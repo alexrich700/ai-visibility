@@ -39,6 +39,7 @@ export async function registerRoutes(
         overallScore: results.overallScore,
         chatgptScore: results.chatgptScore,
         googleAIScore: results.googleAIScore,
+        executiveSummary: results.executiveSummary,
         promptResults: results.promptResults,
         sentimentAnalysis: results.sentimentAnalysis,
         competitors: results.competitors,

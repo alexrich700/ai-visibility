@@ -116,6 +116,60 @@ function simulateResponse(prompt: string, businessName: string): { found: boolea
   return { found, response, competitors };
 }
 
+// Generate a one-liner summary for prompt results
+function generatePromptSummary(chatgptFound: boolean, googleAIFound: boolean, chatgptCompetitors: string[], googleAICompetitors: string[], businessName: string): string {
+  if (chatgptFound && googleAIFound) {
+    return `${businessName} was mentioned by both ChatGPT and Google AI.`;
+  }
+  if (chatgptFound) {
+    return `${businessName} found on ChatGPT only. Google AI cited competitors.`;
+  }
+  if (googleAIFound) {
+    return `${businessName} found on Google AI only. ChatGPT cited competitors.`;
+  }
+  const allCompetitors = [...new Set([...chatgptCompetitors, ...googleAICompetitors])];
+  if (allCompetitors.length > 0) {
+    const cited = allCompetitors.slice(0, 2).map(c => `'${c}'`).join(' and ');
+    return `Cited ${cited}. ${businessName} not mentioned.`;
+  }
+  return `AI provided generic response. ${businessName} not found.`;
+}
+
+// Generate executive summary using AI
+async function generateExecutiveSummary(
+  businessName: string,
+  keyword: string,
+  overallScore: number,
+  chatgptScore: number,
+  googleAIScore: number,
+  sentimentOverall: string,
+  location: string
+): Promise<string> {
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: "You write professional, matter-of-fact executive summaries for AI visibility audit reports. Be concise and data-driven."
+        },
+        {
+          role: "user",
+          content: `Write a 2-3 sentence executive summary for an AI visibility audit.
+Start with: "We analyzed ${businessName} across 20 high-intent AI prompts on ChatGPT and Google AI${location !== "nationwide" ? ` for ${keyword} in ${location}` : ` for ${keyword} nationwide`}."
+Key findings: overall score ${overallScore}/100, ChatGPT ${chatgptScore}%, Google AI ${googleAIScore}%, sentiment ${sentimentOverall}.
+Describe what this means for AI visibility. Be professional.`
+        }
+      ],
+      max_completion_tokens: 300,
+    });
+    return response.choices[0]?.message?.content || `We analyzed ${businessName} across 20 high-intent AI prompts on ChatGPT and Google AI. The results indicate a visibility score of ${overallScore}/100 with ${sentimentOverall} brand sentiment.`;
+  } catch (error) {
+    console.error("Executive summary generation error:", error);
+    return `We analyzed ${businessName} across 20 high-intent AI prompts on ChatGPT and Google AI. The results indicate a visibility score of ${overallScore}/100 with ${sentimentOverall} brand sentiment.`;
+  }
+}
+
 // Scrape website homepage content
 async function scrapeWebsite(url: string): Promise<string | null> {
   try {
@@ -395,12 +449,14 @@ export async function runAudit(
 ): Promise<{
   promptResults: Array<{
     prompt: string;
+    summary: string;
     chatgpt: { found: boolean; response: string; competitors: string[] };
     googleAI: { found: boolean; response: string; competitors: string[] };
   }>;
   overallScore: number;
   chatgptScore: number;
   googleAIScore: number;
+  executiveSummary: string;
   competitors: Array<{ name: string; mentions: number }>;
   sentimentAnalysis: {
     overall: "positive" | "negative" | "neutral";
@@ -427,7 +483,14 @@ export async function runAudit(
         queryChatGPT(prompt, businessName),
         queryGemini(prompt, businessName),
       ]);
-      return { prompt, chatgpt, googleAI };
+      const summary = generatePromptSummary(
+        chatgpt.found,
+        googleAI.found,
+        chatgpt.competitors,
+        googleAI.competitors,
+        businessName
+      );
+      return { prompt, summary, chatgpt, googleAI };
     })
   );
 
@@ -490,11 +553,24 @@ export async function runAudit(
     .sort((a, b) => b.mentions - a.mentions)
     .slice(0, 5);
 
+  // Generate executive summary
+  const location = scope === "local" && city ? city : "nationwide";
+  const executiveSummary = await generateExecutiveSummary(
+    businessName,
+    keyword,
+    overallScore,
+    chatgptScore,
+    googleAIScore,
+    overallSentiment,
+    location
+  );
+
   return {
     promptResults,
     overallScore,
     chatgptScore,
     googleAIScore,
+    executiveSummary,
     competitors,
     sentimentAnalysis: {
       overall: overallSentiment,
