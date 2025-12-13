@@ -116,55 +116,154 @@ function simulateResponse(prompt: string, businessName: string): { found: boolea
   return { found, response, competitors };
 }
 
-// Generate 20 prompts based on business info
-export function generatePrompts(
+// Scrape website homepage content
+async function scrapeWebsite(url: string): Promise<string | null> {
+  try {
+    const normalizedUrl = url.startsWith('http') ? url : `https://${url}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    
+    const response = await fetch(normalizedUrl, { 
+      headers: { 
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      },
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) return null;
+    const html = await response.text();
+    
+    // Strip HTML tags and get text only
+    const text = html
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
+      .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 3000);
+    
+    return text.length > 100 ? text : null;
+  } catch (error) {
+    console.error("Website scrape error:", error);
+    return null;
+  }
+}
+
+// Fallback prompts if AI generation fails
+function getFallbackPrompts(keyword: string, location: string, businessName: string): string[] {
+  const loc = location !== "nationwide" ? ` in ${location}` : "";
+  const year = new Date().getFullYear();
+  return [
+    `Who is the best ${keyword}${loc}?`,
+    `Top rated ${keyword} providers${loc}`,
+    `Best ${keyword} companies${loc} ${year}`,
+    `${keyword} recommendations${loc}`,
+    `Compare ${keyword} services${loc}`,
+    `Most trusted ${keyword}${loc}`,
+    `${keyword} near me${loc}`,
+    `Affordable ${keyword}${loc}`,
+    `Premium ${keyword} services${loc}`,
+    `${keyword} with best reviews${loc}`,
+    `Who should I hire for ${keyword}${loc}?`,
+    `${keyword} pros and cons${loc}`,
+    `Best value ${keyword}${loc}`,
+    `${keyword} pricing comparison${loc}`,
+    `Reliable ${keyword}${loc}`,
+    `${keyword} experts${loc}`,
+    `Professional ${keyword} services${loc}`,
+    `Find a good ${keyword}${loc}`,
+    `${keyword} alternatives to ${businessName}`,
+    `What are reviews for ${businessName}?`,
+  ];
+}
+
+// Generate 20 prompts dynamically using OpenAI
+export async function generatePrompts(
   businessName: string,
   keyword: string,
   scope: "local" | "national",
   city?: string,
-  websiteContent?: string
-): string[] {
-  const location = scope === "local" && city ? city : "";
-  const locationPhrase = location ? ` in ${location}` : "";
-  const locationContext = location || "nationwide";
-
-  // Base prompts that work for any business
-  const basePrompts = [
-    `Who is the best ${keyword}${locationPhrase}?`,
-    `Top rated ${keyword} providers${locationPhrase}`,
-    `Best ${keyword} companies${locationPhrase} 2024`,
-    `${keyword} recommendations${locationPhrase}`,
-    `Compare ${keyword} services${locationPhrase}`,
-    `Most trusted ${keyword}${locationPhrase}`,
-    `${keyword} near me ${location}`,
-    `Affordable ${keyword}${locationPhrase}`,
-    `Premium ${keyword} services${locationPhrase}`,
-    `${keyword} with best reviews${locationPhrase}`,
-    `Who should I hire for ${keyword}${locationPhrase}?`,
-    `${keyword} pros and cons${locationPhrase}`,
-    `Best value ${keyword}${locationPhrase}`,
-    `${keyword} pricing comparison${locationPhrase}`,
-    `Reliable ${keyword}${locationPhrase}`,
-    `${keyword} experts${locationPhrase}`,
-    `Professional ${keyword} services${locationPhrase}`,
-    `Find a good ${keyword}${locationPhrase}`,
-    `${keyword} alternatives to ${businessName}`,
-    `What are reviews for ${businessName}?`,
-  ];
-
-  // Add location-specific prompts for local businesses
-  if (scope === "local" && city) {
-    return [
-      ...basePrompts.slice(0, 15),
-      `${keyword} ${city} reviews`,
-      `Best ${keyword} near ${city}`,
-      `${city} ${keyword} recommendations`,
-      `Top ${keyword} companies in ${city}`,
-      `${businessName} ${city} reviews`,
-    ];
+  url?: string
+): Promise<string[]> {
+  const location = scope === "local" && city ? city : "nationwide";
+  
+  // Try to scrape homepage for context
+  let homepageContent: string | null = null;
+  if (url) {
+    console.log(`Scraping website: ${url}`);
+    homepageContent = await scrapeWebsite(url);
+    if (homepageContent) {
+      console.log(`Got ${homepageContent.length} chars of homepage content`);
+    }
   }
+  
+  // Build prompt for OpenAI to generate search queries
+  const systemPrompt = `You are a marketing expert specializing in AI search optimization. Generate exactly 20 bottom-of-funnel search queries that potential customers would type into AI assistants (like ChatGPT or Google AI) when actively looking to hire or purchase from a ${keyword} business${location !== "nationwide" ? ` in ${location}` : ""}. 
 
-  return basePrompts;
+These should be research-based queries from people who are ready to make a decision - comparing options, checking reviews, asking for recommendations, or looking for the best provider. Include a mix of:
+- Direct recommendation requests ("best X", "top X", "who should I hire")
+- Comparison queries ("X vs Y", "compare X services")
+- Review/trust queries ("X reviews", "is X reliable")
+- Pricing queries ("X cost", "affordable X")
+- Location-specific queries if applicable
+
+Return ONLY a valid JSON array of exactly 20 strings. No explanations, no markdown, just the JSON array.`;
+  
+  let userPrompt = `Generate 20 bottom-of-funnel AI search queries for:
+Business Name: ${businessName}
+Service/Industry: ${keyword}
+Target Location: ${location}`;
+  
+  if (homepageContent) {
+    userPrompt += `
+
+Here is content from their homepage for additional context about their specific services and value propositions:
+${homepageContent}`;
+  }
+  
+  try {
+    console.log("Generating prompts with OpenAI...");
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      max_completion_tokens: 1500,
+      temperature: 0.7,
+    });
+    
+    const text = response.choices[0]?.message?.content || "";
+    console.log("OpenAI response:", text.slice(0, 200));
+    
+    // Parse JSON array from response - handle potential markdown formatting
+    const cleanText = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const parsed = JSON.parse(cleanText);
+    
+    // Validate: must be array of non-empty strings with exactly 20 items
+    if (Array.isArray(parsed)) {
+      const validPrompts = parsed
+        .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+        .map(s => s.trim())
+        .slice(0, 20);
+      
+      if (validPrompts.length === 20) {
+        console.log(`Generated 20 valid custom prompts`);
+        return validPrompts;
+      } else {
+        console.log(`OpenAI returned ${validPrompts.length} valid prompts (need 20), using fallback`);
+      }
+    }
+  } catch (error) {
+    console.error("Prompt generation error:", error);
+  }
+  
+  // Fallback to basic prompts if OpenAI fails
+  console.log("Using fallback prompts");
+  return getFallbackPrompts(keyword, location, businessName);
 }
 
 // Main audit function
@@ -185,8 +284,8 @@ export async function runAudit(
   googleAIScore: number;
   competitors: Array<{ name: string; mentions: number }>;
 }> {
-  // Generate prompts
-  const prompts = generatePrompts(businessName, keyword, scope, city);
+  // Generate prompts dynamically using OpenAI based on business context
+  const prompts = await generatePrompts(businessName, keyword, scope, city, url);
 
   // Query ChatGPT and Google AI Overviews for each prompt
   const promptResults = await Promise.all(
