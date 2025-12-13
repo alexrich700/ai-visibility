@@ -63,20 +63,108 @@ export default function Home() {
   // Results State
   const [auditResults, setAuditResults] = useState<AuditResults | null>(null);
   
-  // Expanded rows state for viewing full AI responses
-  const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({});
+  // Expanded rows state for viewing full AI responses (keyed by "idx-platform")
+  const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
   const [isPrinting, setIsPrinting] = useState(false);
   
-  const toggleRowExpansion = (index: number) => {
-    setExpandedRows(prev => ({ ...prev, [index]: !prev[index] }));
+  const toggleRowExpansion = (key: string) => {
+    setExpandedRows(prev => ({ ...prev, [key]: !prev[key] }));
   };
   
-  const getResponsePreview = (result: PromptResult): string => {
-    const chatgptResponse = result.chatgpt.response || "";
-    const googleResponse = result.googleAI.response || "";
-    const response = chatgptResponse || googleResponse || "";
-    if (!response) return "No AI response captured.";
-    return response.length > 150 ? response.substring(0, 150) + "..." : response;
+  const renderMarkdown = (text: string): JSX.Element => {
+    if (!text) return <span className="text-gray-400 italic">No response captured.</span>;
+    
+    const lines = text.split(/\n+/).filter(line => line.trim());
+    
+    return (
+      <div className="space-y-2">
+        {lines.map((line, i) => {
+          let content = line;
+          
+          if (content.startsWith('### ')) {
+            const headerText = content.replace(/^### /, '').replace(/\*\*/g, '');
+            return <h4 key={i} className="font-bold text-[#010400] text-base mt-3 first:mt-0">{headerText}</h4>;
+          }
+          
+          if (content.startsWith('## ')) {
+            const headerText = content.replace(/^## /, '').replace(/\*\*/g, '');
+            return <h3 key={i} className="font-bold text-[#010400] text-lg mt-3 first:mt-0">{headerText}</h3>;
+          }
+          
+          if (/^\d+\.\s/.test(content)) {
+            const numberMatch = content.match(/^(\d+)\.\s/);
+            const number = numberMatch ? numberMatch[1] : '';
+            content = content.replace(/^\d+\.\s/, '');
+            
+            const parts = content.split(/(\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\))/g).filter(Boolean);
+            
+            return (
+              <div key={i} className="flex gap-2 ml-2">
+                <span className="font-bold text-[#5599f9] shrink-0">{number}.</span>
+                <p className="text-gray-700">
+                  {parts.map((part, j) => {
+                    if (part.startsWith('**') && part.endsWith('**')) {
+                      return <strong key={j} className="font-semibold text-[#010400]">{part.slice(2, -2)}</strong>;
+                    }
+                    const linkMatch = part.match(/\[([^\]]+)\]\(([^)]+)\)/);
+                    if (linkMatch) {
+                      return <a key={j} href={linkMatch[2]} className="text-[#5599f9] underline" target="_blank" rel="noopener noreferrer">{linkMatch[1]}</a>;
+                    }
+                    return <span key={j}>{part}</span>;
+                  })}
+                </p>
+              </div>
+            );
+          }
+          
+          if (content.startsWith('- ')) {
+            content = content.replace(/^- /, '');
+            const parts = content.split(/(\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\))/g).filter(Boolean);
+            
+            return (
+              <div key={i} className="flex gap-2 ml-2">
+                <span className="text-[#5599f9] shrink-0">-</span>
+                <p className="text-gray-700">
+                  {parts.map((part, j) => {
+                    if (part.startsWith('**') && part.endsWith('**')) {
+                      return <strong key={j} className="font-semibold text-[#010400]">{part.slice(2, -2)}</strong>;
+                    }
+                    const linkMatch = part.match(/\[([^\]]+)\]\(([^)]+)\)/);
+                    if (linkMatch) {
+                      return <a key={j} href={linkMatch[2]} className="text-[#5599f9] underline" target="_blank" rel="noopener noreferrer">{linkMatch[1]}</a>;
+                    }
+                    return <span key={j}>{part}</span>;
+                  })}
+                </p>
+              </div>
+            );
+          }
+          
+          const parts = content.split(/(\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\))/g).filter(Boolean);
+          
+          return (
+            <p key={i} className="text-gray-700">
+              {parts.map((part, j) => {
+                if (part.startsWith('**') && part.endsWith('**')) {
+                  return <strong key={j} className="font-semibold text-[#010400]">{part.slice(2, -2)}</strong>;
+                }
+                const linkMatch = part.match(/\[([^\]]+)\]\(([^)]+)\)/);
+                if (linkMatch) {
+                  return <a key={j} href={linkMatch[2]} className="text-[#5599f9] underline" target="_blank" rel="noopener noreferrer">{linkMatch[1]}</a>;
+                }
+                return <span key={j}>{part}</span>;
+              })}
+            </p>
+          );
+        })}
+      </div>
+    );
+  };
+  
+  const getResponsePreview = (text: string): string => {
+    if (!text) return "No response captured.";
+    const cleaned = text.replace(/\*\*/g, '').replace(/###?\s/g, '').replace(/\n+/g, ' ').trim();
+    return cleaned.length > 150 ? cleaned.substring(0, 150) + "..." : cleaned;
   };
 
   // Audit mutation
@@ -615,56 +703,51 @@ export default function Home() {
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200 text-xs uppercase tracking-wider text-gray-500 font-bold">
                     <th className="p-4 w-16 text-center">Status</th>
-                    <th className="p-4">Simulated User Query</th>
+                    <th className="p-4 w-48">Simulated User Query</th>
+                    <th className="p-4 w-28">Platform</th>
                     <th className="p-4 hidden md:table-cell">AI Response</th>
-                    <th className="p-4 w-40">Platform</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {auditResults.promptResults?.map((result, idx) => {
-                    const foundCount = [result.chatgpt.found, result.googleAI.found].filter(Boolean).length;
-                    const status = foundCount === 2 ? "found" : foundCount === 1 ? "warning" : "lost";
-                    const isExpanded = expandedRows[idx] || isPrinting;
+                  {auditResults.promptResults?.flatMap((result, idx) => {
                     const chatgptResponse = result.chatgpt.response || "";
                     const googleResponse = result.googleAI.response || "";
-                    const hasLongResponse = chatgptResponse.length > 150 || googleResponse.length > 150;
+                    const chatgptKey = `${idx}-chatgpt`;
+                    const googleKey = `${idx}-google`;
+                    const isChatgptExpanded = expandedRows[chatgptKey] || isPrinting;
+                    const isGoogleExpanded = expandedRows[googleKey] || isPrinting;
                     
-                    return (
-                      <tr key={idx} className="hover:bg-gray-50 transition-colors align-top" data-testid={`full-prompt-result-${idx}`}>
+                    return [
+                      <tr key={chatgptKey} className="hover:bg-gray-50 transition-colors align-top border-b border-gray-50" data-testid={`full-prompt-result-${idx}-chatgpt`}>
                         <td className="p-4 text-center">
-                          {status === 'found' && <CheckCircle className="text-green-500 mx-auto" size={20} />}
-                          {status === 'lost' && <div className="w-5 h-5 mx-auto rounded-full border-2 border-red-200 flex items-center justify-center"><X className="w-3 h-3 text-red-500" /></div>}
-                          {status === 'warning' && <AlertTriangle className="text-[#ffb41c] mx-auto" size={20} />}
+                          {result.chatgpt.found ? (
+                            <CheckCircle className="text-green-500 mx-auto" size={20} />
+                          ) : (
+                            <div className="w-5 h-5 mx-auto rounded-full border-2 border-red-200 flex items-center justify-center">
+                              <X className="w-3 h-3 text-red-500" />
+                            </div>
+                          )}
                         </td>
-                        <td className="p-4 font-medium text-[#010400]">"{result.prompt}"</td>
-                        <td className="p-4 text-gray-600 text-sm hidden md:table-cell">
-                          <div className="space-y-2">
-                            {chatgptResponse && (
-                              <div>
-                                <span className="text-xs font-bold text-green-700 bg-green-50 px-1.5 py-0.5 rounded">ChatGPT:</span>
-                                <p className="mt-1 text-gray-600 print:whitespace-normal">
-                                  {isExpanded ? chatgptResponse : (chatgptResponse.length > 150 ? chatgptResponse.substring(0, 150) + "..." : chatgptResponse)}
-                                </p>
-                              </div>
+                        <td className="p-4 font-medium text-[#010400] text-sm">"{result.prompt}"</td>
+                        <td className="p-4">
+                          <span className="text-xs font-bold px-2 py-1 rounded inline-flex items-center gap-1 bg-green-50 text-green-700 border border-green-200">
+                            <Cpu size={12} /> ChatGPT
+                          </span>
+                        </td>
+                        <td className="p-4 text-sm hidden md:table-cell">
+                          <div>
+                            {isChatgptExpanded ? (
+                              renderMarkdown(chatgptResponse)
+                            ) : (
+                              <p className="text-gray-600">{getResponsePreview(chatgptResponse)}</p>
                             )}
-                            {googleResponse && (
-                              <div className={chatgptResponse ? "pt-2 border-t border-gray-100" : ""}>
-                                <span className="text-xs font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">Google AI:</span>
-                                <p className="mt-1 text-gray-600 print:whitespace-normal">
-                                  {isExpanded ? googleResponse : (googleResponse.length > 150 ? googleResponse.substring(0, 150) + "..." : googleResponse)}
-                                </p>
-                              </div>
-                            )}
-                            {!chatgptResponse && !googleResponse && (
-                              <p className="text-gray-400 italic">No AI response captured.</p>
-                            )}
-                            {hasLongResponse && (
+                            {chatgptResponse.length > 150 && (
                               <button
-                                onClick={() => toggleRowExpansion(idx)}
+                                onClick={() => toggleRowExpansion(chatgptKey)}
                                 className="text-xs font-medium text-[#5599f9] hover:text-[#4a8ce8] flex items-center gap-1 mt-2 no-print"
-                                data-testid={`button-expand-response-${idx}`}
+                                data-testid={`button-expand-response-${idx}-chatgpt`}
                               >
-                                {isExpanded ? (
+                                {isChatgptExpanded ? (
                                   <>View Less <ChevronUp size={14} /></>
                                 ) : (
                                   <>View Full Response <ChevronDown size={14} /></>
@@ -673,18 +756,47 @@ export default function Home() {
                             )}
                           </div>
                         </td>
+                      </tr>,
+                      <tr key={googleKey} className="hover:bg-gray-50 transition-colors align-top border-b-2 border-gray-200" data-testid={`full-prompt-result-${idx}-google`}>
+                        <td className="p-4 text-center">
+                          {result.googleAI.found ? (
+                            <CheckCircle className="text-green-500 mx-auto" size={20} />
+                          ) : (
+                            <div className="w-5 h-5 mx-auto rounded-full border-2 border-red-200 flex items-center justify-center">
+                              <X className="w-3 h-3 text-red-500" />
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-4 text-gray-400 text-sm italic">(same query)</td>
                         <td className="p-4">
-                          <div className="flex flex-col gap-1">
-                            <span className={`text-xs font-bold px-2 py-1 rounded inline-block ${
-                              result.chatgpt.found ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-                            }`}>ChatGPT</span>
-                            <span className={`text-xs font-bold px-2 py-1 rounded inline-block ${
-                              result.googleAI.found ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-                            }`}>Google AI</span>
+                          <span className="text-xs font-bold px-2 py-1 rounded inline-flex items-center gap-1 bg-blue-50 text-blue-700 border border-blue-200">
+                            <Globe size={12} /> Google AI
+                          </span>
+                        </td>
+                        <td className="p-4 text-sm hidden md:table-cell">
+                          <div>
+                            {isGoogleExpanded ? (
+                              renderMarkdown(googleResponse)
+                            ) : (
+                              <p className="text-gray-600">{getResponsePreview(googleResponse)}</p>
+                            )}
+                            {googleResponse.length > 150 && (
+                              <button
+                                onClick={() => toggleRowExpansion(googleKey)}
+                                className="text-xs font-medium text-[#5599f9] hover:text-[#4a8ce8] flex items-center gap-1 mt-2 no-print"
+                                data-testid={`button-expand-response-${idx}-google`}
+                              >
+                                {isGoogleExpanded ? (
+                                  <>View Less <ChevronUp size={14} /></>
+                                ) : (
+                                  <>View Full Response <ChevronDown size={14} /></>
+                                )}
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
-                    );
+                    ];
                   })}
                 </tbody>
               </table>
