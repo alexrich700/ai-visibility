@@ -28,6 +28,14 @@ async function queryGemini(prompt: string, businessName: string): Promise<{ foun
     const text = response.text || "";
     const found = text.toLowerCase().includes(businessName.toLowerCase());
     const competitors = extractCompetitors(text, businessName);
+    
+    // Debug logging for detection
+    console.log(`[GEMINI DETECTION] Business: "${businessName}" | Found: ${found}`);
+    if (found) {
+      console.log(`[GEMINI] Brand mentioned in response`);
+    } else {
+      console.log(`[GEMINI] Response preview (first 200 chars): ${text.slice(0, 200).replace(/\n/g, ' ')}`);
+    }
 
     return { found, response: text, competitors };
   } catch (error) {
@@ -58,6 +66,14 @@ async function queryChatGPT(prompt: string, businessName: string): Promise<{ fou
     const text = response.choices[0]?.message?.content || "";
     const found = text.toLowerCase().includes(businessName.toLowerCase());
     const competitors = extractCompetitors(text, businessName);
+    
+    // Debug logging for detection
+    console.log(`[CHATGPT DETECTION] Business: "${businessName}" | Found: ${found}`);
+    if (found) {
+      console.log(`[CHATGPT] Brand mentioned in response`);
+    } else {
+      console.log(`[CHATGPT] Response preview (first 200 chars): ${text.slice(0, 200).replace(/\n/g, ' ')}`);
+    }
 
     return { found, response: text, competitors };
   } catch (error) {
@@ -122,7 +138,7 @@ function generatePromptSummary(chatgptFound: boolean, googleAIFound: boolean, ch
   if (googleAIFound) {
     return `${businessName} found on Google AI only. ChatGPT cited competitors.`;
   }
-  const allCompetitors = [...new Set([...chatgptCompetitors, ...googleAICompetitors])];
+  const allCompetitors = Array.from(new Set([...chatgptCompetitors, ...googleAICompetitors]));
   if (allCompetitors.length > 0) {
     const cited = allCompetitors.slice(0, 2).map(c => `'${c}'`).join(' and ');
     return `Cited ${cited}. ${businessName} not mentioned.`;
