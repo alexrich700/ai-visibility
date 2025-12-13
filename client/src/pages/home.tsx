@@ -18,6 +18,8 @@ import {
   User,
   BarChart2,
   Loader2,
+  Download,
+  Lock,
 } from "lucide-react";
 import type { AuditRequest, AuditResults, PromptResult } from "@shared/schema";
 
@@ -153,13 +155,29 @@ export default function Home() {
     </div>
   );
 
+  const getPromptResultText = (result: PromptResult): string => {
+    const foundCount = [result.chatgpt.found, result.gemini.found, result.perplexity.found].filter(Boolean).length;
+    if (foundCount === 0) {
+      const competitorCount = (result.chatgpt.competitors?.length || 0) + (result.gemini.competitors?.length || 0) + (result.perplexity.competitors?.length || 0);
+      if (competitorCount > 0) {
+        return `Result: ${Math.min(competitorCount, 3)} Competitors cited. Your brand was not mentioned.`;
+      }
+      return "Result: AI recommended competitors. Your brand was not mentioned.";
+    }
+    if (foundCount === 3) {
+      return "Result: Brand found across all platforms.";
+    }
+    return "Result: Brand found, but sentiment was neutral/mixed.";
+  };
+
   const PromptResultRow = ({ result, index }: { result: PromptResult; index: number }) => {
     const foundCount = [result.chatgpt.found, result.gemini.found, result.perplexity.found].filter(Boolean).length;
     const isFound = foundCount > 0;
+    const resultText = getPromptResultText(result);
 
     return (
       <div 
-        className="flex items-start gap-4 p-4 border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors"
+        className="flex items-start gap-4 p-4 border-b border-gray-100 last:border-0"
         data-testid={`prompt-result-${index}`}
       >
         <div className="mt-1">
@@ -172,19 +190,11 @@ export default function Home() {
           )}
         </div>
         <div className="flex-1">
-          <div className="font-mono text-xs text-gray-400 uppercase tracking-wider mb-1">Prompt #{index + 1}</div>
+          <div className="font-mono text-xs text-gray-400 uppercase tracking-wider mb-1">Simulated Prompt</div>
           <p className="font-medium text-[#010400] text-lg">"{result.prompt}"</p>
-          <div className="flex flex-wrap gap-2 mt-2">
-            <span className={`text-xs px-2 py-1 rounded ${result.chatgpt.found ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-600'}`}>
-              ChatGPT: {result.chatgpt.found ? 'Found' : 'Not Found'}
-            </span>
-            <span className={`text-xs px-2 py-1 rounded ${result.gemini.found ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-600'}`}>
-              Gemini: {result.gemini.found ? 'Found' : 'Not Found'}
-            </span>
-            <span className={`text-xs px-2 py-1 rounded ${result.perplexity.found ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-600'}`}>
-              Perplexity: {result.perplexity.found ? 'Found' : 'Not Found'}
-            </span>
-          </div>
+          <p className={`text-sm mt-1 ${isFound ? 'text-green-600' : 'text-red-500 font-medium'}`}>
+            {resultText}
+          </p>
         </div>
       </div>
     );
@@ -590,64 +600,115 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Competitor Share of Voice */}
-        {auditResults?.competitors && auditResults.competitors.length > 0 && (
-          <div className="space-y-6">
-            <div className="flex items-center gap-3">
-              <BarChart2 size={24} className="text-[#5599f9]" />
-              <h3 className="text-xl font-bold text-[#010400] tracking-tight">Competitor Share of Voice</h3>
-            </div>
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <div className="space-y-4">
-                {auditResults.competitors.map((competitor, index) => (
-                  <div key={index} className="flex items-center gap-4" data-testid={`competitor-${index}`}>
-                    <div className="w-32 font-medium text-[#010400] truncate">{competitor.name}</div>
-                    <div className="flex-1 bg-gray-100 rounded-full h-3 overflow-hidden">
-                      <div
-                        className="bg-[#5599f9] h-full rounded-full transition-all"
-                        style={{ width: `${Math.min((competitor.mentions / 20) * 100, 100)}%` }}
-                      ></div>
-                    </div>
-                    <div className="w-16 text-right text-sm font-bold text-gray-500">{competitor.mentions} mentions</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Prompt Log */}
+        {/* Prompt Log - Two Column Layout */}
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-4">
             <h3 className="text-xl font-bold text-[#010400] tracking-tight flex items-center gap-3">
               <Cpu size={24} className="text-[#5599f9]" />
               Live Prompt Simulation Log
             </h3>
-            <span className="text-xs font-bold bg-gray-100 px-3 py-1 rounded text-gray-500">
+            <span className="text-xs font-bold bg-[#010400] px-3 py-1 rounded text-white">
               {auditResults?.promptResults?.length || 0} PROMPTS TESTED
             </span>
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
-            {auditResults?.promptResults?.map((result, index) => (
-              <PromptResultRow key={index} result={result} index={index} />
-            ))}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left Column - First 5 Prompts */}
+            <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+              {auditResults?.promptResults?.slice(0, 5).map((result, index) => (
+                <PromptResultRow key={index} result={result} index={index} />
+              ))}
+            </div>
+
+            {/* Right Column - Stats */}
+            <div className="space-y-4">
+              {/* Conversion Loss Card */}
+              <div className="bg-gray-50 rounded-xl border border-gray-200 p-6">
+                <div className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Est. Conversion Loss</div>
+                <div className="text-5xl font-bold text-[#5599f9] tracking-tight">23X</div>
+                <p className="text-sm text-gray-500 mt-2">AI traffic converts 23x higher than standard search.</p>
+              </div>
+
+              {/* Top Competitors Found */}
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <div className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-4">Top Competitors Found</div>
+                <div className="space-y-3">
+                  {(auditResults?.competitors || []).slice(0, 3).map((competitor, index) => (
+                    <div key={index} className="flex items-center gap-3" data-testid={`competitor-${index}`}>
+                      <div className="w-6 h-6 rounded bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500">
+                        {String.fromCharCode(65 + index)}
+                      </div>
+                      <span className="font-medium text-[#010400]">{competitor.name}</span>
+                    </div>
+                  ))}
+                  {(!auditResults?.competitors || auditResults.competitors.length === 0) && (
+                    <>
+                      <div className="flex items-center gap-3">
+                        <div className="w-6 h-6 rounded bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500">A</div>
+                        <span className="font-medium text-gray-400">Competitor A</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="w-6 h-6 rounded bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500">B</div>
+                        <span className="font-medium text-gray-400">Competitor B</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="w-6 h-6 rounded bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500">C</div>
+                        <span className="font-medium text-gray-400">Competitor C</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
+
+          {/* Footer text */}
+          <p className="text-center text-sm text-gray-400 italic">
+            + {Math.max((auditResults?.promptResults?.length || 20) - 5, 15)} other prompt variations analyzed in full report.
+          </p>
         </div>
 
-        {/* CTA */}
-        <div className="bg-gradient-to-r from-[#5599f9] to-[#4a8ce8] rounded-2xl p-8 md:p-12 text-center text-white">
-          <h3 className="text-2xl md:text-3xl font-bold tracking-tight mb-4">Ready to Dominate AI Search?</h3>
-          <p className="text-blue-100 mb-6 max-w-xl mx-auto">
-            Get your personalized 90-day roadmap to improve your AI visibility score and start capturing leads from AI-powered search.
+        {/* CTA - Gray Design */}
+        <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl p-8 md:p-12 text-center">
+          <h3 className="text-2xl md:text-3xl font-bold text-[#010400] tracking-tight mb-4">
+            Turn this score from{" "}
+            <span className="inline-block bg-[#010400] text-white px-3 py-1 rounded-lg mx-1">
+              {auditResults?.overallScore || 0}
+            </span>
+            {" "}to{" "}
+            <span className="inline-block border-2 border-[#5599f9] text-[#5599f9] px-3 py-1 rounded-lg mx-1">
+              80+
+            </span>
+          </h3>
+          <p className="text-gray-500 mb-8 max-w-xl mx-auto">
+            We have generated a 90-day roadmap to fix your technical errors and build the content AI is looking for.
           </p>
           <button
             onClick={() => setShowLeadForm(true)}
-            className="bg-white text-[#5599f9] font-bold px-8 py-4 rounded-xl shadow-lg hover:shadow-xl transition-all inline-flex items-center gap-2"
+            className="bg-[#5599f9] hover:bg-[#4a8ce8] text-white font-bold px-8 py-4 rounded-xl shadow-lg shadow-blue-500/20 transition-all inline-flex items-center gap-2"
             data-testid="button-get-report"
           >
-            Get My Full Report <ArrowRight size={20} />
+            <Download size={20} /> DOWNLOAD FULL REPORT
           </button>
+          <div className="flex items-center justify-center gap-6 mt-6 text-xs font-medium text-gray-400 uppercase tracking-wider flex-wrap">
+            <span className="flex items-center gap-2">
+              <Lock size={14} /> Secure 256-bit Encryption
+            </span>
+            <span>No Credit Card Required</span>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="border-t border-gray-100 pt-8 text-center space-y-4">
+          <div className="flex items-center justify-center gap-2 text-sm font-bold text-gray-400 tracking-wide">
+            <div className="flex h-5 w-5 relative overflow-hidden rounded bg-[#5599f9]">
+              <div className="absolute top-0 right-0 w-2.5 h-5 bg-[#ffb41c] skew-x-12 transform translate-x-0.5"></div>
+            </div>
+            ROSSMAN MEDIA
+          </div>
+          <p className="text-xs text-gray-400 max-w-md mx-auto">
+            *This audit is a simulation based on public LLM behavior patterns and typical industry prompts.
+          </p>
         </div>
       </main>
     </div>
