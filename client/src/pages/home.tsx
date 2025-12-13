@@ -203,99 +203,6 @@ export default function Home() {
     );
   };
 
-  const LeadGenModal = () => (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#010400]/80 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl relative">
-        <button
-          onClick={() => setShowLeadForm(false)}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-900 transition-colors z-10"
-          data-testid="button-close-modal"
-        >
-          <X size={24} />
-        </button>
-
-        <div className="bg-[#5599f9] p-8 text-center">
-          <FileText className="text-white mx-auto mb-4" size={48} />
-          <h2 className="text-2xl font-bold text-white tracking-tight">Unlock Your 90-Day Roadmap</h2>
-          <p className="text-blue-100 mt-2">
-            See exactly how to fix your technical errors and turn this score from {auditResults?.overallScore || 0} to 80+.
-          </p>
-        </div>
-
-        <div className="p-8 space-y-6">
-          <form className="space-y-4" onSubmit={handleLeadSubmit}>
-            <div>
-              <label className="block text-xs font-bold uppercase text-gray-400 mb-1">Full Name</label>
-              <div className="relative">
-                <User className="absolute left-3 top-3 text-gray-400" size={18} />
-                <input
-                  type="text"
-                  className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:border-[#5599f9] focus:ring-1 focus:ring-[#5599f9] outline-none"
-                  placeholder="John Doe"
-                  value={leadName}
-                  onChange={(e) => setLeadName(e.target.value)}
-                  data-testid="input-lead-name"
-                  required
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold uppercase text-gray-400 mb-1">Work Email</label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-3 text-gray-400" size={18} />
-                <input
-                  type="email"
-                  className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:border-[#5599f9] focus:ring-1 focus:ring-[#5599f9] outline-none"
-                  placeholder="john@company.com"
-                  value={leadEmail}
-                  onChange={(e) => setLeadEmail(e.target.value)}
-                  data-testid="input-lead-email"
-                  required
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold uppercase text-gray-400 mb-1">Phone Number</label>
-              <div className="relative">
-                <Phone className="absolute left-3 top-3 text-gray-400" size={18} />
-                <input
-                  type="tel"
-                  className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:border-[#5599f9] focus:ring-1 focus:ring-[#5599f9] outline-none"
-                  placeholder="(555) 123-4567"
-                  value={leadPhone}
-                  onChange={(e) => setLeadPhone(e.target.value)}
-                  data-testid="input-lead-phone"
-                  required
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={leadMutation.isPending}
-              className="w-full bg-[#5599f9] hover:bg-[#4a8ce8] text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 mt-4 disabled:opacity-50"
-              data-testid="button-submit-lead"
-            >
-              {leadMutation.isPending ? (
-                <Loader2 className="animate-spin" size={20} />
-              ) : (
-                <>Get My Full Report <ArrowRight size={20} /></>
-              )}
-            </button>
-          </form>
-
-          <div className="text-center">
-            <p className="text-xs text-gray-400">
-              Your detailed report will be emailed to you immediately.
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
   // --- View: Input ---
   if (step === "input") {
     return (
@@ -888,7 +795,98 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-white text-[#010400] pb-20 font-sans relative">
-      {showLeadForm && <LeadGenModal />}
+      {showLeadForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#010400]/80 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl relative">
+            <button
+              onClick={() => setShowLeadForm(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-900 transition-colors z-10"
+              data-testid="button-close-modal"
+            >
+              <X size={24} />
+            </button>
+
+            <div className="bg-[#5599f9] p-8 text-center">
+              <FileText className="text-white mx-auto mb-4" size={48} />
+              <h2 className="text-2xl font-bold text-white tracking-tight">Unlock Your 90-Day Roadmap</h2>
+              <p className="text-blue-100 mt-2">
+                See exactly how to fix your technical errors and turn this score from {auditResults?.overallScore || 0} to 80+.
+              </p>
+            </div>
+
+            <div className="p-8 space-y-6">
+              <form className="space-y-4" onSubmit={handleLeadSubmit}>
+                <div>
+                  <label className="block text-xs font-bold uppercase text-gray-400 mb-1">Full Name</label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-3 text-gray-400" size={18} />
+                    <input
+                      type="text"
+                      className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:border-[#5599f9] focus:ring-1 focus:ring-[#5599f9] outline-none"
+                      placeholder="John Doe"
+                      value={leadName}
+                      onChange={(e) => setLeadName(e.target.value)}
+                      data-testid="input-lead-name"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase text-gray-400 mb-1">Work Email</label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-3 text-gray-400" size={18} />
+                    <input
+                      type="email"
+                      className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:border-[#5599f9] focus:ring-1 focus:ring-[#5599f9] outline-none"
+                      placeholder="john@company.com"
+                      value={leadEmail}
+                      onChange={(e) => setLeadEmail(e.target.value)}
+                      data-testid="input-lead-email"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase text-gray-400 mb-1">Phone Number</label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-3 text-gray-400" size={18} />
+                    <input
+                      type="tel"
+                      className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:border-[#5599f9] focus:ring-1 focus:ring-[#5599f9] outline-none"
+                      placeholder="(555) 123-4567"
+                      value={leadPhone}
+                      onChange={(e) => setLeadPhone(e.target.value)}
+                      data-testid="input-lead-phone"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={leadMutation.isPending}
+                  className="w-full bg-[#5599f9] hover:bg-[#4a8ce8] text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 mt-4 disabled:opacity-50"
+                  data-testid="button-submit-lead"
+                >
+                  {leadMutation.isPending ? (
+                    <Loader2 className="animate-spin" size={20} />
+                  ) : (
+                    <>Get My Full Report <ArrowRight size={20} /></>
+                  )}
+                </button>
+              </form>
+
+              <div className="text-center">
+                <p className="text-xs text-gray-400">
+                  Your detailed report will be emailed to you immediately.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <header className="bg-white border-b border-gray-100 sticky top-0 z-20">
         <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center gap-4">
