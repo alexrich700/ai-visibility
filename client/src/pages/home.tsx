@@ -676,7 +676,7 @@ export default function Home() {
               {auditResults?.overallScore || 0}
             </span>
             {" "}to{" "}
-            <span className="inline-block border-2 border-[#5599f9] text-[#5599f9] px-3 py-1 rounded-lg mx-1">
+            <span className="inline-block bg-[#5599f9] text-white px-3 py-1 rounded-lg mx-1">
               80+
             </span>
           </h3>
