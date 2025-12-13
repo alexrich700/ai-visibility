@@ -31,6 +31,7 @@ export type AuditRequest = z.infer<typeof auditRequestSchema>;
 // Prompt result from each AI platform (research-based visibility prompts)
 export const promptResultSchema = z.object({
   prompt: z.string(),
+  summary: z.string().optional(),
   chatgpt: z.object({
     found: z.boolean(),
     response: z.string(),
@@ -81,6 +82,7 @@ export const auditResultsSchema = z.object({
   overallScore: z.number(),
   chatgptScore: z.number(),
   googleAIScore: z.number(),
+  executiveSummary: z.string().optional(),
   promptResults: z.array(promptResultSchema),
   sentimentAnalysis: sentimentSummarySchema.optional(),
   competitors: z.array(z.object({
