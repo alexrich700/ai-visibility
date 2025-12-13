@@ -121,7 +121,7 @@ export default function Home() {
       setScanStatus(stages[currentStage].text);
       setActivePrompt(stages[currentStage].subtext);
       currentStage++;
-    }, 600);
+    }, 3000);
 
     try {
       await auditMutation.mutateAsync({
