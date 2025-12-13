@@ -132,9 +132,9 @@ async function queryGemini(prompt: string, businessName: string, url?: string): 
 // ChatGPT client using Replit AI Integrations
 async function queryChatGPT(prompt: string, businessName: string, url?: string): Promise<{ found: boolean; response: string; competitors: string[] }> {
   try {
-    // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+    // Using gpt-4o for better knowledge and more recent training data
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4o",
       messages: [
         {
           role: "system",
@@ -242,7 +242,7 @@ async function generateExecutiveSummary(
 ): Promise<string> {
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4o",
       messages: [
         {
           role: "system",
@@ -393,7 +393,7 @@ ${homepageContent}`;
   try {
     console.log("Generating research prompts with OpenAI...");
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4o",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt }
@@ -460,7 +460,7 @@ Example formats:
   try {
     console.log("Generating sentiment prompts with OpenAI...");
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4o",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt }
