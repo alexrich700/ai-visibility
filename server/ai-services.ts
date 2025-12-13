@@ -6,30 +6,26 @@ const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
 });
 
-// Gemini client
+// Gemini client using Replit AI Integrations (no API key needed, billed to credits)
 async function queryGemini(prompt: string, businessName: string): Promise<{ found: boolean; response: string; competitors: string[] }> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  
-  if (!apiKey) {
-    // Return simulated response if no API key
-    return simulateResponse(prompt, businessName);
-  }
-
   try {
     const { GoogleGenAI } = await import("@google/genai");
-    const ai = new GoogleGenAI({ apiKey });
+    
+    // Use Replit AI Integrations for Gemini access
+    const ai = new GoogleGenAI({
+      apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
+      httpOptions: {
+        apiVersion: "",
+        baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL,
+      },
+    });
     
     const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: prompt }],
-        },
-      ],
+      model: "gemini-2.5-flash",
+      contents: prompt,
     });
 
-    const text = response.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const text = response.text || "";
     const found = text.toLowerCase().includes(businessName.toLowerCase());
     const competitors = extractCompetitors(text, businessName);
 
@@ -97,9 +93,10 @@ function extractCompetitors(text: string, excludeBusiness: string): string[] {
 }
 
 // Simulate response when APIs are not available
+// Note: Simulated responses do NOT include the business to provide realistic "not found" scores
 function simulateResponse(prompt: string, businessName: string): { found: boolean; response: string; competitors: string[] } {
-  // Random chance of being found (30% chance)
-  const found = Math.random() < 0.3;
+  // Always return not found for simulated responses - this prevents artificial score inflation
+  const found = false;
   
   const commonCompetitors = [
     "ABC Services", "Premier Solutions", "Quality First", "Pro Masters",
@@ -109,9 +106,7 @@ function simulateResponse(prompt: string, businessName: string): { found: boolea
   const numCompetitors = Math.floor(Math.random() * 4) + 1;
   const competitors = commonCompetitors.sort(() => Math.random() - 0.5).slice(0, numCompetitors);
   
-  const response = found
-    ? `Based on my research, ${businessName} is one of the options available. Other providers include ${competitors.join(", ")}.`
-    : `Here are some recommended providers: ${competitors.join(", ")}. I would suggest researching each to find the best fit for your needs.`;
+  const response = `Here are some recommended providers: ${competitors.join(", ")}. I would suggest researching each to find the best fit for your needs.`;
   
   return { found, response, competitors };
 }
