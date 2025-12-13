@@ -40,55 +40,6 @@ async function queryGemini(prompt: string, businessName: string): Promise<{ foun
   }
 }
 
-// Perplexity client
-async function queryPerplexity(prompt: string, businessName: string): Promise<{ found: boolean; response: string; competitors: string[] }> {
-  const apiKey = process.env.PERPLEXITY_API_KEY;
-  
-  if (!apiKey) {
-    return simulateResponse(prompt, businessName);
-  }
-
-  try {
-    const response = await fetch("https://api.perplexity.ai/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "llama-3.1-sonar-small-128k-online",
-        messages: [
-          {
-            role: "system",
-            content: "You are a helpful assistant that provides factual, detailed answers about local and national businesses.",
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        max_tokens: 1024,
-        temperature: 0.2,
-        stream: false,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Perplexity API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const text = data.choices?.[0]?.message?.content || "";
-    const found = text.toLowerCase().includes(businessName.toLowerCase());
-    const competitors = extractCompetitors(text, businessName);
-
-    return { found, response: text, competitors };
-  } catch (error) {
-    console.error("Perplexity API error:", error);
-    return simulateResponse(prompt, businessName);
-  }
-}
-
 // ChatGPT client using Replit AI Integrations
 async function queryChatGPT(prompt: string, businessName: string): Promise<{ found: boolean; response: string; competitors: string[] }> {
   try {
@@ -227,47 +178,42 @@ export async function runAudit(
   promptResults: Array<{
     prompt: string;
     chatgpt: { found: boolean; response: string; competitors: string[] };
-    gemini: { found: boolean; response: string; competitors: string[] };
-    perplexity: { found: boolean; response: string; competitors: string[] };
+    googleAI: { found: boolean; response: string; competitors: string[] };
   }>;
   overallScore: number;
   chatgptScore: number;
-  geminiScore: number;
-  perplexityScore: number;
+  googleAIScore: number;
   competitors: Array<{ name: string; mentions: number }>;
 }> {
   // Generate prompts
   const prompts = generatePrompts(businessName, keyword, scope, city);
 
-  // Query all AI platforms for each prompt
+  // Query ChatGPT and Google AI Overviews for each prompt
   const promptResults = await Promise.all(
     prompts.map(async (prompt) => {
-      const [chatgpt, gemini, perplexity] = await Promise.all([
+      const [chatgpt, googleAI] = await Promise.all([
         queryChatGPT(prompt, businessName),
         queryGemini(prompt, businessName),
-        queryPerplexity(prompt, businessName),
       ]);
 
-      return { prompt, chatgpt, gemini, perplexity };
+      return { prompt, chatgpt, googleAI };
     })
   );
 
   // Calculate scores
   const chatgptFound = promptResults.filter((r) => r.chatgpt.found).length;
-  const geminiFound = promptResults.filter((r) => r.gemini.found).length;
-  const perplexityFound = promptResults.filter((r) => r.perplexity.found).length;
+  const googleAIFound = promptResults.filter((r) => r.googleAI.found).length;
 
   const chatgptScore = Math.round((chatgptFound / prompts.length) * 100);
-  const geminiScore = Math.round((geminiFound / prompts.length) * 100);
-  const perplexityScore = Math.round((perplexityFound / prompts.length) * 100);
+  const googleAIScore = Math.round((googleAIFound / prompts.length) * 100);
   
-  // Overall score is weighted average
-  const overallScore = Math.round((chatgptScore + geminiScore + perplexityScore) / 3);
+  // Overall score is average of both platforms
+  const overallScore = Math.round((chatgptScore + googleAIScore) / 2);
 
   // Aggregate competitors
   const competitorMap = new Map<string, number>();
   for (const result of promptResults) {
-    for (const competitor of [...result.chatgpt.competitors, ...result.gemini.competitors, ...result.perplexity.competitors]) {
+    for (const competitor of [...result.chatgpt.competitors, ...result.googleAI.competitors]) {
       competitorMap.set(competitor, (competitorMap.get(competitor) || 0) + 1);
     }
   }
@@ -281,8 +227,7 @@ export async function runAudit(
     promptResults,
     overallScore,
     chatgptScore,
-    geminiScore,
-    perplexityScore,
+    googleAIScore,
     competitors,
   };
 }

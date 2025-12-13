@@ -95,12 +95,11 @@ export default function Home() {
     const stages = [
       { progress: 5, text: "Initializing Rossman Media AI Engine...", subtext: "Connecting to Knowledge Graph..." },
       { progress: 10, text: `Identifying Entity: ${businessName}`, subtext: "Verifying domain authority..." },
-      { progress: 15, text: "Scraping website content...", subtext: `Analyzing ${url}...` },
-      { progress: 25, text: "Generating 20 User Intent Prompts...", subtext: `Creating variations for "${keyword}"...` },
-      { progress: 35, text: "Querying ChatGPT...", subtext: `PROMPT: "Who is the best ${keyword} ${locationString}?"` },
-      { progress: 50, text: "Querying Gemini...", subtext: `PROMPT: "Top rated ${keyword} providers ${locationContext}..."` },
-      { progress: 65, text: "Querying Perplexity...", subtext: `PROMPT: "Compare ${keyword} pricing ${locationString}..."` },
-      { progress: 80, text: "Analyzing Competitor Share of Voice...", subtext: "Cross-referencing ChatGPT, Gemini & Perplexity..." },
+      { progress: 20, text: "Scraping website content...", subtext: `Analyzing ${url}...` },
+      { progress: 30, text: "Generating 20 User Intent Prompts...", subtext: `Creating variations for "${keyword}"...` },
+      { progress: 45, text: "Querying ChatGPT...", subtext: `PROMPT: "Who is the best ${keyword} ${locationString}?"` },
+      { progress: 65, text: "Querying Google AI Overviews...", subtext: `PROMPT: "Top rated ${keyword} providers ${locationContext}..."` },
+      { progress: 80, text: "Analyzing Competitor Share of Voice...", subtext: "Cross-referencing ChatGPT & Google AI..." },
       { progress: 90, text: "Compiling Prompt Log...", subtext: "Identifying missed opportunities..." },
       { progress: 95, text: "Calculating visibility score...", subtext: "Finalizing audit..." },
     ];
@@ -156,22 +155,22 @@ export default function Home() {
   );
 
   const getPromptResultText = (result: PromptResult): string => {
-    const foundCount = [result.chatgpt.found, result.gemini.found, result.perplexity.found].filter(Boolean).length;
+    const foundCount = [result.chatgpt.found, result.googleAI.found].filter(Boolean).length;
     if (foundCount === 0) {
-      const competitorCount = (result.chatgpt.competitors?.length || 0) + (result.gemini.competitors?.length || 0) + (result.perplexity.competitors?.length || 0);
+      const competitorCount = (result.chatgpt.competitors?.length || 0) + (result.googleAI.competitors?.length || 0);
       if (competitorCount > 0) {
         return `Result: ${Math.min(competitorCount, 3)} Competitors cited. Your brand was not mentioned.`;
       }
       return "Result: AI recommended competitors. Your brand was not mentioned.";
     }
-    if (foundCount === 3) {
+    if (foundCount === 2) {
       return "Result: Brand found across all platforms.";
     }
     return "Result: Brand found, but sentiment was neutral/mixed.";
   };
 
   const PromptResultRow = ({ result, index }: { result: PromptResult; index: number }) => {
-    const foundCount = [result.chatgpt.found, result.gemini.found, result.perplexity.found].filter(Boolean).length;
+    const foundCount = [result.chatgpt.found, result.googleAI.found].filter(Boolean).length;
     const isFound = foundCount > 0;
     const resultText = getPromptResultText(result);
 
@@ -311,7 +310,7 @@ export default function Home() {
                 Are you invisible to AI?
               </h1>
               <p className="text-xl md:text-2xl text-gray-500 max-w-2xl mx-auto leading-relaxed font-light">
-                See exactly how ChatGPT, Perplexity, and Gemini recommend (or ignore) your brand.
+                See exactly how ChatGPT and Google AI Overviews recommend (or ignore) your brand.
               </p>
             </div>
 
@@ -422,7 +421,7 @@ export default function Home() {
 
                   <div className="text-center pt-2">
                     <p className="text-xs text-gray-400 font-medium">
-                      Generating 20 AI prompt variations - Checking ChatGPT, Perplexity, Gemini
+                      Generating 20 AI prompt variations - Checking ChatGPT & Google AI Overviews
                     </p>
                   </div>
                 </div>
@@ -431,8 +430,7 @@ export default function Home() {
 
             <div className="flex flex-wrap items-center justify-center gap-8 text-sm font-medium text-gray-400 uppercase tracking-widest">
               <span className="flex items-center gap-2"><CheckCircle size={14} className="text-[#5599f9]" /> ChatGPT</span>
-              <span className="flex items-center gap-2"><CheckCircle size={14} className="text-[#5599f9]" /> Perplexity</span>
-              <span className="flex items-center gap-2"><CheckCircle size={14} className="text-[#5599f9]" /> Gemini</span>
+              <span className="flex items-center gap-2"><CheckCircle size={14} className="text-[#5599f9]" /> Google AI Overviews</span>
             </div>
           </div>
         </main>
@@ -559,7 +557,7 @@ export default function Home() {
         </div>
 
         {/* Platform Scores */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
@@ -578,23 +576,10 @@ export default function Home() {
               <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
                 <Globe className="text-blue-600" size={20} />
               </div>
-              <span className="font-bold text-[#010400]">Gemini</span>
+              <span className="font-bold text-[#010400]">Google AI Overviews</span>
             </div>
-            <div className={`text-4xl font-bold ${getScoreColor(auditResults?.geminiScore || 0)}`} data-testid="text-gemini-score">
-              {auditResults?.geminiScore || 0}%
-            </div>
-            <p className="text-sm text-gray-500 mt-1">Visibility Score</p>
-          </div>
-
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                <Search className="text-purple-600" size={20} />
-              </div>
-              <span className="font-bold text-[#010400]">Perplexity</span>
-            </div>
-            <div className={`text-4xl font-bold ${getScoreColor(auditResults?.perplexityScore || 0)}`} data-testid="text-perplexity-score">
-              {auditResults?.perplexityScore || 0}%
+            <div className={`text-4xl font-bold ${getScoreColor(auditResults?.googleAIScore || 0)}`} data-testid="text-google-ai-score">
+              {auditResults?.googleAIScore || 0}%
             </div>
             <p className="text-sm text-gray-500 mt-1">Visibility Score</p>
           </div>

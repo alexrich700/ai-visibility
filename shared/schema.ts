@@ -36,12 +36,7 @@ export const promptResultSchema = z.object({
     response: z.string(),
     competitors: z.array(z.string()).optional(),
   }),
-  gemini: z.object({
-    found: z.boolean(),
-    response: z.string(),
-    competitors: z.array(z.string()).optional(),
-  }),
-  perplexity: z.object({
+  googleAI: z.object({
     found: z.boolean(),
     response: z.string(),
     competitors: z.array(z.string()).optional(),
@@ -59,8 +54,7 @@ export const auditResultsSchema = z.object({
   city: z.string().optional(),
   overallScore: z.number(),
   chatgptScore: z.number(),
-  geminiScore: z.number(),
-  perplexityScore: z.number(),
+  googleAIScore: z.number(),
   promptResults: z.array(promptResultSchema),
   competitors: z.array(z.object({
     name: z.string(),
@@ -88,7 +82,7 @@ export const scanProgressSchema = z.object({
   status: z.string(),
   subtext: z.string(),
   currentPrompt: z.string().optional(),
-  currentPlatform: z.enum(["chatgpt", "gemini", "perplexity"]).optional(),
+  currentPlatform: z.enum(["chatgpt", "googleAI"]).optional(),
 });
 
 export type ScanProgress = z.infer<typeof scanProgressSchema>;
