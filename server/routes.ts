@@ -40,6 +40,7 @@ export async function registerRoutes(
         chatgptScore: results.chatgptScore,
         googleAIScore: results.googleAIScore,
         promptResults: results.promptResults,
+        sentimentAnalysis: results.sentimentAnalysis,
         competitors: results.competitors,
         timestamp: new Date().toISOString(),
       });

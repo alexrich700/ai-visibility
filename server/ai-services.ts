@@ -152,8 +152,8 @@ async function scrapeWebsite(url: string): Promise<string | null> {
   }
 }
 
-// Fallback prompts if AI generation fails
-function getFallbackPrompts(keyword: string, location: string, businessName: string): string[] {
+// Fallback research prompts (NO brand name - for visibility testing)
+function getFallbackResearchPrompts(keyword: string, location: string): string[] {
   const loc = location !== "nationwide" ? ` in ${location}` : "";
   const year = new Date().getFullYear();
   return [
@@ -175,14 +175,25 @@ function getFallbackPrompts(keyword: string, location: string, businessName: str
     `${keyword} experts${loc}`,
     `Professional ${keyword} services${loc}`,
     `Find a good ${keyword}${loc}`,
-    `${keyword} alternatives to ${businessName}`,
-    `What are reviews for ${businessName}?`,
+    `Top 5 ${keyword}${loc}`,
+    `Best ${keyword} for home${loc}`,
   ];
 }
 
-// Generate 20 prompts dynamically using OpenAI
-export async function generatePrompts(
-  businessName: string,
+// Fallback sentiment prompts (WITH brand name - for sentiment analysis)
+function getFallbackSentimentPrompts(businessName: string, keyword: string, location: string): string[] {
+  const loc = location !== "nationwide" ? ` in ${location}` : "";
+  return [
+    `Would you recommend ${businessName}${loc}?`,
+    `Is ${businessName} a reliable ${keyword}?`,
+    `What do customers say about ${businessName}?`,
+    `${businessName} reviews - are they worth it?`,
+    `Should I hire ${businessName} for ${keyword}?`,
+  ];
+}
+
+// Generate 20 RESEARCH-BASED prompts (NO brand name - for visibility testing)
+export async function generateResearchPrompts(
   keyword: string,
   scope: "local" | "national",
   city?: string,
@@ -190,7 +201,7 @@ export async function generatePrompts(
 ): Promise<string[]> {
   const location = scope === "local" && city ? city : "nationwide";
   
-  // Try to scrape homepage for context
+  // Try to scrape homepage for context about services
   let homepageContent: string | null = null;
   if (url) {
     console.log(`Scraping website: ${url}`);
@@ -200,32 +211,38 @@ export async function generatePrompts(
     }
   }
   
-  // Build prompt for OpenAI to generate search queries
-  const systemPrompt = `You are a marketing expert specializing in AI search optimization. Generate exactly 20 bottom-of-funnel search queries that potential customers would type into AI assistants (like ChatGPT or Google AI) when actively looking to hire or purchase from a ${keyword} business${location !== "nationwide" ? ` in ${location}` : ""}. 
+  // Build prompt for OpenAI - explicitly exclude brand name
+  const systemPrompt = `You are a marketing expert specializing in AI search optimization. Generate exactly 20 research-based search queries that potential customers would type into AI assistants (like ChatGPT or Google AI) when actively looking to hire or purchase from a ${keyword} business${location !== "nationwide" ? ` in ${location}` : ""}.
 
-These should be research-based queries from people who are ready to make a decision - comparing options, checking reviews, asking for recommendations, or looking for the best provider. Include a mix of:
-- Direct recommendation requests ("best X", "top X", "who should I hire")
-- Comparison queries ("X vs Y", "compare X services")
-- Review/trust queries ("X reviews", "is X reliable")
-- Pricing queries ("X cost", "affordable X")
+CRITICAL: These must be GENERIC research queries that do NOT include any specific business or brand names. We want to test if the business appears organically in AI recommendations.
+
+These should be queries from people comparing options and making decisions:
+- Direct recommendation requests ("best X", "top X", "who should I hire for X")
+- Comparison queries ("compare X services", "X vs competitors")
+- Trust/quality queries ("most reliable X", "top-rated X")
+- Pricing queries ("affordable X", "X pricing")
 - Location-specific queries if applicable
+
+DO NOT include:
+- Any brand or business names
+- Queries asking about specific company reviews
+- Queries mentioning "[business name]"
 
 Return ONLY a valid JSON array of exactly 20 strings. No explanations, no markdown, just the JSON array.`;
   
-  let userPrompt = `Generate 20 bottom-of-funnel AI search queries for:
-Business Name: ${businessName}
-Service/Industry: ${keyword}
-Target Location: ${location}`;
+  let userPrompt = `Generate 20 generic research-based AI search queries for the ${keyword} industry${location !== "nationwide" ? ` in ${location}` : ""}.
+
+Remember: NO brand names or specific company references allowed.`;
   
   if (homepageContent) {
     userPrompt += `
 
-Here is content from their homepage for additional context about their specific services and value propositions:
+Here is homepage content for context about typical services in this industry (but DO NOT use the company name):
 ${homepageContent}`;
   }
   
   try {
-    console.log("Generating prompts with OpenAI...");
+    console.log("Generating research prompts with OpenAI...");
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
@@ -237,13 +254,11 @@ ${homepageContent}`;
     });
     
     const text = response.choices[0]?.message?.content || "";
-    console.log("OpenAI response:", text.slice(0, 200));
+    console.log("OpenAI research prompts response:", text.slice(0, 200));
     
-    // Parse JSON array from response - handle potential markdown formatting
     const cleanText = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const parsed = JSON.parse(cleanText);
     
-    // Validate: must be array of non-empty strings with exactly 20 items
     if (Array.isArray(parsed)) {
       const validPrompts = parsed
         .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
@@ -251,19 +266,123 @@ ${homepageContent}`;
         .slice(0, 20);
       
       if (validPrompts.length === 20) {
-        console.log(`Generated 20 valid custom prompts`);
+        console.log(`Generated 20 valid research prompts`);
         return validPrompts;
       } else {
         console.log(`OpenAI returned ${validPrompts.length} valid prompts (need 20), using fallback`);
       }
     }
   } catch (error) {
-    console.error("Prompt generation error:", error);
+    console.error("Research prompt generation error:", error);
   }
   
-  // Fallback to basic prompts if OpenAI fails
-  console.log("Using fallback prompts");
-  return getFallbackPrompts(keyword, location, businessName);
+  console.log("Using fallback research prompts");
+  return getFallbackResearchPrompts(keyword, location);
+}
+
+// Generate 5 SENTIMENT prompts (WITH brand name - for sentiment analysis)
+export async function generateSentimentPrompts(
+  businessName: string,
+  keyword: string,
+  scope: "local" | "national",
+  city?: string
+): Promise<string[]> {
+  const location = scope === "local" && city ? city : "nationwide";
+  
+  const systemPrompt = `You are a marketing expert. Generate exactly 5 brand-specific search queries that someone would type into AI assistants to learn about the reputation and quality of a specific business.
+
+These queries should:
+- Directly mention the business name: "${businessName}"
+- Ask about reviews, recommendations, reliability, quality
+- Be natural questions a potential customer would ask
+
+Return ONLY a valid JSON array of exactly 5 strings. No explanations, no markdown, just the JSON array.`;
+  
+  const userPrompt = `Generate 5 brand-specific queries for:
+Business Name: ${businessName}
+Industry: ${keyword}
+Location: ${location !== "nationwide" ? location : "National"}
+
+Example formats:
+- "Would you recommend [business name]?"
+- "Is [business name] a good [service]?"
+- "What do customers say about [business name]?"`;
+  
+  try {
+    console.log("Generating sentiment prompts with OpenAI...");
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      max_completion_tokens: 500,
+      temperature: 0.7,
+    });
+    
+    const text = response.choices[0]?.message?.content || "";
+    console.log("OpenAI sentiment prompts response:", text.slice(0, 200));
+    
+    const cleanText = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const parsed = JSON.parse(cleanText);
+    
+    if (Array.isArray(parsed)) {
+      const validPrompts = parsed
+        .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+        .map(s => s.trim())
+        .slice(0, 5);
+      
+      if (validPrompts.length === 5) {
+        console.log(`Generated 5 valid sentiment prompts`);
+        return validPrompts;
+      }
+    }
+  } catch (error) {
+    console.error("Sentiment prompt generation error:", error);
+  }
+  
+  console.log("Using fallback sentiment prompts");
+  return getFallbackSentimentPrompts(businessName, keyword, location);
+}
+
+// Analyze sentiment of an AI response
+function analyzeSentiment(response: string, businessName: string): "positive" | "negative" | "neutral" {
+  const lowerResponse = response.toLowerCase();
+  const lowerBusiness = businessName.toLowerCase();
+  
+  // Check if business is even mentioned
+  if (!lowerResponse.includes(lowerBusiness)) {
+    return "neutral";
+  }
+  
+  // Positive indicators
+  const positiveWords = [
+    "recommend", "excellent", "great", "reliable", "trusted", "professional",
+    "quality", "satisfied", "happy", "best", "top-rated", "highly rated",
+    "good reviews", "positive", "outstanding", "exceptional", "worth it"
+  ];
+  
+  // Negative indicators
+  const negativeWords = [
+    "not recommend", "avoid", "poor", "bad reviews", "complaints", "issues",
+    "problems", "unreliable", "overpriced", "disappointing", "negative",
+    "caution", "be careful", "concerns", "warning"
+  ];
+  
+  let positiveScore = 0;
+  let negativeScore = 0;
+  
+  for (const word of positiveWords) {
+    if (lowerResponse.includes(word)) positiveScore++;
+  }
+  
+  for (const word of negativeWords) {
+    if (lowerResponse.includes(word)) negativeScore++;
+  }
+  
+  if (positiveScore > negativeScore + 1) return "positive";
+  if (negativeScore > positiveScore) return "negative";
+  return "neutral";
 }
 
 // Main audit function
@@ -283,31 +402,80 @@ export async function runAudit(
   chatgptScore: number;
   googleAIScore: number;
   competitors: Array<{ name: string; mentions: number }>;
+  sentimentAnalysis: {
+    overall: "positive" | "negative" | "neutral";
+    positiveCount: number;
+    negativeCount: number;
+    neutralCount: number;
+    results: Array<{
+      prompt: string;
+      chatgpt: { response: string; sentiment: "positive" | "negative" | "neutral" };
+      googleAI: { response: string; sentiment: "positive" | "negative" | "neutral" };
+    }>;
+  };
 }> {
-  // Generate prompts dynamically using OpenAI based on business context
-  const prompts = await generatePrompts(businessName, keyword, scope, city, url);
+  // Generate research prompts (NO brand name - for visibility testing)
+  const researchPrompts = await generateResearchPrompts(keyword, scope, city, url);
+  
+  // Generate sentiment prompts (WITH brand name - for sentiment analysis)
+  const sentimentPrompts = await generateSentimentPrompts(businessName, keyword, scope, city);
 
-  // Query ChatGPT and Google AI Overviews for each prompt
+  // Query ChatGPT and Google AI for research prompts (visibility)
   const promptResults = await Promise.all(
-    prompts.map(async (prompt) => {
+    researchPrompts.map(async (prompt) => {
       const [chatgpt, googleAI] = await Promise.all([
         queryChatGPT(prompt, businessName),
         queryGemini(prompt, businessName),
       ]);
-
       return { prompt, chatgpt, googleAI };
     })
   );
 
-  // Calculate scores
+  // Query ChatGPT and Google AI for sentiment prompts
+  const sentimentResults = await Promise.all(
+    sentimentPrompts.map(async (prompt) => {
+      const [chatgptResult, googleAIResult] = await Promise.all([
+        queryChatGPT(prompt, businessName),
+        queryGemini(prompt, businessName),
+      ]);
+      return {
+        prompt,
+        chatgpt: {
+          response: chatgptResult.response,
+          sentiment: analyzeSentiment(chatgptResult.response, businessName),
+        },
+        googleAI: {
+          response: googleAIResult.response,
+          sentiment: analyzeSentiment(googleAIResult.response, businessName),
+        },
+      };
+    })
+  );
+
+  // Calculate visibility scores
   const chatgptFound = promptResults.filter((r) => r.chatgpt.found).length;
   const googleAIFound = promptResults.filter((r) => r.googleAI.found).length;
 
-  const chatgptScore = Math.round((chatgptFound / prompts.length) * 100);
-  const googleAIScore = Math.round((googleAIFound / prompts.length) * 100);
-  
-  // Overall score is average of both platforms
+  const chatgptScore = Math.round((chatgptFound / researchPrompts.length) * 100);
+  const googleAIScore = Math.round((googleAIFound / researchPrompts.length) * 100);
   const overallScore = Math.round((chatgptScore + googleAIScore) / 2);
+
+  // Calculate sentiment summary
+  let positiveCount = 0;
+  let negativeCount = 0;
+  let neutralCount = 0;
+  
+  for (const result of sentimentResults) {
+    for (const sentiment of [result.chatgpt.sentiment, result.googleAI.sentiment]) {
+      if (sentiment === "positive") positiveCount++;
+      else if (sentiment === "negative") negativeCount++;
+      else neutralCount++;
+    }
+  }
+  
+  const overallSentiment: "positive" | "negative" | "neutral" = 
+    positiveCount > negativeCount + neutralCount ? "positive" :
+    negativeCount > positiveCount ? "negative" : "neutral";
 
   // Aggregate competitors
   const competitorMap = new Map<string, number>();
@@ -328,5 +496,12 @@ export async function runAudit(
     chatgptScore,
     googleAIScore,
     competitors,
+    sentimentAnalysis: {
+      overall: overallSentiment,
+      positiveCount,
+      negativeCount,
+      neutralCount,
+      results: sentimentResults,
+    },
   };
 }

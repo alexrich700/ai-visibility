@@ -28,7 +28,7 @@ export const auditRequestSchema = z.object({
 
 export type AuditRequest = z.infer<typeof auditRequestSchema>;
 
-// Prompt result from each AI platform
+// Prompt result from each AI platform (research-based visibility prompts)
 export const promptResultSchema = z.object({
   prompt: z.string(),
   chatgpt: z.object({
@@ -45,6 +45,32 @@ export const promptResultSchema = z.object({
 
 export type PromptResult = z.infer<typeof promptResultSchema>;
 
+// Sentiment result from brand-specific prompts
+export const sentimentResultSchema = z.object({
+  prompt: z.string(),
+  chatgpt: z.object({
+    response: z.string(),
+    sentiment: z.enum(["positive", "negative", "neutral"]),
+  }),
+  googleAI: z.object({
+    response: z.string(),
+    sentiment: z.enum(["positive", "negative", "neutral"]),
+  }),
+});
+
+export type SentimentResult = z.infer<typeof sentimentResultSchema>;
+
+// Overall sentiment analysis summary
+export const sentimentSummarySchema = z.object({
+  overall: z.enum(["positive", "negative", "neutral"]),
+  positiveCount: z.number(),
+  negativeCount: z.number(),
+  neutralCount: z.number(),
+  results: z.array(sentimentResultSchema),
+});
+
+export type SentimentSummary = z.infer<typeof sentimentSummarySchema>;
+
 // Audit results
 export const auditResultsSchema = z.object({
   businessName: z.string(),
@@ -56,6 +82,7 @@ export const auditResultsSchema = z.object({
   chatgptScore: z.number(),
   googleAIScore: z.number(),
   promptResults: z.array(promptResultSchema),
+  sentimentAnalysis: sentimentSummarySchema.optional(),
   competitors: z.array(z.object({
     name: z.string(),
     mentions: z.number(),
