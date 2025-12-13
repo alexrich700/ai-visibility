@@ -20,6 +20,9 @@ import {
   Loader2,
   Download,
   Lock,
+  ThumbsUp,
+  ThumbsDown,
+  Minus,
 } from "lucide-react";
 import type { AuditRequest, AuditResults, PromptResult, SentimentResult } from "@shared/schema";
 
@@ -630,48 +633,54 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Sentiment Prompts */}
-            <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+            {/* Sentiment Prompts - Table Layout */}
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              {/* Table Header */}
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 p-4 bg-gray-50 border-b border-gray-200">
+                <div className="md:col-span-6">
+                  <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Brand Query</span>
+                </div>
+                <div className="md:col-span-3">
+                  <span className="text-xs font-bold uppercase tracking-wider text-gray-500">ChatGPT</span>
+                </div>
+                <div className="md:col-span-3">
+                  <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Google AI</span>
+                </div>
+              </div>
+              
+              {/* Table Rows */}
               {auditResults.sentimentAnalysis.results.map((result, index) => (
                 <div 
                   key={index} 
-                  className="flex items-start gap-4 p-4"
+                  className="grid grid-cols-1 md:grid-cols-12 gap-4 p-5 border-b border-gray-100 last:border-0 items-center"
                   data-testid={`sentiment-result-${index}`}
                 >
-                  <div className="mt-1">
-                    {result.chatgpt.sentiment === "positive" || result.googleAI.sentiment === "positive" ? (
-                      <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center">
-                        <CheckCircle className="w-3 h-3 text-green-600" />
-                      </div>
-                    ) : result.chatgpt.sentiment === "negative" || result.googleAI.sentiment === "negative" ? (
-                      <div className="w-5 h-5 rounded-full bg-red-100 flex items-center justify-center">
-                        <X className="w-3 h-3 text-red-600" />
-                      </div>
-                    ) : (
-                      <div className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center">
-                        <div className="w-2 h-2 rounded-full bg-gray-400" />
-                      </div>
-                    )}
+                  <div className="md:col-span-6">
+                    <p className="font-medium text-[#010400] text-base">"{result.prompt}"</p>
                   </div>
-                  <div className="flex-1">
-                    <div className="font-mono text-xs text-gray-400 uppercase tracking-wider mb-1">Brand Query</div>
-                    <p className="font-medium text-[#010400] text-lg">"{result.prompt}"</p>
-                    <div className="flex items-center gap-4 mt-2 text-sm">
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                        result.chatgpt.sentiment === "positive" ? "bg-green-100 text-green-700" :
-                        result.chatgpt.sentiment === "negative" ? "bg-red-100 text-red-700" :
-                        "bg-gray-100 text-gray-600"
-                      }`}>
-                        ChatGPT: {result.chatgpt.sentiment}
-                      </span>
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                        result.googleAI.sentiment === "positive" ? "bg-green-100 text-green-700" :
-                        result.googleAI.sentiment === "negative" ? "bg-red-100 text-red-700" :
-                        "bg-gray-100 text-gray-600"
-                      }`}>
-                        Google AI: {result.googleAI.sentiment}
-                      </span>
-                    </div>
+                  <div className="md:col-span-3">
+                    <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1.5 rounded ${
+                      result.chatgpt.sentiment === "positive" ? "bg-green-100 text-green-700" :
+                      result.chatgpt.sentiment === "negative" ? "bg-red-100 text-red-700" :
+                      "bg-gray-100 text-gray-600"
+                    }`}>
+                      {result.chatgpt.sentiment === "positive" && <ThumbsUp size={14} />}
+                      {result.chatgpt.sentiment === "negative" && <ThumbsDown size={14} />}
+                      {result.chatgpt.sentiment === "neutral" && <Minus size={14} />}
+                      {result.chatgpt.sentiment.charAt(0).toUpperCase() + result.chatgpt.sentiment.slice(1)}
+                    </span>
+                  </div>
+                  <div className="md:col-span-3">
+                    <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1.5 rounded ${
+                      result.googleAI.sentiment === "positive" ? "bg-green-100 text-green-700" :
+                      result.googleAI.sentiment === "negative" ? "bg-red-100 text-red-700" :
+                      "bg-gray-100 text-gray-600"
+                    }`}>
+                      {result.googleAI.sentiment === "positive" && <ThumbsUp size={14} />}
+                      {result.googleAI.sentiment === "negative" && <ThumbsDown size={14} />}
+                      {result.googleAI.sentiment === "neutral" && <Minus size={14} />}
+                      {result.googleAI.sentiment.charAt(0).toUpperCase() + result.googleAI.sentiment.slice(1)}
+                    </span>
                   </div>
                 </div>
               ))}
