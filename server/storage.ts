@@ -1,37 +1,70 @@
-import { type User, type InsertUser } from "@shared/schema";
 import { randomUUID } from "crypto";
 
-// modify the interface with any CRUD methods
-// you might need
+export interface Lead {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  businessName: string;
+  auditScore: number;
+  createdAt: string;
+}
+
+export interface AuditRecord {
+  id: string;
+  businessName: string;
+  url: string;
+  keyword: string;
+  scope: "local" | "national";
+  city?: string;
+  overallScore: number;
+  createdAt: string;
+}
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  createLead(lead: Omit<Lead, "id" | "createdAt">): Promise<Lead>;
+  getLeads(): Promise<Lead[]>;
+  createAuditRecord(audit: Omit<AuditRecord, "id" | "createdAt">): Promise<AuditRecord>;
+  getAuditRecords(): Promise<AuditRecord[]>;
 }
 
 export class MemStorage implements IStorage {
-  private users: Map<string, User>;
+  private leads: Map<string, Lead>;
+  private audits: Map<string, AuditRecord>;
 
   constructor() {
-    this.users = new Map();
+    this.leads = new Map();
+    this.audits = new Map();
   }
 
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
-  }
-
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
-  }
-
-  async createUser(insertUser: InsertUser): Promise<User> {
+  async createLead(leadData: Omit<Lead, "id" | "createdAt">): Promise<Lead> {
     const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+    const lead: Lead = {
+      ...leadData,
+      id,
+      createdAt: new Date().toISOString(),
+    };
+    this.leads.set(id, lead);
+    return lead;
+  }
+
+  async getLeads(): Promise<Lead[]> {
+    return Array.from(this.leads.values());
+  }
+
+  async createAuditRecord(auditData: Omit<AuditRecord, "id" | "createdAt">): Promise<AuditRecord> {
+    const id = randomUUID();
+    const audit: AuditRecord = {
+      ...auditData,
+      id,
+      createdAt: new Date().toISOString(),
+    };
+    this.audits.set(id, audit);
+    return audit;
+  }
+
+  async getAuditRecords(): Promise<AuditRecord[]> {
+    return Array.from(this.audits.values());
   }
 }
 

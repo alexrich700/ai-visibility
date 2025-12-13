@@ -1,0 +1,654 @@
+import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import {
+  Search,
+  CheckCircle,
+  AlertTriangle,
+  Cpu,
+  Globe,
+  ArrowRight,
+  MapPin,
+  Layout,
+  Building2,
+  FileText,
+  X,
+  Phone,
+  Mail,
+  User,
+  BarChart2,
+  Loader2,
+} from "lucide-react";
+import type { AuditRequest, AuditResults, PromptResult } from "@shared/schema";
+
+type Step = "input" | "scanning" | "results";
+
+interface ScanProgress {
+  progress: number;
+  status: string;
+  subtext: string;
+}
+
+export default function Home() {
+  const [step, setStep] = useState<Step>("input");
+  const [showLeadForm, setShowLeadForm] = useState(false);
+
+  // Input State
+  const [businessName, setBusinessName] = useState("");
+  const [url, setUrl] = useState("");
+  const [keyword, setKeyword] = useState("");
+  const [scope, setScope] = useState<"local" | "national">("local");
+  const [city, setCity] = useState("");
+
+  // Lead Form State
+  const [leadName, setLeadName] = useState("");
+  const [leadEmail, setLeadEmail] = useState("");
+  const [leadPhone, setLeadPhone] = useState("");
+
+  // Scanning State
+  const [scanProgress, setScanProgress] = useState(0);
+  const [scanStatus, setScanStatus] = useState("");
+  const [activePrompt, setActivePrompt] = useState("");
+
+  // Results State
+  const [auditResults, setAuditResults] = useState<AuditResults | null>(null);
+
+  // Audit mutation
+  const auditMutation = useMutation({
+    mutationFn: async (data: AuditRequest) => {
+      const response = await apiRequest("POST", "/api/audit", data);
+      return response as AuditResults;
+    },
+    onSuccess: (data) => {
+      setAuditResults(data);
+      setStep("results");
+    },
+    onError: (error) => {
+      console.error("Audit failed:", error);
+      setStep("input");
+    },
+  });
+
+  // Lead capture mutation
+  const leadMutation = useMutation({
+    mutationFn: async (data: { name: string; email: string; phone: string; businessName: string; auditScore: number }) => {
+      return apiRequest("POST", "/api/leads", data);
+    },
+    onSuccess: () => {
+      setShowLeadForm(false);
+    },
+  });
+
+  const startScan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!url || !keyword || !businessName) return;
+    if (scope === "local" && !city) return;
+
+    setStep("scanning");
+
+    const locationString = scope === "local" ? `in ${city}` : "";
+    const locationContext = scope === "local" ? city : "National";
+
+    const stages = [
+      { progress: 5, text: "Initializing Rossman Media AI Engine...", subtext: "Connecting to Knowledge Graph..." },
+      { progress: 10, text: `Identifying Entity: ${businessName}`, subtext: "Verifying domain authority..." },
+      { progress: 15, text: "Scraping website content...", subtext: `Analyzing ${url}...` },
+      { progress: 25, text: "Generating 20 User Intent Prompts...", subtext: `Creating variations for "${keyword}"...` },
+      { progress: 35, text: "Querying ChatGPT...", subtext: `PROMPT: "Who is the best ${keyword} ${locationString}?"` },
+      { progress: 50, text: "Querying Gemini...", subtext: `PROMPT: "Top rated ${keyword} providers ${locationContext}..."` },
+      { progress: 65, text: "Querying Perplexity...", subtext: `PROMPT: "Compare ${keyword} pricing ${locationString}..."` },
+      { progress: 80, text: "Analyzing Competitor Share of Voice...", subtext: "Cross-referencing ChatGPT, Gemini & Perplexity..." },
+      { progress: 90, text: "Compiling Prompt Log...", subtext: "Identifying missed opportunities..." },
+      { progress: 95, text: "Calculating visibility score...", subtext: "Finalizing audit..." },
+    ];
+
+    let currentStage = 0;
+    const interval = setInterval(() => {
+      if (currentStage >= stages.length) {
+        clearInterval(interval);
+        return;
+      }
+      setScanProgress(stages[currentStage].progress);
+      setScanStatus(stages[currentStage].text);
+      setActivePrompt(stages[currentStage].subtext);
+      currentStage++;
+    }, 600);
+
+    try {
+      await auditMutation.mutateAsync({
+        businessName,
+        url,
+        keyword,
+        scope,
+        city: scope === "local" ? city : undefined,
+      });
+    } finally {
+      clearInterval(interval);
+      setScanProgress(100);
+      setScanStatus("Audit Complete");
+      setActivePrompt("Redirecting...");
+    }
+  };
+
+  const handleLeadSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!leadName || !leadEmail || !leadPhone) return;
+
+    leadMutation.mutate({
+      name: leadName,
+      email: leadEmail,
+      phone: leadPhone,
+      businessName,
+      auditScore: auditResults?.overallScore || 0,
+    });
+  };
+
+  const Branding = () => (
+    <div className="flex items-center gap-3 font-bold text-2xl tracking-tighter text-[#010400]">
+      <div className="flex h-8 w-8 relative overflow-hidden rounded-md bg-[#5599f9]">
+        <div className="absolute top-0 right-0 w-4 h-8 bg-[#ffb41c] skew-x-12 transform translate-x-1"></div>
+      </div>
+      <span>ROSSMAN<span className="font-light">MEDIA</span></span>
+    </div>
+  );
+
+  const PromptResultRow = ({ result, index }: { result: PromptResult; index: number }) => {
+    const foundCount = [result.chatgpt.found, result.gemini.found, result.perplexity.found].filter(Boolean).length;
+    const isFound = foundCount > 0;
+
+    return (
+      <div 
+        className="flex items-start gap-4 p-4 border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors"
+        data-testid={`prompt-result-${index}`}
+      >
+        <div className="mt-1">
+          {isFound ? (
+            <CheckCircle className="text-[#5599f9]" size={20} />
+          ) : (
+            <div className="w-5 h-5 rounded-full border-2 border-red-200 flex items-center justify-center">
+              <X className="w-3 h-3 text-red-500" />
+            </div>
+          )}
+        </div>
+        <div className="flex-1">
+          <div className="font-mono text-xs text-gray-400 uppercase tracking-wider mb-1">Prompt #{index + 1}</div>
+          <p className="font-medium text-[#010400] text-lg">"{result.prompt}"</p>
+          <div className="flex flex-wrap gap-2 mt-2">
+            <span className={`text-xs px-2 py-1 rounded ${result.chatgpt.found ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-600'}`}>
+              ChatGPT: {result.chatgpt.found ? 'Found' : 'Not Found'}
+            </span>
+            <span className={`text-xs px-2 py-1 rounded ${result.gemini.found ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-600'}`}>
+              Gemini: {result.gemini.found ? 'Found' : 'Not Found'}
+            </span>
+            <span className={`text-xs px-2 py-1 rounded ${result.perplexity.found ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-600'}`}>
+              Perplexity: {result.perplexity.found ? 'Found' : 'Not Found'}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const LeadGenModal = () => (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#010400]/80 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl relative">
+        <button
+          onClick={() => setShowLeadForm(false)}
+          className="absolute top-4 right-4 text-gray-400 hover:text-gray-900 transition-colors z-10"
+          data-testid="button-close-modal"
+        >
+          <X size={24} />
+        </button>
+
+        <div className="bg-[#5599f9] p-8 text-center">
+          <FileText className="text-white mx-auto mb-4" size={48} />
+          <h2 className="text-2xl font-bold text-white tracking-tight">Unlock Your 90-Day Roadmap</h2>
+          <p className="text-blue-100 mt-2">
+            See exactly how to fix your technical errors and turn this score from {auditResults?.overallScore || 0} to 80+.
+          </p>
+        </div>
+
+        <div className="p-8 space-y-6">
+          <form className="space-y-4" onSubmit={handleLeadSubmit}>
+            <div>
+              <label className="block text-xs font-bold uppercase text-gray-400 mb-1">Full Name</label>
+              <div className="relative">
+                <User className="absolute left-3 top-3 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:border-[#5599f9] focus:ring-1 focus:ring-[#5599f9] outline-none"
+                  placeholder="John Doe"
+                  value={leadName}
+                  onChange={(e) => setLeadName(e.target.value)}
+                  data-testid="input-lead-name"
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase text-gray-400 mb-1">Work Email</label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-3 text-gray-400" size={18} />
+                <input
+                  type="email"
+                  className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:border-[#5599f9] focus:ring-1 focus:ring-[#5599f9] outline-none"
+                  placeholder="john@company.com"
+                  value={leadEmail}
+                  onChange={(e) => setLeadEmail(e.target.value)}
+                  data-testid="input-lead-email"
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase text-gray-400 mb-1">Phone Number</label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-3 text-gray-400" size={18} />
+                <input
+                  type="tel"
+                  className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:border-[#5599f9] focus:ring-1 focus:ring-[#5599f9] outline-none"
+                  placeholder="(555) 123-4567"
+                  value={leadPhone}
+                  onChange={(e) => setLeadPhone(e.target.value)}
+                  data-testid="input-lead-phone"
+                  required
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={leadMutation.isPending}
+              className="w-full bg-[#5599f9] hover:bg-[#4a8ce8] text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 mt-4 disabled:opacity-50"
+              data-testid="button-submit-lead"
+            >
+              {leadMutation.isPending ? (
+                <Loader2 className="animate-spin" size={20} />
+              ) : (
+                <>Get My Full Report <ArrowRight size={20} /></>
+              )}
+            </button>
+          </form>
+
+          <div className="text-center">
+            <p className="text-xs text-gray-400">
+              Your detailed report will be emailed to you immediately.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // --- View: Input ---
+  if (step === "input") {
+    return (
+      <div className="min-h-screen bg-white flex flex-col font-sans text-[#010400] selection:bg-[#5599f9] selection:text-white">
+        <header className="px-6 py-8 flex justify-between items-center max-w-7xl mx-auto w-full">
+          <Branding />
+          <button className="text-sm font-semibold tracking-wide text-gray-500 hover:text-[#5599f9] transition-colors uppercase">
+            Client Login
+          </button>
+        </header>
+
+        <main className="flex-1 flex flex-col items-center justify-center px-4 -mt-10">
+          <div className="max-w-3xl w-full text-center space-y-10">
+            <div className="space-y-6">
+              <h1 className="text-5xl md:text-7xl font-bold text-[#010400] tracking-tighter leading-none">
+                Are you invisible to AI?
+              </h1>
+              <p className="text-xl md:text-2xl text-gray-500 max-w-2xl mx-auto leading-relaxed font-light">
+                See exactly how ChatGPT, Perplexity, and Gemini recommend (or ignore) your brand.
+              </p>
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-2xl shadow-blue-900/5">
+              <form onSubmit={startScan} className="flex flex-col">
+                <div className="flex border-b border-gray-200">
+                  <button
+                    type="button"
+                    onClick={() => setScope("local")}
+                    className={`flex-1 py-4 text-sm font-bold tracking-widest uppercase transition-all flex items-center justify-center gap-2 ${
+                      scope === "local"
+                        ? "bg-gray-50 text-[#010400] border-b-2 border-[#5599f9]"
+                        : "bg-white text-gray-400 hover:text-gray-600 hover:bg-gray-50"
+                    }`}
+                    data-testid="button-scope-local"
+                  >
+                    <MapPin size={16} className={scope === "local" ? "text-[#5599f9]" : ""} /> Local Business
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setScope("national")}
+                    className={`flex-1 py-4 text-sm font-bold tracking-widest uppercase transition-all flex items-center justify-center gap-2 ${
+                      scope === "national"
+                        ? "bg-gray-50 text-[#010400] border-b-2 border-[#5599f9]"
+                        : "bg-white text-gray-400 hover:text-gray-600 hover:bg-gray-50"
+                    }`}
+                    data-testid="button-scope-national"
+                  >
+                    <Globe size={16} className={scope === "national" ? "text-[#5599f9]" : ""} /> National Brand
+                  </button>
+                </div>
+
+                <div className="p-8 space-y-4 bg-white">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="group relative">
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <Building2 className="text-gray-400 group-focus-within:text-[#5599f9] transition-colors" size={20} />
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Business Name"
+                        className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 focus:border-[#5599f9] focus:ring-1 focus:ring-[#5599f9] outline-none transition-all font-medium rounded-lg"
+                        value={businessName}
+                        onChange={(e) => setBusinessName(e.target.value)}
+                        data-testid="input-business-name"
+                        required
+                      />
+                    </div>
+
+                    <div className="group relative">
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <Layout className="text-gray-400 group-focus-within:text-[#5599f9] transition-colors" size={20} />
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Website (e.g. rossmanmedia.com)"
+                        className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 focus:border-[#5599f9] focus:ring-1 focus:ring-[#5599f9] outline-none transition-all font-medium rounded-lg"
+                        value={url}
+                        onChange={(e) => setUrl(e.target.value)}
+                        data-testid="input-url"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className={`grid gap-4 ${scope === "local" ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"}`}>
+                    <div className="group relative">
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <Search className="text-gray-400 group-focus-within:text-[#5599f9] transition-colors" size={20} />
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Main Service (e.g. Plumber, SEO Agency)"
+                        className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 focus:border-[#5599f9] focus:ring-1 focus:ring-[#5599f9] outline-none transition-all font-medium rounded-lg"
+                        value={keyword}
+                        onChange={(e) => setKeyword(e.target.value)}
+                        data-testid="input-keyword"
+                        required
+                      />
+                    </div>
+
+                    {scope === "local" && (
+                      <div className="group relative">
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                          <MapPin className="text-gray-400 group-focus-within:text-[#5599f9] transition-colors" size={20} />
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="Target City (e.g. Dallas, TX)"
+                          className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 focus:border-[#5599f9] focus:ring-1 focus:ring-[#5599f9] outline-none transition-all font-medium rounded-lg"
+                          value={city}
+                          onChange={(e) => setCity(e.target.value)}
+                          data-testid="input-city"
+                          required={scope === "local"}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={auditMutation.isPending}
+                    className="w-full bg-[#5599f9] hover:bg-[#4a8ce8] text-white text-lg font-bold tracking-wide py-5 uppercase transition-all transform active:scale-[0.99] flex items-center justify-center gap-2 mt-4 rounded-lg shadow-lg shadow-blue-500/20 disabled:opacity-50"
+                    data-testid="button-start-audit"
+                  >
+                    Start Visibility Audit <ArrowRight size={20} />
+                  </button>
+
+                  <div className="text-center pt-2">
+                    <p className="text-xs text-gray-400 font-medium">
+                      Generating 20 AI prompt variations - Checking ChatGPT, Perplexity, Gemini
+                    </p>
+                  </div>
+                </div>
+              </form>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-8 text-sm font-medium text-gray-400 uppercase tracking-widest">
+              <span className="flex items-center gap-2"><CheckCircle size={14} className="text-[#5599f9]" /> ChatGPT</span>
+              <span className="flex items-center gap-2"><CheckCircle size={14} className="text-[#5599f9]" /> Perplexity</span>
+              <span className="flex items-center gap-2"><CheckCircle size={14} className="text-[#5599f9]" /> Gemini</span>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // --- View: Scanning ---
+  if (step === "scanning") {
+    return (
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center px-4 font-mono">
+        <div className="max-w-xl w-full space-y-12">
+          <div className="text-center space-y-6">
+            <div className="relative w-24 h-24 mx-auto">
+              <div className="absolute inset-0 border-2 border-gray-100 rounded-full"></div>
+              <div className="absolute inset-0 border-2 border-[#5599f9] rounded-full border-t-transparent animate-spin"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-3 h-3 bg-[#ffb41c] transform rotate-45 animate-pulse"></div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <h2 className="text-3xl font-bold text-[#010400] tracking-tight" data-testid="text-scan-status">{scanStatus}</h2>
+              <div className="h-8">
+                <p className="text-gray-500 text-sm font-medium animate-pulse border border-gray-100 inline-block px-3 py-1 bg-gray-50 rounded-md" data-testid="text-scan-prompt">
+                  {activePrompt}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex justify-between text-xs font-bold uppercase tracking-widest text-gray-400">
+              <span>Progress</span>
+              <span data-testid="text-scan-progress">{scanProgress}%</span>
+            </div>
+            <div className="bg-gray-100 h-1.5 w-full overflow-hidden rounded-full">
+              <div
+                className="bg-[#5599f9] h-full transition-all duration-300 ease-out rounded-full"
+                style={{ width: `${scanProgress}%` }}
+              ></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --- View: Results ---
+  const getScoreColor = (score: number) => {
+    if (score >= 70) return "text-green-600";
+    if (score >= 40) return "text-[#ffb41c]";
+    return "text-red-500";
+  };
+
+  const getScoreLabel = (score: number) => {
+    if (score >= 70) return "Strong";
+    if (score >= 40) return "Moderate";
+    return "Critical";
+  };
+
+  return (
+    <div className="min-h-screen bg-white text-[#010400] pb-20 font-sans relative">
+      {showLeadForm && <LeadGenModal />}
+
+      <header className="bg-white border-b border-gray-100 sticky top-0 z-20">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center gap-4">
+          <Branding />
+          <div className="flex items-center gap-4">
+            <div className="hidden md:flex flex-col items-end mr-4">
+              <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Target</span>
+              <span className="text-sm font-bold">
+                {auditResults?.keyword}{" "}
+                <span className="text-gray-400 font-normal">
+                  ({auditResults?.scope === "local" ? auditResults?.city : "National"})
+                </span>
+              </span>
+            </div>
+            <button
+              onClick={() => setStep("input")}
+              className="text-xs font-bold uppercase tracking-wider text-gray-500 hover:text-[#5599f9] border border-gray-200 hover:border-[#5599f9] px-4 py-2 transition-all rounded-md"
+              data-testid="button-new-audit"
+            >
+              New Audit
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-5xl mx-auto px-6 py-12 space-y-12">
+        {/* Score Hero */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-12 items-center border-b border-gray-100 pb-12">
+          <div className="md:col-span-7 space-y-6">
+            <span className="px-3 py-1 text-xs uppercase tracking-wider font-bold rounded-md bg-[#ffb41c] text-[#010400] border border-[#ffb41c]">
+              Audit Complete
+            </span>
+            <h1 className="text-4xl md:text-6xl font-bold text-[#010400] tracking-tighter leading-none">
+              Your AI Visibility is{" "}
+              <span className="underline decoration-4 decoration-[#ffb41c] underline-offset-4">
+                {getScoreLabel(auditResults?.overallScore || 0)}
+              </span>
+              .
+            </h1>
+            <p className="text-xl text-gray-500 leading-relaxed font-light">
+              We simulated 20 user intent scenarios for{" "}
+              <span className="font-medium text-[#010400]">"{auditResults?.keyword}"</span>
+              {auditResults?.scope === "local" && ` in ${auditResults?.city}`}. While you may rank on Google, AI models
+              are recommending your competitors.
+            </p>
+          </div>
+          <div className="md:col-span-5 flex justify-center md:justify-end">
+            <div className="w-48 h-48 md:w-64 md:h-64 rounded-full border-[12px] border-gray-50 flex items-center justify-center relative">
+              <div className="text-center">
+                <span className={`block text-6xl md:text-7xl font-bold tracking-tighter ${getScoreColor(auditResults?.overallScore || 0)}`} data-testid="text-overall-score">
+                  {auditResults?.overallScore || 0}
+                </span>
+                <span className="block text-sm font-bold uppercase tracking-widest text-gray-400 mt-1">Score / 100</span>
+              </div>
+              <div className="absolute top-0 right-0 bg-[#ffb41c] text-[#010400] p-3 rounded-full border-4 border-white shadow-lg">
+                <AlertTriangle size={24} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Platform Scores */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                <Cpu className="text-green-600" size={20} />
+              </div>
+              <span className="font-bold text-[#010400]">ChatGPT</span>
+            </div>
+            <div className={`text-4xl font-bold ${getScoreColor(auditResults?.chatgptScore || 0)}`} data-testid="text-chatgpt-score">
+              {auditResults?.chatgptScore || 0}%
+            </div>
+            <p className="text-sm text-gray-500 mt-1">Visibility Score</p>
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <Globe className="text-blue-600" size={20} />
+              </div>
+              <span className="font-bold text-[#010400]">Gemini</span>
+            </div>
+            <div className={`text-4xl font-bold ${getScoreColor(auditResults?.geminiScore || 0)}`} data-testid="text-gemini-score">
+              {auditResults?.geminiScore || 0}%
+            </div>
+            <p className="text-sm text-gray-500 mt-1">Visibility Score</p>
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                <Search className="text-purple-600" size={20} />
+              </div>
+              <span className="font-bold text-[#010400]">Perplexity</span>
+            </div>
+            <div className={`text-4xl font-bold ${getScoreColor(auditResults?.perplexityScore || 0)}`} data-testid="text-perplexity-score">
+              {auditResults?.perplexityScore || 0}%
+            </div>
+            <p className="text-sm text-gray-500 mt-1">Visibility Score</p>
+          </div>
+        </div>
+
+        {/* Competitor Share of Voice */}
+        {auditResults?.competitors && auditResults.competitors.length > 0 && (
+          <div className="space-y-6">
+            <div className="flex items-center gap-3">
+              <BarChart2 size={24} className="text-[#5599f9]" />
+              <h3 className="text-xl font-bold text-[#010400] tracking-tight">Competitor Share of Voice</h3>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <div className="space-y-4">
+                {auditResults.competitors.map((competitor, index) => (
+                  <div key={index} className="flex items-center gap-4" data-testid={`competitor-${index}`}>
+                    <div className="w-32 font-medium text-[#010400] truncate">{competitor.name}</div>
+                    <div className="flex-1 bg-gray-100 rounded-full h-3 overflow-hidden">
+                      <div
+                        className="bg-[#5599f9] h-full rounded-full transition-all"
+                        style={{ width: `${Math.min((competitor.mentions / 20) * 100, 100)}%` }}
+                      ></div>
+                    </div>
+                    <div className="w-16 text-right text-sm font-bold text-gray-500">{competitor.mentions} mentions</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Prompt Log */}
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-bold text-[#010400] tracking-tight flex items-center gap-3">
+              <Cpu size={24} className="text-[#5599f9]" />
+              Live Prompt Simulation Log
+            </h3>
+            <span className="text-xs font-bold bg-gray-100 px-3 py-1 rounded text-gray-500">
+              {auditResults?.promptResults?.length || 0} PROMPTS TESTED
+            </span>
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+            {auditResults?.promptResults?.map((result, index) => (
+              <PromptResultRow key={index} result={result} index={index} />
+            ))}
+          </div>
+        </div>
+
+        {/* CTA */}
+        <div className="bg-gradient-to-r from-[#5599f9] to-[#4a8ce8] rounded-2xl p-8 md:p-12 text-center text-white">
+          <h3 className="text-2xl md:text-3xl font-bold tracking-tight mb-4">Ready to Dominate AI Search?</h3>
+          <p className="text-blue-100 mb-6 max-w-xl mx-auto">
+            Get your personalized 90-day roadmap to improve your AI visibility score and start capturing leads from AI-powered search.
+          </p>
+          <button
+            onClick={() => setShowLeadForm(true)}
+            className="bg-white text-[#5599f9] font-bold px-8 py-4 rounded-xl shadow-lg hover:shadow-xl transition-all inline-flex items-center gap-2"
+            data-testid="button-get-report"
+          >
+            Get My Full Report <ArrowRight size={20} />
+          </button>
+        </div>
+      </main>
+    </div>
+  );
+}
