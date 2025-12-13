@@ -26,6 +26,8 @@ import {
   Zap,
   Calendar,
   Printer,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import type { AuditRequest, AuditResults, PromptResult, SentimentResult } from "@shared/schema";
 
@@ -60,6 +62,22 @@ export default function Home() {
 
   // Results State
   const [auditResults, setAuditResults] = useState<AuditResults | null>(null);
+  
+  // Expanded rows state for viewing full AI responses
+  const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({});
+  const [isPrinting, setIsPrinting] = useState(false);
+  
+  const toggleRowExpansion = (index: number) => {
+    setExpandedRows(prev => ({ ...prev, [index]: !prev[index] }));
+  };
+  
+  const getResponsePreview = (result: PromptResult): string => {
+    const chatgptResponse = result.chatgpt.response || "";
+    const googleResponse = result.googleAI.response || "";
+    const response = chatgptResponse || googleResponse || "";
+    if (!response) return "No AI response captured.";
+    return response.length > 150 ? response.substring(0, 150) + "..." : response;
+  };
 
   // Audit mutation
   const auditMutation = useMutation({
@@ -402,7 +420,11 @@ export default function Home() {
     }
 
     const handlePrintReport = () => {
-      window.print();
+      setIsPrinting(true);
+      setTimeout(() => {
+        window.print();
+        setIsPrinting(false);
+      }, 100);
     };
 
     const getScoreColorFull = (score: number) => {
@@ -440,6 +462,7 @@ export default function Home() {
             body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .no-print { display: none !important; }
             .print-break { page-break-before: always; }
+            td p { white-space: normal !important; }
           }
         `}</style>
 
@@ -593,36 +616,72 @@ export default function Home() {
                   <tr className="bg-gray-50 border-b border-gray-200 text-xs uppercase tracking-wider text-gray-500 font-bold">
                     <th className="p-4 w-16 text-center">Status</th>
                     <th className="p-4">Simulated User Query</th>
-                    <th className="p-4 hidden md:table-cell">AI Response Summary</th>
-                    <th className="p-4 w-32">Platform</th>
+                    <th className="p-4 hidden md:table-cell">AI Response</th>
+                    <th className="p-4 w-40">Platform</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {auditResults.promptResults?.map((result, idx) => {
                     const foundCount = [result.chatgpt.found, result.googleAI.found].filter(Boolean).length;
                     const status = foundCount === 2 ? "found" : foundCount === 1 ? "warning" : "lost";
-                    const platforms = [];
-                    if (result.chatgpt.found) platforms.push("ChatGPT");
-                    if (result.googleAI.found) platforms.push("Google AI");
-                    const platformText = platforms.length > 0 ? platforms.join(", ") : "None";
+                    const isExpanded = expandedRows[idx] || isPrinting;
+                    const chatgptResponse = result.chatgpt.response || "";
+                    const googleResponse = result.googleAI.response || "";
+                    const hasLongResponse = chatgptResponse.length > 150 || googleResponse.length > 150;
                     
                     return (
-                      <tr key={idx} className="hover:bg-gray-50 transition-colors" data-testid={`full-prompt-result-${idx}`}>
+                      <tr key={idx} className="hover:bg-gray-50 transition-colors align-top" data-testid={`full-prompt-result-${idx}`}>
                         <td className="p-4 text-center">
                           {status === 'found' && <CheckCircle className="text-green-500 mx-auto" size={20} />}
                           {status === 'lost' && <div className="w-5 h-5 mx-auto rounded-full border-2 border-red-200 flex items-center justify-center"><X className="w-3 h-3 text-red-500" /></div>}
                           {status === 'warning' && <AlertTriangle className="text-[#ffb41c] mx-auto" size={20} />}
                         </td>
                         <td className="p-4 font-medium text-[#010400]">"{result.prompt}"</td>
-                        <td className="p-4 text-gray-500 text-sm hidden md:table-cell">
-                          {result.summary || getPromptResultText(result)}
+                        <td className="p-4 text-gray-600 text-sm hidden md:table-cell">
+                          <div className="space-y-2">
+                            {chatgptResponse && (
+                              <div>
+                                <span className="text-xs font-bold text-green-700 bg-green-50 px-1.5 py-0.5 rounded">ChatGPT:</span>
+                                <p className="mt-1 text-gray-600 print:whitespace-normal">
+                                  {isExpanded ? chatgptResponse : (chatgptResponse.length > 150 ? chatgptResponse.substring(0, 150) + "..." : chatgptResponse)}
+                                </p>
+                              </div>
+                            )}
+                            {googleResponse && (
+                              <div className={chatgptResponse ? "pt-2 border-t border-gray-100" : ""}>
+                                <span className="text-xs font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">Google AI:</span>
+                                <p className="mt-1 text-gray-600 print:whitespace-normal">
+                                  {isExpanded ? googleResponse : (googleResponse.length > 150 ? googleResponse.substring(0, 150) + "..." : googleResponse)}
+                                </p>
+                              </div>
+                            )}
+                            {!chatgptResponse && !googleResponse && (
+                              <p className="text-gray-400 italic">No AI response captured.</p>
+                            )}
+                            {hasLongResponse && (
+                              <button
+                                onClick={() => toggleRowExpansion(idx)}
+                                className="text-xs font-medium text-[#5599f9] hover:text-[#4a8ce8] flex items-center gap-1 mt-2 no-print"
+                                data-testid={`button-expand-response-${idx}`}
+                              >
+                                {isExpanded ? (
+                                  <>View Less <ChevronUp size={14} /></>
+                                ) : (
+                                  <>View Full Response <ChevronDown size={14} /></>
+                                )}
+                              </button>
+                            )}
+                          </div>
                         </td>
                         <td className="p-4">
-                          <span className={`text-xs font-bold px-2 py-1 rounded ${
-                            status === 'found' ? 'bg-green-100 text-green-700' :
-                            status === 'warning' ? 'bg-yellow-100 text-yellow-700' :
-                            'bg-gray-100 text-gray-600'
-                          }`}>{platformText}</span>
+                          <div className="flex flex-col gap-1">
+                            <span className={`text-xs font-bold px-2 py-1 rounded inline-block ${
+                              result.chatgpt.found ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                            }`}>ChatGPT</span>
+                            <span className={`text-xs font-bold px-2 py-1 rounded inline-block ${
+                              result.googleAI.found ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                            }`}>Google AI</span>
+                          </div>
                         </td>
                       </tr>
                     );
