@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import type { AuditRequest, AuditResults, PromptResult, SentimentResult } from "@shared/schema";
 
-type Step = "input" | "scanning" | "results";
+type Step = "input" | "scanning" | "results" | "fullReport";
 
 interface ScanProgress {
   progress: number;
@@ -82,6 +82,7 @@ export default function Home() {
     },
     onSuccess: () => {
       setShowLeadForm(false);
+      setStep("fullReport");
     },
   });
 
@@ -478,6 +479,396 @@ export default function Home() {
             </div>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  // --- View: Full Report (After Lead Submission) ---
+  if (step === "fullReport") {
+    // Guard: redirect to results if no audit data
+    if (!auditResults) {
+      setStep("results");
+      return null;
+    }
+
+    const handlePrintReport = () => {
+      window.print();
+    };
+
+    const getScoreColorFull = (score: number) => {
+      if (score >= 70) return "text-green-600";
+      if (score >= 40) return "text-[#ffb41c]";
+      return "text-red-500";
+    };
+
+    const getScoreLabelFull = (score: number) => {
+      if (score >= 70) return "Strong";
+      if (score >= 40) return "Moderate";
+      return "Critical";
+    };
+
+    return (
+      <div className="min-h-screen bg-white text-[#010400] pb-20 font-sans print:pb-0" id="full-report">
+        {/* Print Styles */}
+        <style>{`
+          @media print {
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .no-print { display: none !important; }
+            .print-break { page-break-before: always; }
+          }
+        `}</style>
+
+        <header className="bg-white border-b border-gray-100 sticky top-0 z-20 no-print">
+          <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center gap-4">
+            <Branding />
+            <div className="flex items-center gap-4">
+              <button
+                onClick={handlePrintReport}
+                className="bg-[#5599f9] hover:bg-[#4a8ce8] text-white font-bold px-6 py-2 rounded-lg transition-all inline-flex items-center gap-2"
+                data-testid="button-download-pdf"
+              >
+                <Download size={18} /> Download PDF
+              </button>
+              <button
+                onClick={() => setStep("input")}
+                className="text-xs font-bold uppercase tracking-wider text-gray-500 hover:text-[#5599f9] border border-gray-200 hover:border-[#5599f9] px-4 py-2 transition-all rounded-md"
+                data-testid="button-new-audit-full"
+              >
+                New Audit
+              </button>
+            </div>
+          </div>
+        </header>
+
+        {/* Print Header */}
+        <div className="hidden print:block px-6 py-4 border-b border-gray-200">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 relative overflow-hidden rounded-md bg-[#5599f9]">
+              <div className="absolute top-0 right-0 w-4 h-8 bg-[#ffb41c] skew-x-12 transform translate-x-1"></div>
+            </div>
+            <span className="font-bold text-2xl tracking-tighter text-[#010400]">ROSSMAN<span className="font-light">MEDIA</span></span>
+          </div>
+        </div>
+
+        <main className="max-w-5xl mx-auto px-6 py-12 space-y-12">
+          {/* Report Title */}
+          <div className="text-center space-y-4">
+            <span className="px-4 py-2 text-sm uppercase tracking-wider font-bold rounded-lg bg-[#5599f9] text-white">
+              Full AI Visibility Report
+            </span>
+            <h1 className="text-4xl md:text-5xl font-bold text-[#010400] tracking-tighter">
+              {auditResults?.businessName}
+            </h1>
+            <p className="text-lg text-gray-500">
+              {auditResults?.keyword} {auditResults?.scope === "local" && `in ${auditResults?.city}`}
+            </p>
+            <p className="text-sm text-gray-400">
+              Report generated on {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+            </p>
+          </div>
+
+          {/* Score Summary */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 border-b border-gray-100 pb-12">
+            <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
+              <div className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Overall Score</div>
+              <div className={`text-6xl font-bold ${getScoreColorFull(auditResults?.overallScore || 0)}`} data-testid="full-report-overall-score">
+                {auditResults?.overallScore || 0}
+              </div>
+              <div className="text-sm text-gray-500 mt-2">/ 100</div>
+              <span className={`inline-block mt-3 px-3 py-1 text-xs uppercase tracking-wider font-bold rounded-md ${
+                (auditResults?.overallScore || 0) >= 70 ? "bg-green-100 text-green-700" :
+                (auditResults?.overallScore || 0) >= 40 ? "bg-yellow-100 text-yellow-700" :
+                "bg-red-100 text-red-700"
+              }`}>
+                {getScoreLabelFull(auditResults?.overallScore || 0)}
+              </span>
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <Cpu className="text-green-600" size={18} />
+                <span className="text-xs font-bold uppercase tracking-wider text-gray-500">ChatGPT</span>
+              </div>
+              <div className={`text-5xl font-bold ${getScoreColorFull(auditResults?.chatgptScore || 0)}`} data-testid="full-report-chatgpt-score">
+                {auditResults?.chatgptScore || 0}%
+              </div>
+              <div className="text-sm text-gray-500 mt-2">Visibility</div>
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <Globe className="text-blue-600" size={18} />
+                <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Google AI</span>
+              </div>
+              <div className={`text-5xl font-bold ${getScoreColorFull(auditResults?.googleAIScore || 0)}`} data-testid="full-report-google-score">
+                {auditResults?.googleAIScore || 0}%
+              </div>
+              <div className="text-sm text-gray-500 mt-2">Visibility</div>
+            </div>
+          </div>
+
+          {/* ALL 20 Visibility Prompts */}
+          <div className="space-y-6 print-break">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <h2 className="text-2xl font-bold text-[#010400] tracking-tight flex items-center gap-3">
+                <Cpu size={28} className="text-[#5599f9]" />
+                Complete Visibility Prompt Analysis
+              </h2>
+              <span className="text-sm font-bold bg-[#010400] px-4 py-2 rounded text-white">
+                {auditResults?.promptResults?.length || 20} PROMPTS ANALYZED
+              </span>
+            </div>
+
+            <p className="text-gray-500">
+              We tested your brand visibility across {auditResults?.promptResults?.length || 20} different user intent scenarios that potential customers might ask AI assistants.
+            </p>
+
+            <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+              {auditResults?.promptResults?.map((result, index) => {
+                const foundCount = [result.chatgpt.found, result.googleAI.found].filter(Boolean).length;
+                const isFound = foundCount > 0;
+                const resultText = getPromptResultText(result);
+                
+                return (
+                  <div 
+                    key={index}
+                    className="flex items-start gap-4 p-5"
+                    data-testid={`full-prompt-result-${index}`}
+                  >
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="text-xs font-bold text-gray-400 w-6">#{index + 1}</span>
+                      {isFound ? (
+                        <CheckCircle className="text-[#5599f9]" size={20} />
+                      ) : (
+                        <div className="w-5 h-5 rounded-full border-2 border-red-200 flex items-center justify-center">
+                          <X className="w-3 h-3 text-red-500" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-[#010400] text-base">"{result.prompt}"</p>
+                      <div className="flex items-center gap-4 mt-2 flex-wrap">
+                        <span className={`text-xs font-bold px-2 py-1 rounded ${result.chatgpt.found ? "bg-green-100 text-green-700" : "bg-red-50 text-red-600"}`}>
+                          ChatGPT: {result.chatgpt.found ? "Found" : "Not Found"}
+                        </span>
+                        <span className={`text-xs font-bold px-2 py-1 rounded ${result.googleAI.found ? "bg-green-100 text-green-700" : "bg-red-50 text-red-600"}`}>
+                          Google AI: {result.googleAI.found ? "Found" : "Not Found"}
+                        </span>
+                      </div>
+                      <p className={`text-sm mt-2 ${isFound ? 'text-green-600' : 'text-red-500'}`}>
+                        {resultText}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ALL 5 Sentiment Prompts */}
+          {auditResults?.sentimentAnalysis && (
+            <div className="space-y-6 print-break">
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <h2 className="text-2xl font-bold text-[#010400] tracking-tight flex items-center gap-3">
+                  <BarChart2 size={28} className="text-[#ffb41c]" />
+                  Brand Sentiment Analysis
+                </h2>
+                <span className={`text-sm font-bold px-4 py-2 rounded ${
+                  auditResults.sentimentAnalysis.overall === "positive" 
+                    ? "bg-green-100 text-green-700" 
+                    : auditResults.sentimentAnalysis.overall === "negative"
+                    ? "bg-red-100 text-red-700"
+                    : "bg-gray-100 text-gray-700"
+                }`} data-testid="full-sentiment-overall">
+                  {auditResults.sentimentAnalysis.overall.toUpperCase()} OVERALL
+                </span>
+              </div>
+
+              <p className="text-gray-500">
+                We asked AI assistants directly about <span className="font-medium text-[#010400]">{auditResults.businessName}</span> to understand how they perceive and describe your brand.
+              </p>
+
+              {/* Sentiment Summary */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="bg-green-50 rounded-xl border border-green-100 p-6 text-center">
+                  <ThumbsUp className="mx-auto text-green-600 mb-2" size={24} />
+                  <div className="text-3xl font-bold text-green-600" data-testid="full-sentiment-positive">
+                    {auditResults.sentimentAnalysis.positiveCount}
+                  </div>
+                  <div className="text-sm font-bold uppercase tracking-wider text-green-600">Positive</div>
+                </div>
+                <div className="bg-gray-50 rounded-xl border border-gray-200 p-6 text-center">
+                  <Minus className="mx-auto text-gray-500 mb-2" size={24} />
+                  <div className="text-3xl font-bold text-gray-600" data-testid="full-sentiment-neutral">
+                    {auditResults.sentimentAnalysis.neutralCount}
+                  </div>
+                  <div className="text-sm font-bold uppercase tracking-wider text-gray-500">Neutral</div>
+                </div>
+                <div className="bg-red-50 rounded-xl border border-red-100 p-6 text-center">
+                  <ThumbsDown className="mx-auto text-red-600 mb-2" size={24} />
+                  <div className="text-3xl font-bold text-red-600" data-testid="full-sentiment-negative">
+                    {auditResults.sentimentAnalysis.negativeCount}
+                  </div>
+                  <div className="text-sm font-bold uppercase tracking-wider text-red-600">Negative</div>
+                </div>
+              </div>
+
+              {/* Full Sentiment Table */}
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 p-4 bg-gray-50 border-b border-gray-200">
+                  <div className="md:col-span-6">
+                    <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Brand Query</span>
+                  </div>
+                  <div className="md:col-span-3">
+                    <span className="text-xs font-bold uppercase tracking-wider text-gray-500">ChatGPT Response</span>
+                  </div>
+                  <div className="md:col-span-3">
+                    <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Google AI Response</span>
+                  </div>
+                </div>
+                
+                {auditResults.sentimentAnalysis.results.map((result, index) => (
+                  <div 
+                    key={index} 
+                    className="grid grid-cols-1 md:grid-cols-12 gap-4 p-5 border-b border-gray-100 last:border-0 items-center"
+                    data-testid={`full-sentiment-result-${index}`}
+                  >
+                    <div className="md:col-span-6">
+                      <p className="font-medium text-[#010400]">"{result.prompt}"</p>
+                    </div>
+                    <div className="md:col-span-3">
+                      <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded ${
+                        result.chatgpt.sentiment === "positive" ? "bg-green-100 text-green-700" :
+                        result.chatgpt.sentiment === "negative" ? "bg-red-100 text-red-700" :
+                        "bg-gray-100 text-gray-600"
+                      }`}>
+                        {result.chatgpt.sentiment === "positive" && <ThumbsUp size={14} />}
+                        {result.chatgpt.sentiment === "negative" && <ThumbsDown size={14} />}
+                        {result.chatgpt.sentiment === "neutral" && <Minus size={14} />}
+                        {result.chatgpt.sentiment.charAt(0).toUpperCase() + result.chatgpt.sentiment.slice(1)}
+                      </span>
+                    </div>
+                    <div className="md:col-span-3">
+                      <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded ${
+                        result.googleAI.sentiment === "positive" ? "bg-green-100 text-green-700" :
+                        result.googleAI.sentiment === "negative" ? "bg-red-100 text-red-700" :
+                        "bg-gray-100 text-gray-600"
+                      }`}>
+                        {result.googleAI.sentiment === "positive" && <ThumbsUp size={14} />}
+                        {result.googleAI.sentiment === "negative" && <ThumbsDown size={14} />}
+                        {result.googleAI.sentiment === "neutral" && <Minus size={14} />}
+                        {result.googleAI.sentiment.charAt(0).toUpperCase() + result.googleAI.sentiment.slice(1)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Competitor Analysis */}
+          <div className="space-y-6 print-break">
+            <h2 className="text-2xl font-bold text-[#010400] tracking-tight flex items-center gap-3">
+              <AlertTriangle size={28} className="text-[#ffb41c]" />
+              Competitor Analysis
+            </h2>
+
+            <p className="text-gray-500">
+              These competitors were mentioned by AI assistants when users asked about {auditResults?.keyword} {auditResults?.scope === "local" && `in ${auditResults?.city}`}.
+            </p>
+
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <div className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-6">Competitors Cited by AI</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {(auditResults?.competitors || []).map((competitor, index) => (
+                  <div key={index} className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg" data-testid={`full-competitor-${index}`}>
+                    <div className="w-10 h-10 rounded-lg bg-[#5599f9] flex items-center justify-center text-white font-bold">
+                      {String.fromCharCode(65 + index)}
+                    </div>
+                    <div>
+                      <span className="font-bold text-[#010400]">{competitor.name}</span>
+                      <div className="text-xs text-gray-500">{competitor.mentions} mentions</div>
+                    </div>
+                  </div>
+                ))}
+                {(!auditResults?.competitors || auditResults.competitors.length === 0) && (
+                  <p className="text-gray-400 col-span-full">No specific competitors identified in AI responses.</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Recommendations */}
+          <div className="space-y-6 bg-gradient-to-br from-[#5599f9]/5 to-[#ffb41c]/5 rounded-2xl p-8 print-break">
+            <h2 className="text-2xl font-bold text-[#010400] tracking-tight">
+              90-Day Improvement Roadmap
+            </h2>
+
+            <div className="space-y-4">
+              <div className="flex items-start gap-4 p-4 bg-white rounded-xl border border-gray-200">
+                <div className="w-8 h-8 rounded-full bg-[#5599f9] flex items-center justify-center text-white font-bold shrink-0">1</div>
+                <div>
+                  <h3 className="font-bold text-[#010400]">Optimize Technical SEO for AI Crawlers</h3>
+                  <p className="text-sm text-gray-500 mt-1">Ensure your website is properly structured with schema markup, clear content hierarchy, and fast load times to improve AI indexing.</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-4 p-4 bg-white rounded-xl border border-gray-200">
+                <div className="w-8 h-8 rounded-full bg-[#5599f9] flex items-center justify-center text-white font-bold shrink-0">2</div>
+                <div>
+                  <h3 className="font-bold text-[#010400]">Build Authoritative Content</h3>
+                  <p className="text-sm text-gray-500 mt-1">Create comprehensive, expert-level content that AI models will reference when answering user questions about your industry.</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-4 p-4 bg-white rounded-xl border border-gray-200">
+                <div className="w-8 h-8 rounded-full bg-[#5599f9] flex items-center justify-center text-white font-bold shrink-0">3</div>
+                <div>
+                  <h3 className="font-bold text-[#010400]">Increase Brand Mentions & Citations</h3>
+                  <p className="text-sm text-gray-500 mt-1">Get featured in industry publications, directories, and authoritative sources that AI models use for training data.</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-4 p-4 bg-white rounded-xl border border-gray-200">
+                <div className="w-8 h-8 rounded-full bg-[#5599f9] flex items-center justify-center text-white font-bold shrink-0">4</div>
+                <div>
+                  <h3 className="font-bold text-[#010400]">Monitor & Iterate</h3>
+                  <p className="text-sm text-gray-500 mt-1">Regularly run visibility audits to track progress and adjust strategy based on how AI models are responding to your brand.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* CTA for Contact */}
+          <div className="bg-[#010400] rounded-2xl p-8 md:p-12 text-center no-print">
+            <h3 className="text-2xl md:text-3xl font-bold text-white tracking-tight mb-4">
+              Ready to Improve Your AI Visibility?
+            </h3>
+            <p className="text-gray-400 mb-8 max-w-xl mx-auto">
+              Our team of AI optimization experts can help implement these recommendations and boost your visibility score.
+            </p>
+            <a
+              href="mailto:contact@rossmanmedia.com"
+              className="bg-[#5599f9] hover:bg-[#4a8ce8] text-white font-bold px-8 py-4 rounded-xl shadow-lg transition-all inline-flex items-center gap-2"
+              data-testid="button-contact-us"
+            >
+              <Mail size={20} /> Contact Our Team
+            </a>
+          </div>
+
+          {/* Footer */}
+          <div className="border-t border-gray-100 pt-8 text-center space-y-4">
+            <div className="flex items-center justify-center gap-2 text-sm font-bold text-gray-400 tracking-wide">
+              <div className="flex h-5 w-5 relative overflow-hidden rounded bg-[#5599f9]">
+                <div className="absolute top-0 right-0 w-2.5 h-5 bg-[#ffb41c] skew-x-12 transform translate-x-0.5"></div>
+              </div>
+              ROSSMAN MEDIA
+            </div>
+            <p className="text-xs text-gray-400 max-w-md mx-auto">
+              This report was generated based on real AI platform queries. Results may vary as AI models are continuously updated.
+            </p>
+          </div>
+        </main>
       </div>
     );
   }
