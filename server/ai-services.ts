@@ -6,8 +6,94 @@ const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
 });
 
+// Extract root domain from URL for detection (e.g., "buildingbrandsmarketing" from "buildingbrandsmarketing.com")
+function extractDomainKeywords(url: string): string[] {
+  if (!url) return [];
+  
+  try {
+    // Clean the URL
+    let cleanUrl = url.toLowerCase().trim();
+    if (!cleanUrl.startsWith('http')) {
+      cleanUrl = 'https://' + cleanUrl;
+    }
+    
+    const urlObj = new URL(cleanUrl);
+    let hostname = urlObj.hostname;
+    
+    // Remove www. prefix
+    hostname = hostname.replace(/^www\./, '');
+    
+    // Get the domain without TLD (e.g., "buildingbrandsmarketing" from "buildingbrandsmarketing.com")
+    const parts = hostname.split('.');
+    const domainName = parts[0]; // e.g., "buildingbrandsmarketing"
+    
+    const keywords: string[] = [];
+    
+    // Add the full domain name
+    if (domainName && domainName.length > 3) {
+      keywords.push(domainName);
+    }
+    
+    // Add the full hostname (e.g., "buildingbrandsmarketing.com")
+    if (hostname && hostname.length > 3) {
+      keywords.push(hostname);
+    }
+    
+    return keywords;
+  } catch {
+    // If URL parsing fails, try simple extraction
+    const cleaned = url.toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0];
+    const domainName = cleaned.split('.')[0];
+    return domainName && domainName.length > 3 ? [domainName, cleaned] : [];
+  }
+}
+
+// Generate name variations for better detection
+function generateNameVariations(businessName: string): string[] {
+  const variations: string[] = [businessName.toLowerCase()];
+  
+  // Remove common suffixes and create variations
+  const suffixesToRemove = [' marketing', ' agency', ' consulting', ' services', ' llc', ' inc', ' co', ' company'];
+  let baseName = businessName.toLowerCase();
+  for (const suffix of suffixesToRemove) {
+    if (baseName.endsWith(suffix)) {
+      baseName = baseName.slice(0, -suffix.length).trim();
+      if (baseName.length > 3) {
+        variations.push(baseName);
+      }
+      break;
+    }
+  }
+  
+  // Create camelCase/concatenated version (e.g., "buildingbrands" from "Building Brands")
+  const concatenated = businessName.toLowerCase().replace(/\s+/g, '');
+  if (concatenated.length > 4 && !variations.includes(concatenated)) {
+    variations.push(concatenated);
+  }
+  
+  return variations;
+}
+
+// Check if any of the search terms are found in the text
+function checkForMentions(text: string, businessName: string, url?: string): { found: boolean; matchedTerm?: string } {
+  const lowerText = text.toLowerCase();
+  
+  // Get all search terms
+  const nameVariations = generateNameVariations(businessName);
+  const domainKeywords = url ? extractDomainKeywords(url) : [];
+  const allTerms = [...nameVariations, ...domainKeywords];
+  
+  for (const term of allTerms) {
+    if (term && term.length > 3 && lowerText.includes(term)) {
+      return { found: true, matchedTerm: term };
+    }
+  }
+  
+  return { found: false };
+}
+
 // Gemini client using Replit AI Integrations (no API key needed, billed to credits)
-async function queryGemini(prompt: string, businessName: string): Promise<{ found: boolean; response: string; competitors: string[] }> {
+async function queryGemini(prompt: string, businessName: string, url?: string): Promise<{ found: boolean; response: string; competitors: string[] }> {
   try {
     const { GoogleGenAI } = await import("@google/genai");
     
@@ -26,18 +112,17 @@ async function queryGemini(prompt: string, businessName: string): Promise<{ foun
     });
 
     const text = response.text || "";
-    const found = text.toLowerCase().includes(businessName.toLowerCase());
+    const detection = checkForMentions(text, businessName, url);
     const competitors = extractCompetitors(text, businessName);
     
     // Debug logging for detection
-    console.log(`[GEMINI DETECTION] Business: "${businessName}" | Found: ${found}`);
-    if (found) {
-      console.log(`[GEMINI] Brand mentioned in response`);
-    } else {
-      console.log(`[GEMINI] Response preview (first 200 chars): ${text.slice(0, 200).replace(/\n/g, ' ')}`);
+    const searchTerms = [...generateNameVariations(businessName), ...(url ? extractDomainKeywords(url) : [])];
+    console.log(`[GEMINI DETECTION] Business: "${businessName}" | URL: "${url}" | Search terms: ${JSON.stringify(searchTerms)} | Found: ${detection.found}${detection.matchedTerm ? ` (matched: "${detection.matchedTerm}")` : ''}`);
+    if (!detection.found) {
+      console.log(`[GEMINI] Response preview (first 300 chars): ${text.slice(0, 300).replace(/\n/g, ' ')}`);
     }
 
-    return { found, response: text, competitors };
+    return { found: detection.found, response: text, competitors };
   } catch (error) {
     console.error("Gemini API error:", error);
     return simulateResponse(prompt, businessName);
@@ -45,7 +130,7 @@ async function queryGemini(prompt: string, businessName: string): Promise<{ foun
 }
 
 // ChatGPT client using Replit AI Integrations
-async function queryChatGPT(prompt: string, businessName: string): Promise<{ found: boolean; response: string; competitors: string[] }> {
+async function queryChatGPT(prompt: string, businessName: string, url?: string): Promise<{ found: boolean; response: string; competitors: string[] }> {
   try {
     // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
     const response = await openai.chat.completions.create({
@@ -64,18 +149,17 @@ async function queryChatGPT(prompt: string, businessName: string): Promise<{ fou
     });
 
     const text = response.choices[0]?.message?.content || "";
-    const found = text.toLowerCase().includes(businessName.toLowerCase());
+    const detection = checkForMentions(text, businessName, url);
     const competitors = extractCompetitors(text, businessName);
     
     // Debug logging for detection
-    console.log(`[CHATGPT DETECTION] Business: "${businessName}" | Found: ${found}`);
-    if (found) {
-      console.log(`[CHATGPT] Brand mentioned in response`);
-    } else {
-      console.log(`[CHATGPT] Response preview (first 200 chars): ${text.slice(0, 200).replace(/\n/g, ' ')}`);
+    const searchTerms = [...generateNameVariations(businessName), ...(url ? extractDomainKeywords(url) : [])];
+    console.log(`[CHATGPT DETECTION] Business: "${businessName}" | URL: "${url}" | Search terms: ${JSON.stringify(searchTerms)} | Found: ${detection.found}${detection.matchedTerm ? ` (matched: "${detection.matchedTerm}")` : ''}`);
+    if (!detection.found) {
+      console.log(`[CHATGPT] Response preview (first 300 chars): ${text.slice(0, 300).replace(/\n/g, ' ')}`);
     }
 
-    return { found, response: text, competitors };
+    return { found: detection.found, response: text, competitors };
   } catch (error) {
     console.error("ChatGPT API error:", error);
     return simulateResponse(prompt, businessName);
@@ -491,8 +575,8 @@ export async function runAudit(
   const promptResults = await Promise.all(
     researchPrompts.map(async (prompt) => {
       const [chatgpt, googleAI] = await Promise.all([
-        queryChatGPT(prompt, businessName),
-        queryGemini(prompt, businessName),
+        queryChatGPT(prompt, businessName, url),
+        queryGemini(prompt, businessName, url),
       ]);
       const summary = generatePromptSummary(
         chatgpt.found,
@@ -509,8 +593,8 @@ export async function runAudit(
   const sentimentResults = await Promise.all(
     sentimentPrompts.map(async (prompt) => {
       const [chatgptResult, googleAIResult] = await Promise.all([
-        queryChatGPT(prompt, businessName),
-        queryGemini(prompt, businessName),
+        queryChatGPT(prompt, businessName, url),
+        queryGemini(prompt, businessName, url),
       ]);
       return {
         prompt,
