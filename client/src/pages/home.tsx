@@ -579,7 +579,13 @@ export default function Home() {
           {/* 3. Simulated Prompt Log - Table Format */}
           <section className="p-12 border-b border-gray-200 bg-gray-50">
             <SectionHeader title="Simulated Prompt Log" icon={Cpu} />
-            <p className="mb-6 text-gray-600">We simulated the following user queries to test brand presence across AI platforms.</p>
+            <p className="mb-4 text-gray-600">We simulated the following user queries to test brand presence across AI platforms.</p>
+            <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-6">
+              <p className="text-sm text-gray-700">
+                <span className="font-bold text-[#5599f9]">How to read this:</span> These are generic questions users might ask AI—your brand name is <span className="font-medium">not included</span> in the prompt. 
+                If AI doesn't recommend you here, it means you're invisible to organic AI-assisted discovery, even if AI knows about your brand when asked directly.
+              </p>
+            </div>
 
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
               <table className="w-full text-left border-collapse">
@@ -1008,6 +1014,24 @@ export default function Home() {
           </div>
         </div>
 
+        {/* Visibility Score Explanation */}
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-5" data-testid="visibility-explanation">
+          <div className="flex gap-4">
+            <div className="shrink-0">
+              <div className="w-10 h-10 bg-[#5599f9] rounded-lg flex items-center justify-center">
+                <Search className="text-white" size={20} />
+              </div>
+            </div>
+            <div>
+              <h4 className="font-bold text-[#010400] mb-1">What does this score mean?</h4>
+              <p className="text-sm text-gray-600 leading-relaxed">
+                Your visibility score measures how often AI assistants <span className="font-medium">organically recommend</span> your brand when users ask generic questions like "best {auditResults?.keyword} in {auditResults?.scope === "local" ? auditResults?.city : "the country"}." 
+                A low score means AI doesn't naturally suggest your business—even if it knows about you. This is different from sentiment, which measures what AI says <span className="font-medium">when asked directly about your brand</span>.
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Sentiment Analysis Section */}
         {auditResults?.sentimentAnalysis && (
           <div className="space-y-6">
@@ -1119,6 +1143,10 @@ export default function Home() {
               {auditResults?.promptResults?.length || 0} PROMPTS TESTED
             </span>
           </div>
+
+          <p className="text-gray-500 text-sm" data-testid="prompt-log-explanation">
+            These prompts simulate what real users might ask AI assistants. Your brand must be recommended <span className="font-medium text-[#010400]">without being mentioned in the question</span>—this tests true AI visibility.
+          </p>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Left Column - First 5 Prompts */}
