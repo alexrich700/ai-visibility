@@ -449,30 +449,32 @@ async function scrapeWebsite(url: string): Promise<string | null> {
 }
 
 // Fallback research prompts (NO brand name - for visibility testing)
+// These prompts explicitly request specific named businesses to avoid generic advice responses
 function getFallbackResearchPrompts(keyword: string, location: string): string[] {
   const loc = location !== "nationwide" ? ` in ${location}` : "";
+  const city = location !== "nationwide" ? location : "my area";
   const year = new Date().getFullYear();
   return [
-    `Who is the best ${keyword}${loc}?`,
-    `Top rated ${keyword} providers${loc}`,
-    `Best ${keyword} companies${loc} ${year}`,
-    `${keyword} recommendations${loc}`,
-    `Compare ${keyword} services${loc}`,
-    `Most trusted ${keyword}${loc}`,
-    `${keyword} near me${loc}`,
-    `Affordable ${keyword}${loc}`,
-    `Premium ${keyword} services${loc}`,
-    `${keyword} with best reviews${loc}`,
-    `Who should I hire for ${keyword}${loc}?`,
-    `${keyword} pros and cons${loc}`,
-    `Best value ${keyword}${loc}`,
-    `${keyword} pricing comparison${loc}`,
-    `Reliable ${keyword}${loc}`,
-    `${keyword} experts${loc}`,
-    `Professional ${keyword} services${loc}`,
-    `Find a good ${keyword}${loc}`,
-    `Top 5 ${keyword}${loc}`,
-    `Best ${keyword} for home${loc}`,
+    `Give me a list of the top 3 ${keyword} companies${loc}`,
+    `Name 5 specific ${keyword} businesses I can call today${loc}`,
+    `What are the best reviewed ${keyword} services for drywall repair${loc}?`,
+    `List the top-rated ${keyword} companies that do door installation${loc}`,
+    `Which ${keyword} businesses${loc} specialize in furniture assembly?`,
+    `Can you recommend specific ${keyword} companies for minor electrical work${loc}?`,
+    `Name the most trusted ${keyword} services for painting touch-ups${loc}`,
+    `What ${keyword} companies${loc} have the best Google reviews in ${year}?`,
+    `List 3 ${keyword} businesses that offer same-day service${loc}`,
+    `Which specific ${keyword} companies do you recommend for home repairs${loc}?`,
+    `Give me the names of reliable ${keyword} services${loc}`,
+    `What are 5 ${keyword} companies I should get quotes from${loc}?`,
+    `Name some well-known ${keyword} franchises operating${loc}`,
+    `List ${keyword} businesses${loc} with 4.5+ star ratings`,
+    `Which ${keyword} companies${loc} are best for small jobs?`,
+    `Can you name ${keyword} services that specialize in TV mounting${loc}?`,
+    `What are the top ${keyword} companies for kitchen repairs${loc}?`,
+    `List specific ${keyword} providers for bathroom repairs${loc}`,
+    `Name ${keyword} businesses${loc} that offer free estimates`,
+    `Which ${keyword} companies${loc} are best for deck and fence repair?`,
   ];
 }
 
@@ -507,28 +509,45 @@ export async function generateResearchPrompts(
     }
   }
   
-  // Build prompt for OpenAI - explicitly exclude brand name
-  const systemPrompt = `You are a marketing expert specializing in AI search optimization. Generate exactly 20 research-based search queries that potential customers would type into AI assistants (like ChatGPT or Google AI) when actively looking to hire or purchase from a ${keyword} business${location !== "nationwide" ? ` in ${location}` : ""}.
+  // Build prompt for OpenAI - explicitly exclude brand name but request specific business names in responses
+  const systemPrompt = `You are a marketing expert specializing in AI search optimization. Generate exactly 20 research-based search queries that potential customers would type into AI assistants (like ChatGPT or Google AI) when actively looking to hire a ${keyword} business${location !== "nationwide" ? ` in ${location}` : ""}.
 
-CRITICAL: These must be GENERIC research queries that do NOT include any specific business or brand names. We want to test if the business appears organically in AI recommendations.
+CRITICAL REQUIREMENTS:
+1. These must be GENERIC research queries that do NOT include any specific business or brand names
+2. Each query MUST explicitly ask for SPECIFIC BUSINESS NAMES to be listed - avoid vague queries that result in generic advice
+3. Use long-tail, specific queries that will trigger AI to list actual company names
 
-These should be queries from people comparing options and making decisions:
-- Direct recommendation requests ("best X", "top X", "who should I hire for X")
-- Comparison queries ("compare X services", "X vs competitors")
-- Trust/quality queries ("most reliable X", "top-rated X")
-- Pricing queries ("affordable X", "X pricing")
-- Location-specific queries if applicable
+INCLUDE these types of prompts (MUST request specific business names):
+- "Give me the top 3 ${keyword} companies in ${location !== "nationwide" ? location : "my area"}"
+- "Name 5 specific ${keyword} businesses I can call today"
+- "List the best reviewed ${keyword} services for [specific service type]"
+- "Which ${keyword} companies do you recommend for [specific task]?"
+- "Can you name ${keyword} services that specialize in [specific service]?"
 
-DO NOT include:
-- Any brand or business names
-- Queries asking about specific company reviews
-- Queries mentioning "[business name]"
+INCLUDE specific service types like:
+- Drywall repair
+- Door installation  
+- Furniture assembly
+- Minor electrical work
+- Painting touch-ups
+- TV mounting
+- Deck and fence repair
+- Kitchen/bathroom repairs
+
+DO NOT generate prompts that will result in generic advice like:
+- "Who should I hire for ${keyword}?" (too vague - will get generic tips)
+- "What to look for in a ${keyword}" (educational, not transactional)
+- "Pros and cons of hiring ${keyword}" (informational, won't list businesses)
 
 Return ONLY a valid JSON array of exactly 20 strings. No explanations, no markdown, just the JSON array.`;
   
-  let userPrompt = `Generate 20 generic research-based AI search queries for the ${keyword} industry${location !== "nationwide" ? ` in ${location}` : ""}.
+  let userPrompt = `Generate 20 specific, long-tail AI search queries for the ${keyword} industry${location !== "nationwide" ? ` in ${location}` : ""}.
 
-Remember: NO brand names or specific company references allowed.`;
+IMPORTANT:
+- Each query should explicitly request a LIST of specific business names (e.g., "List 3 companies", "Name 5 businesses", "Which companies do you recommend")
+- Include queries for specific services like drywall repair, door installation, furniture assembly, TV mounting
+- NO brand names in the queries themselves, but queries should request brand names in the response
+- Avoid vague queries like "best ${keyword}" - use "Give me the top 3 ${keyword} companies" instead`;
   
   if (homepageContent) {
     userPrompt += `
