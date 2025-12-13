@@ -57,7 +57,7 @@ export default function Home() {
   const auditMutation = useMutation({
     mutationFn: async (data: AuditRequest) => {
       const response = await apiRequest("POST", "/api/audit", data);
-      return response as AuditResults;
+      return await response.json() as AuditResults;
     },
     onSuccess: (data) => {
       setAuditResults(data);
@@ -72,7 +72,8 @@ export default function Home() {
   // Lead capture mutation
   const leadMutation = useMutation({
     mutationFn: async (data: { name: string; email: string; phone: string; businessName: string; auditScore: number }) => {
-      return apiRequest("POST", "/api/leads", data);
+      const response = await apiRequest("POST", "/api/leads", data);
+      return await response.json();
     },
     onSuccess: () => {
       setShowLeadForm(false);
