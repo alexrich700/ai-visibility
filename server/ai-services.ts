@@ -191,10 +191,52 @@ const BUSINESS_SUFFIXES = [
   'group', 'solutions', 'pros', 'masters', 'experts', 'enterprises', 'associates',
 ];
 
+// Common phrases that are NOT business names (section headers, CTAs, etc.)
+const NON_BUSINESS_PHRASES = new Set([
+  'get multiple quotes',
+  'get quotes',
+  'request quotes',
+  'compare prices',
+  'read reviews',
+  'check reviews',
+  'view reviews',
+  'contact us',
+  'learn more',
+  'find out more',
+  'here are some',
+  'things to consider',
+  'key factors',
+  'important tips',
+  'how to choose',
+  'what to look for',
+  'pros and cons',
+  'final thoughts',
+  'in conclusion',
+  'keep in mind',
+  'additional tips',
+]);
+
 // Check if a name is a valid business name (not a generic term)
 function isValidBusinessName(name: string): boolean {
   const lowerName = name.toLowerCase().trim();
   const words = lowerName.split(/\s+/);
+  
+  // Reject names ending with colons (section headers)
+  if (name.endsWith(':')) {
+    return false;
+  }
+  
+  // Reject known non-business phrases
+  const cleanLowerName = lowerName.replace(/[:\-–]/g, '').trim();
+  if (NON_BUSINESS_PHRASES.has(cleanLowerName)) {
+    return false;
+  }
+  
+  // Reject phrases that start with action verbs (typically CTAs/instructions)
+  const actionVerbs = ['get', 'check', 'read', 'view', 'find', 'look', 'compare', 'request', 'contact', 'learn', 'see', 'visit', 'call', 'ask', 'choose', 'hire', 'consider'];
+  if (actionVerbs.some(verb => lowerName.startsWith(verb + ' '))) {
+    return false;
+  }
   
   // Reject single-word generic terms
   if (words.length === 1) {
@@ -265,7 +307,7 @@ function extractCompetitors(text: string, excludeBusiness: string): string[] {
   const locationPattern = /\b([A-Z][A-Za-z\s&'.-]+?\s+(?:of|in)\s+[A-Z][A-Za-z\s]+?)(?:[,.]|\s+is|\s+offers|\s+provides)/g;
   while ((match = locationPattern.exec(text)) !== null) {
     const name = match[1].trim();
-    if (name.length > 5 && name.length < 60) {
+    if (isValidBusinessName(name) && name.length > 5 && name.length < 60) {
       if (!name.toLowerCase().includes(excludeBusiness.toLowerCase())) {
         competitors.add(name);
       }
