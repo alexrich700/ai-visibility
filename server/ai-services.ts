@@ -166,25 +166,130 @@ async function queryChatGPT(prompt: string, businessName: string, url?: string):
   }
 }
 
+// Generic service keywords to filter out from competitor extraction
+const SERVICE_KEYWORDS = new Set([
+  // Service types
+  'handyman', 'plumber', 'electrician', 'painter', 'contractor', 'roofer',
+  'landscaper', 'cleaner', 'mover', 'carpenter', 'mechanic', 'technician',
+  // Service categories
+  'plumbing', 'painting', 'roofing', 'electrical', 'carpentry', 'landscaping',
+  'cleaning', 'moving', 'hvac', 'flooring', 'remodeling', 'renovation',
+  // Generic terms
+  'services', 'service', 'provider', 'providers', 'professional', 'professionals',
+  'company', 'companies', 'business', 'businesses', 'expert', 'experts',
+  'specialist', 'specialists', 'contractor', 'contractors', 'team', 'crew',
+  // Common descriptors that get extracted incorrectly
+  'local', 'national', 'certified', 'licensed', 'insured', 'experienced',
+  'reliable', 'trusted', 'quality', 'affordable', 'premium', 'top',
+  // Phrases that get partially extracted
+  'and', 'or', 'the', 'for', 'with', 'from', 'their', 'your', 'our',
+]);
+
+// Business name suffixes that indicate a real company name
+const BUSINESS_SUFFIXES = [
+  'services', 'service', 'company', 'co', 'llc', 'inc', 'corp', 'corporation',
+  'group', 'solutions', 'pros', 'masters', 'experts', 'enterprises', 'associates',
+];
+
+// Check if a name is a valid business name (not a generic term)
+function isValidBusinessName(name: string): boolean {
+  const lowerName = name.toLowerCase().trim();
+  const words = lowerName.split(/\s+/);
+  
+  // Reject single-word generic terms
+  if (words.length === 1) {
+    // Single word is only valid if it's a proper branded name (contains numbers, unique spelling)
+    // or ends with a business suffix that makes it a name
+    if (SERVICE_KEYWORDS.has(lowerName)) {
+      return false;
+    }
+    // Single words like "TaskRabbit" or "Thumbtack" are valid
+    // But "Handyman" or "Plumber" are not
+    if (/^[a-z]+$/.test(lowerName) && lowerName.length < 12) {
+      return false; // Generic single lowercase word
+    }
+  }
+  
+  // Reject if ALL words are generic service keywords
+  const nonGenericWords = words.filter(w => !SERVICE_KEYWORDS.has(w));
+  if (nonGenericWords.length === 0) {
+    return false;
+  }
+  
+  // Reject partial phrases
+  if (lowerName.startsWith('and ') || lowerName.startsWith('or ') || 
+      lowerName.startsWith('the ') || lowerName.startsWith('to ')) {
+    return false;
+  }
+  
+  // Accept multi-word names with at least one capitalized proper noun
+  // Accept names ending with business suffixes (e.g., "ABC Services")
+  const hasBusinessSuffix = BUSINESS_SUFFIXES.some(suffix => 
+    lowerName.endsWith(' ' + suffix) || lowerName === suffix
+  );
+  
+  // Valid if: multi-word OR has business suffix OR contains location indicator
+  const hasLocation = /\b(of|in)\s+[A-Z]/.test(name); // "Mr. Handyman of Keller"
+  
+  return words.length >= 2 || hasBusinessSuffix || hasLocation;
+}
+
 // Extract competitor names from AI responses
 function extractCompetitors(text: string, excludeBusiness: string): string[] {
-  // Common patterns for business names in AI responses
-  const patterns = [
-    /(?:recommend|suggest|consider|try|check out|popular|top|best|leading)\s+([A-Z][a-zA-Z\s&]+?)(?:\s*[,.]|\s+and|\s+or|\s+for|\s+is|\s+are)/gi,
-    /(?:companies like|businesses like|such as)\s+([A-Z][a-zA-Z\s&,]+?)(?:\s*[.]|\s+and|\s+or)/gi,
-    /\b([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*)\s+(?:is|are)\s+(?:known|famous|popular|recommended)/gi,
-  ];
-
   const competitors: Set<string> = new Set();
   
-  for (const pattern of patterns) {
-    let match;
-    while ((match = pattern.exec(text)) !== null) {
-      const names = match[1].split(/,\s*|\s+and\s+/).map(n => n.trim());
-      for (const name of names) {
-        if (name.length > 2 && name.length < 50 && !name.toLowerCase().includes(excludeBusiness.toLowerCase())) {
-          competitors.add(name);
-        }
+  // Pattern 1: Bold Markdown names **Business Name**
+  const boldPattern = /\*\*([A-Z][^*]+?)\*\*/g;
+  let match;
+  while ((match = boldPattern.exec(text)) !== null) {
+    const name = match[1].trim();
+    if (isValidBusinessName(name) && name.length > 2 && name.length < 60) {
+      if (!name.toLowerCase().includes(excludeBusiness.toLowerCase())) {
+        competitors.add(name);
+      }
+    }
+  }
+  
+  // Pattern 2: Numbered list items with business names (1. Business Name, 2. Another Business)
+  const numberedPattern = /^\s*\d+\.\s+\*?\*?([A-Z][A-Za-z\s&'.-]+?)(?:\*?\*?)\s*[-–:]?\s/gm;
+  while ((match = numberedPattern.exec(text)) !== null) {
+    const name = match[1].trim().replace(/\*+/g, '');
+    if (isValidBusinessName(name) && name.length > 2 && name.length < 60) {
+      if (!name.toLowerCase().includes(excludeBusiness.toLowerCase())) {
+        competitors.add(name);
+      }
+    }
+  }
+  
+  // Pattern 3: Business names with location patterns (e.g., "Mr. Handyman of Keller")
+  const locationPattern = /\b([A-Z][A-Za-z\s&'.-]+?\s+(?:of|in)\s+[A-Z][A-Za-z\s]+?)(?:[,.]|\s+is|\s+offers|\s+provides)/g;
+  while ((match = locationPattern.exec(text)) !== null) {
+    const name = match[1].trim();
+    if (name.length > 5 && name.length < 60) {
+      if (!name.toLowerCase().includes(excludeBusiness.toLowerCase())) {
+        competitors.add(name);
+      }
+    }
+  }
+  
+  // Pattern 4: Recommendation patterns with proper business names
+  const recommendPattern = /(?:recommend|suggest|consider|try|check out)\s+([A-Z][A-Za-z\s&'.-]+?)(?:\s*[,.]|\s+for|\s+if|\s+as)/gi;
+  while ((match = recommendPattern.exec(text)) !== null) {
+    const name = match[1].trim();
+    if (isValidBusinessName(name) && name.length > 2 && name.length < 60) {
+      if (!name.toLowerCase().includes(excludeBusiness.toLowerCase())) {
+        competitors.add(name);
+      }
+    }
+  }
+  
+  // Pattern 5: Names in quotes
+  const quotedPattern = /"([A-Z][A-Za-z\s&'.-]+?)"/g;
+  while ((match = quotedPattern.exec(text)) !== null) {
+    const name = match[1].trim();
+    if (isValidBusinessName(name) && name.length > 2 && name.length < 60) {
+      if (!name.toLowerCase().includes(excludeBusiness.toLowerCase())) {
+        competitors.add(name);
       }
     }
   }
