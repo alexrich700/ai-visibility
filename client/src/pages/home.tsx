@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import {
@@ -71,6 +71,11 @@ export default function Home() {
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
   const [isPrinting, setIsPrinting] = useState(false);
   const [promptLogTab, setPromptLogTab] = useState<"chatgpt" | "google">("chatgpt");
+
+  // Scroll to top when step changes
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [step]);
   
   const toggleRowExpansion = (key: string) => {
     setExpandedRows(prev => ({ ...prev, [key]: !prev[key] }));
