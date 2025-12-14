@@ -44,7 +44,14 @@ The backend integrates with three AI platforms:
 2. **Google Gemini** - Uses Replit AI Integrations (no API key needed, billed to credits)
 3. **Perplexity** - Requires `PERPLEXITY_API_KEY` environment variable
 
-Each service is queried with business-specific prompts, and responses are analyzed for business mentions and competitor identification. Fallback simulation is provided when API keys are unavailable or errors occur.
+Each service is queried with business-specific prompts, and responses are analyzed for business mentions and competitor identification. 
+
+**Citation Detection Logic:**
+1. First checks if brand's exact domain is cited in AI response URLs
+2. If no domain match, checks if business name is mentioned in response text
+3. Fallback checks for domain mentioned in text without full URL
+
+Fallback simulation is provided when API keys are unavailable or errors occur.
 
 ### Data Layer
 - **ORM**: Drizzle ORM with PostgreSQL dialect
