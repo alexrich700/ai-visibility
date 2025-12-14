@@ -47,6 +47,47 @@ function extractDomainKeywords(url: string): string[] {
   }
 }
 
+// Extract all URLs and domains cited by the AI in its response
+function extractCitedDomains(text: string): string[] {
+  const domains: Set<string> = new Set();
+  
+  // Pattern 1: Full URLs (https://example.com/path or http://example.com)
+  const urlPattern = /https?:\/\/(?:www\.)?([a-zA-Z0-9][-a-zA-Z0-9]*(?:\.[a-zA-Z0-9][-a-zA-Z0-9]*)+)(?:\/[^\s\)>\]"']*)?/gi;
+  let match;
+  while ((match = urlPattern.exec(text)) !== null) {
+    const domain = match[1].toLowerCase();
+    if (domain.length > 3) {
+      domains.add(domain);
+    }
+  }
+  
+  // Pattern 2: Markdown links [text](url)
+  const markdownPattern = /\]\(https?:\/\/(?:www\.)?([a-zA-Z0-9][-a-zA-Z0-9]*(?:\.[a-zA-Z0-9][-a-zA-Z0-9]*)+)[^\)]*\)/gi;
+  while ((match = markdownPattern.exec(text)) !== null) {
+    const domain = match[1].toLowerCase();
+    if (domain.length > 3) {
+      domains.add(domain);
+    }
+  }
+  
+  // Pattern 3: Bare domains mentioned in text (e.g., "visit example.com" or "their website example.com")
+  // Match domain patterns that look like real domains (word.tld or word.word.tld)
+  const bareDomainPattern = /\b([a-zA-Z0-9][-a-zA-Z0-9]*\.(?:com|org|net|io|co|us|biz|info|me|tv|app|dev|ai|tech|agency|services|pro|consulting|solutions|group|llc|inc))\b/gi;
+  while ((match = bareDomainPattern.exec(text)) !== null) {
+    const domain = match[1].toLowerCase();
+    if (domain.length > 3) {
+      domains.add(domain);
+    }
+  }
+  
+  return Array.from(domains);
+}
+
+// Normalize a domain for comparison (remove www, lowercase)
+function normalizeDomain(domain: string): string {
+  return domain.toLowerCase().replace(/^www\./, '').trim();
+}
+
 // Generate name variations for better detection
 function generateNameVariations(businessName: string): string[] {
   const variations: string[] = [businessName.toLowerCase()];
@@ -74,18 +115,54 @@ function generateNameVariations(businessName: string): string[] {
 }
 
 // Check if any of the search terms are found in the text
-function checkForMentions(text: string, businessName: string, url?: string): { found: boolean; matchedTerm?: string } {
-  const lowerText = text.toLowerCase();
+// Priority: 1) Domain cited by AI, 2) Business name mentioned in text
+function checkForMentions(text: string, businessName: string, url?: string): { found: boolean; matchedTerm?: string; matchType?: 'domain' | 'name' } {
+  // STEP 1: Extract all domains/URLs cited by the AI in its response
+  const citedDomains = extractCitedDomains(text);
   
-  // Get all search terms
-  const nameVariations = generateNameVariations(businessName);
-  const domainKeywords = url ? extractDomainKeywords(url) : [];
-  const allTerms = [...nameVariations, ...domainKeywords];
-  
-  for (const term of allTerms) {
-    if (term && term.length > 3 && lowerText.includes(term)) {
-      return { found: true, matchedTerm: term };
+  // STEP 2: Check if brand's domain is among the cited domains (highest priority)
+  if (url) {
+    const brandDomainKeywords = extractDomainKeywords(url);
+    // Get the full domain with TLD for exact matching (e.g., "bakerbrothersplumbing.com")
+    const brandFullDomain = brandDomainKeywords.find(d => d.includes('.'));
+    
+    for (const citedDomain of citedDomains) {
+      const normalizedCited = normalizeDomain(citedDomain);
+      
+      // Only allow EXACT domain match (with or without www prefix already normalized)
+      // This prevents false positives like "exampleplumbing.com" matching "example.com"
+      if (brandFullDomain && normalizedCited === brandFullDomain) {
+        console.log(`[DOMAIN MATCH] Brand domain "${brandFullDomain}" exactly matches AI-cited URL: "${citedDomain}"`);
+        return { found: true, matchedTerm: citedDomain, matchType: 'domain' };
+      }
     }
+  }
+  
+  // STEP 3: If domain not cited, check if business name is mentioned in the text
+  const lowerText = text.toLowerCase();
+  const nameVariations = generateNameVariations(businessName);
+  
+  for (const term of nameVariations) {
+    if (term && term.length > 3 && lowerText.includes(term)) {
+      console.log(`[NAME MATCH] Business name "${term}" found in AI response text`);
+      return { found: true, matchedTerm: term, matchType: 'name' };
+    }
+  }
+  
+  // Also check for full domain mentioned in text as fallback (in case AI mentions domain without link)
+  // Only match the full domain with TLD to avoid false positives
+  if (url) {
+    const brandDomainKeywords = extractDomainKeywords(url);
+    const brandFullDomain = brandDomainKeywords.find(d => d.includes('.'));
+    if (brandFullDomain && lowerText.includes(brandFullDomain)) {
+      console.log(`[TEXT DOMAIN MATCH] Brand domain "${brandFullDomain}" found in AI response text`);
+      return { found: true, matchedTerm: brandFullDomain, matchType: 'domain' };
+    }
+  }
+  
+  // Log cited domains for debugging if no match found
+  if (citedDomains.length > 0) {
+    console.log(`[NO MATCH] AI cited these domains: ${citedDomains.slice(0, 5).join(', ')}`);
   }
   
   return { found: false };
