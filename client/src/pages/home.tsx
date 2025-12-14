@@ -321,9 +321,6 @@ export default function Home() {
       <div className="min-h-screen bg-white flex flex-col font-sans text-[#010400] selection:bg-[#5599f9] selection:text-white">
         <header className="px-6 py-8 flex justify-between items-center max-w-7xl mx-auto w-full">
           <Branding />
-          <button className="text-sm font-semibold tracking-wide text-gray-500 hover:text-[#5599f9] transition-colors uppercase">
-            Client Login
-          </button>
         </header>
 
         <main className="flex-1 flex flex-col items-center justify-center px-4 -mt-10">
