@@ -231,7 +231,7 @@ async function queryChatGPT(prompt: string, businessName: string, url?: string, 
       model: "gpt-4o-search-preview",
       web_search_options: webSearchOptions,
       messages: [
-        { role: "system", content: "You are a helpful assistant that provides factual, detailed answers about local and national businesses. When asked about service providers, list specific company names with their website URLs when possible." },
+        { role: "system", content: "You are a helpful assistant that provides factual, detailed answers about local and national businesses. When asked about service providers, list specific company names with their website URLs when possible. At the end of your response, provide a clean bullet list of just the business names you mentioned (no ratings, reviews, hours, or other details)." },
         { role: "user", content: prompt }
       ],
     } as any);
@@ -315,8 +315,35 @@ function isValidBusinessName(name: string): boolean {
     return false;
   }
   
+  // Reject Google Business Profile metadata patterns
+  // e.g., "Closed · Marketing agency · 5.0 (8 reviews)"
+  if (/\b(closed|open)\s*·/i.test(name)) {
+    return false;
+  }
+  
+  // Reject star ratings with reviews pattern (e.g., "5.0 (71 reviews)" or "4.8 (123)")
+  if (/\d+\.\d+\s*\(\d+(\s*reviews?)?\)/i.test(name)) {
+    return false;
+  }
+  
+  // Reject standalone category descriptors with separators (e.g., "· Marketing agency ·")
+  if (/·\s*[A-Za-z\s]+\s*·/.test(name)) {
+    return false;
+  }
+  
+  // Reject if contains common Google Maps metadata patterns (action phrases, not words that could be in business names)
+  if (/\b(closed now|open now|opens at|closes at|get directions|business hours)\b/i.test(lowerName)) {
+    return false;
+  }
+  // Reject rating context patterns (e.g., "rated 4.8 stars", "4.5-star rating", "4 star reviews")
+  // Preserves business names like "5 Star Plumbing" or "Five Star Auto"
+  if (/\b(rated\s+)?\d+\.?\d*[\s-]*stars?\s*(rating|reviews?|service)?\b/i.test(lowerName) && 
+      /\b(rating|reviews?|rated)\b/i.test(lowerName)) {
+    return false;
+  }
+  
   // Reject known non-business phrases
-  const cleanLowerName = lowerName.replace(/[:\-–]/g, '').trim();
+  const cleanLowerName = lowerName.replace(/[:\-–·]/g, '').trim();
   if (NON_BUSINESS_PHRASES.has(cleanLowerName)) {
     return false;
   }
