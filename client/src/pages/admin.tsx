@@ -18,7 +18,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Lock, Check, X, Eye, ArrowLeft, Building2, Globe, Search, MapPin, Calendar, User, Mail, Phone } from "lucide-react";
+import { Lock, Check, X, Eye, ArrowLeft, Building2, Globe, Search, MapPin, Calendar, User, Mail, Phone, FileText } from "lucide-react";
+import { Link } from "wouter";
 import { format } from "date-fns";
 
 interface Audit {
@@ -412,6 +413,20 @@ export default function Admin() {
                   {format(new Date(selectedAudit.createdAt), "MMMM d, yyyy 'at' h:mm a")}
                 </p>
               </div>
+
+              {selectedAudit.fullResults && (
+                <div className="border-t border-gray-200 pt-4">
+                  <Link href={`/admin/audit/${selectedAudit.id}`}>
+                    <Button 
+                      className="w-full bg-[#5599f9] hover:bg-[#4488e8] text-white font-bold"
+                      data-testid="button-view-full-audit"
+                    >
+                      <FileText className="w-4 h-4 mr-2" />
+                      View Full Audit Report
+                    </Button>
+                  </Link>
+                </div>
+              )}
             </div>
           )}
         </DialogContent>
