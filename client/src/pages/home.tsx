@@ -28,6 +28,8 @@ import {
   Printer,
   ChevronDown,
   ChevronUp,
+  Star,
+  TrendingUp,
 } from "lucide-react";
 import type { AuditRequest, AuditResults, PromptResult, SentimentResult } from "@shared/schema";
 
@@ -990,15 +992,37 @@ export default function Home() {
 
   // --- View: Results ---
   const getScoreColor = (score: number) => {
-    if (score >= 70) return "text-green-600";
+    if (score >= 80) return "text-green-600";
+    if (score >= 60) return "text-green-600";
     if (score >= 40) return "text-[#ffb41c]";
     return "text-red-500";
   };
 
   const getScoreLabel = (score: number) => {
-    if (score >= 70) return "Strong";
+    if (score >= 80) return "Excellent";
+    if (score >= 60) return "Strong";
     if (score >= 40) return "Moderate";
     return "Critical";
+  };
+
+  const getScoreDescription = (score: number) => {
+    if (score >= 80) {
+      return "AI assistants are actively recommending your business. Your brand has excellent visibility across major AI platforms.";
+    }
+    if (score >= 60) {
+      return "Your business is appearing in AI recommendations. There's room to strengthen your visibility and capture more AI-driven leads.";
+    }
+    if (score >= 40) {
+      return "AI visibility shows mixed results. Some AI platforms mention your business, but competitors are often recommended instead.";
+    }
+    return "While you may rank on Google, AI models are recommending your competitors instead of your business.";
+  };
+
+  const getScoreIcon = (score: number) => {
+    if (score >= 80) return { icon: Star, bgColor: "bg-green-500", textColor: "text-white" };
+    if (score >= 60) return { icon: CheckCircle, bgColor: "bg-green-500", textColor: "text-white" };
+    if (score >= 40) return { icon: TrendingUp, bgColor: "bg-[#ffb41c]", textColor: "text-[#010400]" };
+    return { icon: AlertTriangle, bgColor: "bg-red-500", textColor: "text-white" };
   };
 
   return (
@@ -1137,8 +1161,8 @@ export default function Home() {
             <p className="text-xl text-gray-500 leading-relaxed font-light">
               We simulated 20 user intent scenarios for{" "}
               <span className="font-medium text-[#010400]">"{auditResults?.keyword}"</span>
-              {auditResults?.scope === "local" && ` in ${auditResults?.city}`}. While you may rank on Google, AI models
-              are recommending your competitors.
+              {auditResults?.scope === "local" && ` in ${auditResults?.city}`}.{" "}
+              {getScoreDescription(auditResults?.overallScore || 0)}
             </p>
           </div>
           <div className="md:col-span-5 flex justify-center md:justify-end">
@@ -1149,9 +1173,15 @@ export default function Home() {
                 </span>
                 <span className="block text-sm font-bold uppercase tracking-widest text-gray-400 mt-1">Score / 100</span>
               </div>
-              <div className="absolute top-0 right-0 bg-[#ffb41c] text-[#010400] p-3 rounded-full border-4 border-white shadow-lg">
-                <AlertTriangle size={24} />
-              </div>
+              {(() => {
+                const scoreIconData = getScoreIcon(auditResults?.overallScore || 0);
+                const IconComponent = scoreIconData.icon;
+                return (
+                  <div className={`absolute top-0 right-0 ${scoreIconData.bgColor} ${scoreIconData.textColor} p-3 rounded-full border-4 border-white shadow-lg`}>
+                    <IconComponent size={24} />
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>
