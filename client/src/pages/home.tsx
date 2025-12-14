@@ -333,7 +333,7 @@ export default function Home() {
           <div className="max-w-3xl w-full text-center space-y-10">
             <div className="space-y-6">
               <h1 className="text-5xl md:text-7xl font-bold text-[#010400] tracking-tighter leading-none">
-                Are you invisible to AI?
+                Your competitors are getting recommended. Are you?
               </h1>
               <p className="text-xl md:text-2xl text-gray-500 max-w-2xl mx-auto leading-relaxed font-light">
                 See exactly how ChatGPT and Google AI Overviews recommend (or ignore) your brand.
@@ -1147,6 +1147,20 @@ export default function Home() {
               {auditResults?.scope === "local" && ` in ${auditResults?.city}`}.{" "}
               {getScoreDescription(auditResults?.overallScore || 0)}
             </p>
+            {/* Business Impact Statement */}
+            {(auditResults?.overallScore || 0) < 70 && (
+              <div className="bg-red-50 border border-red-100 rounded-xl p-4" data-testid="business-impact">
+                <p className="text-red-700 font-medium">
+                  This means you're invisible in {100 - (auditResults?.overallScore || 0)}% of AI recommendations.
+                  {auditResults?.competitors && auditResults.competitors.length > 0 && (
+                    <> When customers ask ChatGPT or Google AI for a {auditResults?.keyword}{auditResults?.scope === "local" ? ` in ${auditResults?.city}` : ""}, <span className="font-bold">{auditResults.competitors[0].name}</span> shows up. You don't.</>
+                  )}
+                  {(!auditResults?.competitors || auditResults.competitors.length === 0) && (
+                    <> When customers ask ChatGPT or Google AI for a recommendation, your competitors show up. You don't.</>
+                  )}
+                </p>
+              </div>
+            )}
           </div>
           <div className="md:col-span-5 flex justify-center md:justify-end">
             <div className="w-48 h-48 md:w-64 md:h-64 rounded-full border-[12px] border-gray-50 flex items-center justify-center relative">
@@ -1391,30 +1405,37 @@ export default function Home() {
         {/* CTA - Gray Design */}
         <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl p-8 md:p-12 text-center">
           <h3 className="text-2xl md:text-3xl font-bold text-[#010400] tracking-tight mb-4">
-            Turn this score from{" "}
-            <span className="inline-block bg-[#010400] text-white px-3 py-1 rounded-lg mx-1">
-              {auditResults?.overallScore || 0}
-            </span>
-            {" "}to{" "}
-            <span className="inline-block bg-[#5599f9] text-white px-3 py-1 rounded-lg mx-1">
-              80+
-            </span>
+            Ready to start showing up?
           </h3>
-          <p className="text-gray-500 mb-8 max-w-xl mx-auto">
-            We have generated a 90-day roadmap to fix your technical errors and build the content AI is looking for.
+          <p className="text-gray-500 mb-6 max-w-xl mx-auto">
+            Book a 15-minute call. We'll walk through your report, answer questions, and show you exactly what it would take to start showing up.
           </p>
-          <button
-            onClick={() => setShowLeadForm(true)}
-            className="bg-[#5599f9] hover:bg-[#4a8ce8] text-white font-bold px-8 py-4 rounded-xl shadow-lg shadow-blue-500/20 transition-all inline-flex items-center gap-2"
-            data-testid="button-get-report"
-          >
-            <Download size={20} /> DOWNLOAD FULL REPORT
-          </button>
-          <div className="flex items-center justify-center gap-6 mt-6 text-xs font-medium text-gray-400 uppercase tracking-wider flex-wrap">
-            <span className="flex items-center gap-2">
-              <Lock size={14} /> Secure 256-bit Encryption
-            </span>
-            <span>No Credit Card Required</span>
+          <p className="text-sm text-gray-600 font-medium mb-8">
+            No pitch. Just clarity.
+          </p>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <a
+              href="https://calendly.com/rossmanmedia"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-[#5599f9] hover:bg-[#4a8ce8] text-white font-bold px-8 py-4 rounded-xl shadow-lg shadow-blue-500/20 transition-all inline-flex items-center gap-2"
+              data-testid="button-book-call"
+            >
+              <Calendar size={20} /> Book 15-Min Call
+            </a>
+            <button
+              onClick={() => setShowLeadForm(true)}
+              className="bg-white hover:bg-gray-50 text-[#010400] font-bold px-8 py-4 rounded-xl border border-gray-200 transition-all inline-flex items-center gap-2"
+              data-testid="button-get-report"
+            >
+              <Download size={20} /> Get Full Report
+            </button>
+          </div>
+          <div className="mt-8 p-4 bg-white/60 rounded-xl border border-gray-200 max-w-md mx-auto">
+            <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">What happens next?</p>
+            <p className="text-sm text-gray-600">
+              We'll review your audit results together, identify your biggest opportunities, and outline a clear path forward. No pressure, no commitment.
+            </p>
           </div>
         </div>
 
