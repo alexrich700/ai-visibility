@@ -168,7 +168,7 @@ function checkForMentions(text: string, businessName: string, url?: string): { f
   return { found: false };
 }
 
-// Gemini client using Replit AI Integrations (no API key needed, billed to credits)
+// Gemini client using Replit AI Integrations with Google Search grounding
 async function queryGemini(prompt: string, businessName: string, url?: string): Promise<{ found: boolean; response: string; competitors: string[] }> {
   try {
     const { GoogleGenAI } = await import("@google/genai");
@@ -182,9 +182,13 @@ async function queryGemini(prompt: string, businessName: string, url?: string): 
       },
     });
     
+    // Enable Google Search grounding for real-time search results
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: prompt,
+      config: {
+        tools: [{ googleSearch: {} }]
+      }
     });
 
     const text = response.text || "";
@@ -205,18 +209,34 @@ async function queryGemini(prompt: string, businessName: string, url?: string): 
   }
 }
 
-// ChatGPT client using user's direct OpenAI API key with GPT-4o
-async function queryChatGPT(prompt: string, businessName: string, url?: string): Promise<{ found: boolean; response: string; competitors: string[] }> {
+// ChatGPT client using user's direct OpenAI API key with web search enabled
+async function queryChatGPT(prompt: string, businessName: string, url?: string, location?: string): Promise<{ found: boolean; response: string; competitors: string[] }> {
   try {
+    // Build web search options with location if provided
+    const webSearchOptions: any = {};
+    if (location && location !== "nationwide") {
+      const parts = location.split(',').map(p => p.trim());
+      webSearchOptions.user_location = {
+        type: "approximate",
+        approximate: {
+          country: "US",
+          city: parts[0] || undefined,
+          region: parts[1] || undefined
+        }
+      };
+    }
+    
+    // Use gpt-4o-search-preview with web_search_options for real-time search results
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-4o-search-preview",
+      web_search_options: webSearchOptions,
       messages: [
-        { role: "system", content: "You are a helpful assistant that provides factual, detailed answers about local and national businesses. When asked about service providers, list specific company names when possible." },
+        { role: "system", content: "You are a helpful assistant that provides factual, detailed answers about local and national businesses. When asked about service providers, list specific company names with their website URLs when possible." },
         { role: "user", content: prompt }
       ],
-      max_tokens: 1024,
-    });
+    } as any);
 
+    // Extract text from response
     const text = response.choices[0]?.message?.content || "";
     const detection = checkForMentions(text, businessName, url);
     const competitors = extractCompetitors(text, businessName);
@@ -798,11 +818,14 @@ export async function runAudit(
   // Generate sentiment prompts (WITH brand name - for sentiment analysis)
   const sentimentPrompts = await generateSentimentPrompts(businessName, keyword, scope, city);
 
+  // Format location for web search (use city if provided)
+  const searchLocation = city || undefined;
+
   // Query ChatGPT and Google AI for research prompts (visibility)
   const promptResults = await Promise.all(
     researchPrompts.map(async (prompt) => {
       const [chatgpt, googleAI] = await Promise.all([
-        queryChatGPT(prompt, businessName, url),
+        queryChatGPT(prompt, businessName, url, searchLocation),
         queryGemini(prompt, businessName, url),
       ]);
       const summary = generatePromptSummary(
@@ -820,7 +843,7 @@ export async function runAudit(
   const sentimentResults = await Promise.all(
     sentimentPrompts.map(async (prompt) => {
       const [chatgptResult, googleAIResult] = await Promise.all([
-        queryChatGPT(prompt, businessName, url),
+        queryChatGPT(prompt, businessName, url, searchLocation),
         queryGemini(prompt, businessName, url),
       ]);
       return {
