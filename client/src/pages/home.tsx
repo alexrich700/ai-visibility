@@ -330,12 +330,15 @@ export default function Home() {
         </header>
 
         <main className="flex-1 flex flex-col items-center justify-center px-4 -mt-10">
-          <div className="max-w-3xl w-full text-center space-y-10">
-            <div className="space-y-6">
-              <h1 className="text-5xl md:text-7xl font-bold text-[#010400] tracking-tighter leading-none">
-                Your competitors are getting recommended. Are you?
+          <div className="max-w-3xl w-full text-center space-y-12">
+            <div className="space-y-4">
+              <h1 className="text-4xl md:text-5xl font-bold text-[#010400] tracking-tighter leading-tight">
+                Your competitors are getting recommended.
               </h1>
-              <p className="text-xl md:text-2xl text-gray-500 max-w-2xl mx-auto leading-relaxed font-light">
+              <p className="text-2xl md:text-3xl font-bold text-[#5599f9] tracking-tight">
+                Are you?
+              </p>
+              <p className="text-lg md:text-xl text-gray-500 max-w-xl mx-auto leading-relaxed font-light pt-4">
                 See exactly how ChatGPT and Google AI Overviews recommend (or ignore) your brand.
               </p>
             </div>
