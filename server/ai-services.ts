@@ -1,9 +1,8 @@
 import OpenAI from "openai";
 
-// OpenAI client using Replit AI Integrations (no API key needed, billed to credits)
+// OpenAI client using user's direct API key
 const openai = new OpenAI({
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
 // Extract root domain from URL for detection (e.g., "buildingbrandsmarketing" from "buildingbrandsmarketing.com")
@@ -129,23 +128,19 @@ async function queryGemini(prompt: string, businessName: string, url?: string): 
   }
 }
 
-// ChatGPT client using Replit AI Integrations with GPT-5.2
+// ChatGPT client using user's direct OpenAI API key with GPT-4o
 async function queryChatGPT(prompt: string, businessName: string, url?: string): Promise<{ found: boolean; response: string; competitors: string[] }> {
   try {
-    // Using GPT-5.2 with low reasoning effort and verbosity for concise business listings
-    const systemContext = "You are a helpful assistant that provides factual, detailed answers about local and national businesses. When asked about service providers, list specific company names when possible.";
-    const response = await openai.responses.create({
-      model: "gpt-5.2",
-      input: `${systemContext}\n\nUser question: ${prompt}`,
-      reasoning: {
-        effort: "low"
-      },
-      text: {
-        verbosity: "low"
-      }
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: "You are a helpful assistant that provides factual, detailed answers about local and national businesses. When asked about service providers, list specific company names when possible." },
+        { role: "user", content: prompt }
+      ],
+      max_tokens: 1024,
     });
 
-    const text = response.output_text || "";
+    const text = response.choices[0]?.message?.content || "";
     const detection = checkForMentions(text, businessName, url);
     const competitors = extractCompetitors(text, businessName);
     
@@ -374,7 +369,7 @@ function generatePromptSummary(chatgptFound: boolean, googleAIFound: boolean, ch
   return `AI provided generic response. ${businessName} not found.`;
 }
 
-// Generate executive summary using AI with GPT-5.2
+// Generate executive summary using AI with GPT-4o
 async function generateExecutiveSummary(
   businessName: string,
   keyword: string,
@@ -385,23 +380,20 @@ async function generateExecutiveSummary(
   location: string
 ): Promise<string> {
   try {
-    const systemContext = "You write professional, matter-of-fact executive summaries for AI visibility audit reports. Be concise and data-driven.";
     const userPrompt = `Write a 2-3 sentence executive summary for an AI visibility audit.
 Start with: "We analyzed ${businessName} across 20 high-intent AI prompts on ChatGPT and Google AI${location !== "nationwide" ? ` for ${keyword} in ${location}` : ` for ${keyword} nationwide`}."
 Key findings: overall score ${overallScore}/100, ChatGPT ${chatgptScore}%, Google AI ${googleAIScore}%, sentiment ${sentimentOverall}.
 Describe what this means for AI visibility. Be professional.`;
     
-    const response = await openai.responses.create({
-      model: "gpt-5.2",
-      input: `${systemContext}\n\n${userPrompt}`,
-      reasoning: {
-        effort: "low"
-      },
-      text: {
-        verbosity: "low"
-      }
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: "You write professional, matter-of-fact executive summaries for AI visibility audit reports. Be concise and data-driven." },
+        { role: "user", content: userPrompt }
+      ],
+      max_tokens: 512,
     });
-    return response.output_text || `We analyzed ${businessName} across 20 high-intent AI prompts on ChatGPT and Google AI. The results indicate a visibility score of ${overallScore}/100 with ${sentimentOverall} brand sentiment.`;
+    return response.choices[0]?.message?.content || `We analyzed ${businessName} across 20 high-intent AI prompts on ChatGPT and Google AI. The results indicate a visibility score of ${overallScore}/100 with ${sentimentOverall} brand sentiment.`;
   } catch (error) {
     console.error("Executive summary generation error:", error);
     return `We analyzed ${businessName} across 20 high-intent AI prompts on ChatGPT and Google AI. The results indicate a visibility score of ${overallScore}/100 with ${sentimentOverall} brand sentiment.`;
@@ -551,19 +543,17 @@ ${homepageContent}`;
   }
   
   try {
-    console.log("Generating research prompts with GPT-5.2...");
-    const response = await openai.responses.create({
-      model: "gpt-5.2",
-      input: `${systemPrompt}\n\n${userPrompt}`,
-      reasoning: {
-        effort: "medium"
-      },
-      text: {
-        verbosity: "medium"
-      }
+    console.log("Generating research prompts with GPT-4o...");
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      max_tokens: 2048,
     });
     
-    const text = response.output_text || "";
+    const text = response.choices[0]?.message?.content || "";
     console.log("OpenAI research prompts response:", text.slice(0, 200));
     
     const cleanText = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
@@ -619,20 +609,18 @@ Example formats:
 - "What do customers say about [business name]?"`;
   
   try {
-    console.log("Generating sentiment prompts with GPT-5.2...");
-    const response = await openai.responses.create({
-      model: "gpt-5.2",
-      input: `${systemPrompt}\n\n${userPrompt}`,
-      reasoning: {
-        effort: "low"
-      },
-      text: {
-        verbosity: "low"
-      }
+    console.log("Generating sentiment prompts with GPT-4o...");
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      max_tokens: 512,
     });
     
-    const text = response.output_text || "";
-    console.log("GPT-5.2 sentiment prompts response:", text.slice(0, 200));
+    const text = response.choices[0]?.message?.content || "";
+    console.log("GPT-4o sentiment prompts response:", text.slice(0, 200));
     
     const cleanText = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const parsed = JSON.parse(cleanText);
