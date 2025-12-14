@@ -450,31 +450,31 @@ async function scrapeWebsite(url: string): Promise<string | null> {
 
 // Fallback research prompts (NO brand name - for visibility testing)
 // These prompts explicitly request specific named businesses to avoid generic advice responses
+// Note: These are GENERIC prompts that work for any industry - no hardcoded service types
 function getFallbackResearchPrompts(keyword: string, location: string): string[] {
   const loc = location !== "nationwide" ? ` in ${location}` : "";
-  const city = location !== "nationwide" ? location : "my area";
   const year = new Date().getFullYear();
   return [
     `Give me a list of the top 3 ${keyword} companies${loc}`,
     `Name 5 specific ${keyword} businesses I can call today${loc}`,
-    `What are the best reviewed ${keyword} services for drywall repair${loc}?`,
-    `List the top-rated ${keyword} companies that do door installation${loc}`,
-    `Which ${keyword} businesses${loc} specialize in furniture assembly?`,
-    `Can you recommend specific ${keyword} companies for minor electrical work${loc}?`,
-    `Name the most trusted ${keyword} services for painting touch-ups${loc}`,
+    `What are the best reviewed ${keyword} services${loc}?`,
+    `List the top-rated ${keyword} companies${loc}`,
+    `Which ${keyword} businesses${loc} have the best reputation?`,
+    `Can you recommend specific ${keyword} companies${loc}?`,
+    `Name the most trusted ${keyword} services${loc}`,
     `What ${keyword} companies${loc} have the best Google reviews in ${year}?`,
     `List 3 ${keyword} businesses that offer same-day service${loc}`,
-    `Which specific ${keyword} companies do you recommend for home repairs${loc}?`,
+    `Which specific ${keyword} companies do you recommend${loc}?`,
     `Give me the names of reliable ${keyword} services${loc}`,
     `What are 5 ${keyword} companies I should get quotes from${loc}?`,
-    `Name some well-known ${keyword} franchises operating${loc}`,
+    `Name some well-known ${keyword} franchises${loc}`,
     `List ${keyword} businesses${loc} with 4.5+ star ratings`,
-    `Which ${keyword} companies${loc} are best for small jobs?`,
-    `Can you name ${keyword} services that specialize in TV mounting${loc}?`,
-    `What are the top ${keyword} companies for kitchen repairs${loc}?`,
-    `List specific ${keyword} providers for bathroom repairs${loc}`,
+    `Which ${keyword} companies${loc} are best for residential work?`,
+    `Can you name the leading ${keyword} providers${loc}?`,
+    `What are the top ${keyword} companies for emergencies${loc}?`,
+    `List specific ${keyword} providers I can hire${loc}`,
     `Name ${keyword} businesses${loc} that offer free estimates`,
-    `Which ${keyword} companies${loc} are best for deck and fence repair?`,
+    `Which ${keyword} companies${loc} are best for commercial jobs?`,
   ];
 }
 
@@ -516,23 +516,21 @@ CRITICAL REQUIREMENTS:
 1. These must be GENERIC research queries that do NOT include any specific business or brand names
 2. Each query MUST explicitly ask for SPECIFIC BUSINESS NAMES to be listed - avoid vague queries that result in generic advice
 3. Use long-tail, specific queries that will trigger AI to list actual company names
+4. Include service types that are RELEVANT TO THE "${keyword.toUpperCase()}" INDUSTRY - do NOT use services from other industries
 
 INCLUDE these types of prompts (MUST request specific business names):
 - "Give me the top 3 ${keyword} companies in ${location !== "nationwide" ? location : "my area"}"
 - "Name 5 specific ${keyword} businesses I can call today"
-- "List the best reviewed ${keyword} services for [specific service type]"
-- "Which ${keyword} companies do you recommend for [specific task]?"
-- "Can you name ${keyword} services that specialize in [specific service]?"
+- "List the best reviewed ${keyword} services for [specific ${keyword}-related service]"
+- "Which ${keyword} companies do you recommend for [specific ${keyword}-related task]?"
+- "Can you name ${keyword} services that specialize in [specific ${keyword}-related specialty]?"
 
-INCLUDE specific service types like:
-- Drywall repair
-- Door installation  
-- Furniture assembly
-- Minor electrical work
-- Painting touch-ups
-- TV mounting
-- Deck and fence repair
-- Kitchen/bathroom repairs
+IMPORTANT: Generate service types that are SPECIFIC TO THE ${keyword.toUpperCase()} INDUSTRY. For example:
+- If keyword is "plumbing": use pipe repair, drain cleaning, water heater installation, sewer line repair, leak detection
+- If keyword is "electrician": use panel upgrades, outlet installation, lighting repair, wiring, circuit breaker replacement
+- If keyword is "handyman": use drywall repair, door installation, furniture assembly, TV mounting, painting touch-ups
+- If keyword is "roofing": use shingle replacement, leak repair, gutter installation, roof inspection, storm damage repair
+- If keyword is "HVAC": use AC repair, furnace installation, duct cleaning, thermostat replacement, heating maintenance
 
 DO NOT generate prompts that will result in generic advice like:
 - "Who should I hire for ${keyword}?" (too vague - will get generic tips)
@@ -545,7 +543,7 @@ Return ONLY a valid JSON array of exactly 20 strings. No explanations, no markdo
 
 IMPORTANT:
 - Each query should explicitly request a LIST of specific business names (e.g., "List 3 companies", "Name 5 businesses", "Which companies do you recommend")
-- Include queries for specific services like drywall repair, door installation, furniture assembly, TV mounting
+- Include queries for specific services that are RELEVANT TO ${keyword.toUpperCase()} - NOT services from other industries
 - NO brand names in the queries themselves, but queries should request brand names in the response
 - Avoid vague queries like "best ${keyword}" - use "Give me the top 3 ${keyword} companies" instead`;
   
