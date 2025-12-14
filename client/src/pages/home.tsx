@@ -189,7 +189,7 @@ export default function Home() {
 
   // Lead capture mutation
   const leadMutation = useMutation({
-    mutationFn: async (data: { name: string; email: string; phone: string; businessName: string; auditScore: number }) => {
+    mutationFn: async (data: { name: string; email: string; phone: string; businessName: string; auditScore: number; auditId?: number }) => {
       const response = await apiRequest("POST", "/api/leads", data);
       return await response.json();
     },
@@ -259,6 +259,7 @@ export default function Home() {
       phone: leadPhone,
       businessName,
       auditScore: auditResults?.overallScore || 0,
+      auditId: auditResults?.auditId,
     });
   };
 

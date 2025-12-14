@@ -120,6 +120,7 @@ export type SentimentSummary = z.infer<typeof sentimentSummarySchema>;
 
 // Audit results
 export const auditResultsSchema = z.object({
+  auditId: z.number().optional(),
   businessName: z.string(),
   url: z.string(),
   keyword: z.string(),
