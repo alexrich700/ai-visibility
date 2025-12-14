@@ -40,11 +40,11 @@ Key endpoints:
 
 ### AI Service Integration
 The backend integrates with three AI platforms:
-1. **OpenAI/ChatGPT** - Uses Replit AI Integrations (no API key needed)
-2. **Google Gemini** - Requires `GEMINI_API_KEY` environment variable
+1. **OpenAI/ChatGPT** - Uses user's direct `OPENAI_API_KEY` with gpt-4o model via chat.completions API
+2. **Google Gemini** - Uses Replit AI Integrations (no API key needed, billed to credits)
 3. **Perplexity** - Requires `PERPLEXITY_API_KEY` environment variable
 
-Each service is queried with business-specific prompts, and responses are analyzed for business mentions and competitor identification. Fallback simulation is provided when API keys are unavailable.
+Each service is queried with business-specific prompts, and responses are analyzed for business mentions and competitor identification. Fallback simulation is provided when API keys are unavailable or errors occur.
 
 ### Data Layer
 - **ORM**: Drizzle ORM with PostgreSQL dialect
@@ -63,8 +63,8 @@ The `shared/` directory contains TypeScript schemas and types used by both front
 ## External Dependencies
 
 ### AI Services
-- **OpenAI API** (via Replit AI Integrations) - Primary LLM for ChatGPT visibility checks
-- **Google Gemini API** - Secondary AI platform visibility analysis
+- **OpenAI API** (direct API key) - Primary LLM for ChatGPT visibility checks using gpt-4o model
+- **Google Gemini API** (via Replit AI Integrations) - Secondary AI platform visibility analysis
 - **Perplexity API** - Search-focused AI visibility analysis
 
 ### Database
@@ -80,5 +80,6 @@ The `shared/` directory contains TypeScript schemas and types used by both front
 
 ### Environment Variables Required
 - `DATABASE_URL` - PostgreSQL connection string
-- `GEMINI_API_KEY` - Google Gemini API access (optional, falls back to simulation)
+- `OPENAI_API_KEY` - OpenAI API key for ChatGPT visibility checks (required for full functionality)
+- `GEMINI_API_KEY` - Google Gemini API access (optional, uses Replit AI Integrations if not set)
 - `PERPLEXITY_API_KEY` - Perplexity API access (optional, falls back to simulation)
