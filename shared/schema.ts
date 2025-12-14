@@ -1,4 +1,4 @@
-import { pgTable, text, varchar, integer, jsonb, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, jsonb, timestamp, boolean, serial } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -16,6 +16,52 @@ export const insertUserSchema = createInsertSchema(users).pick({
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+
+// Audits table - stores every audit run
+export const audits = pgTable("audits", {
+  id: serial("id").primaryKey(),
+  businessName: text("business_name").notNull(),
+  url: text("url"),
+  keyword: text("keyword").notNull(),
+  scope: text("scope").notNull(),
+  city: text("city"),
+  overallScore: integer("overall_score").notNull(),
+  chatgptScore: integer("chatgpt_score").notNull(),
+  googleAIScore: integer("google_ai_score").notNull(),
+  fullResults: text("full_results"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertAuditSchema = createInsertSchema(audits).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertAudit = z.infer<typeof insertAuditSchema>;
+export type Audit = typeof audits.$inferSelect;
+
+// Leads table - stores contact info when user requests full report
+export const leads = pgTable("leads", {
+  id: serial("id").primaryKey(),
+  auditId: integer("audit_id").references(() => audits.id),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  phone: text("phone").notNull(),
+  businessName: text("business_name").notNull(),
+  auditScore: integer("audit_score").notNull(),
+  status: text("status").notNull().default("new"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertLeadSchema = createInsertSchema(leads).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertLead = z.infer<typeof insertLeadSchema>;
+export type DbLead = typeof leads.$inferSelect;
 
 // Audit request schema for frontend validation
 export const auditRequestSchema = z.object({

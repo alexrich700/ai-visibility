@@ -1,71 +1,72 @@
-import { randomUUID } from "crypto";
-
-export interface Lead {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  businessName: string;
-  auditScore: number;
-  createdAt: string;
-}
-
-export interface AuditRecord {
-  id: string;
-  businessName: string;
-  url: string;
-  keyword: string;
-  scope: "local" | "national";
-  city?: string;
-  overallScore: number;
-  createdAt: string;
-}
+import { db } from "./db";
+import { audits, leads, InsertAudit, InsertLead, Audit, DbLead } from "@shared/schema";
+import { eq, desc } from "drizzle-orm";
 
 export interface IStorage {
-  createLead(lead: Omit<Lead, "id" | "createdAt">): Promise<Lead>;
-  getLeads(): Promise<Lead[]>;
-  createAuditRecord(audit: Omit<AuditRecord, "id" | "createdAt">): Promise<AuditRecord>;
-  getAuditRecords(): Promise<AuditRecord[]>;
+  createAudit(audit: InsertAudit): Promise<Audit>;
+  getAudits(): Promise<Audit[]>;
+  getAuditById(id: number): Promise<Audit | undefined>;
+  createLead(lead: InsertLead): Promise<DbLead>;
+  getLeads(): Promise<DbLead[]>;
+  getLeadById(id: number): Promise<DbLead | undefined>;
+  updateLeadStatus(id: number, status: string): Promise<DbLead | undefined>;
+  getAuditsWithLeads(): Promise<(Audit & { lead?: DbLead })[]>;
 }
 
-export class MemStorage implements IStorage {
-  private leads: Map<string, Lead>;
-  private audits: Map<string, AuditRecord>;
-
-  constructor() {
-    this.leads = new Map();
-    this.audits = new Map();
-  }
-
-  async createLead(leadData: Omit<Lead, "id" | "createdAt">): Promise<Lead> {
-    const id = randomUUID();
-    const lead: Lead = {
-      ...leadData,
-      id,
-      createdAt: new Date().toISOString(),
-    };
-    this.leads.set(id, lead);
-    return lead;
-  }
-
-  async getLeads(): Promise<Lead[]> {
-    return Array.from(this.leads.values());
-  }
-
-  async createAuditRecord(auditData: Omit<AuditRecord, "id" | "createdAt">): Promise<AuditRecord> {
-    const id = randomUUID();
-    const audit: AuditRecord = {
-      ...auditData,
-      id,
-      createdAt: new Date().toISOString(),
-    };
-    this.audits.set(id, audit);
+export class DatabaseStorage implements IStorage {
+  async createAudit(auditData: InsertAudit): Promise<Audit> {
+    const [audit] = await db.insert(audits).values(auditData).returning();
     return audit;
   }
 
-  async getAuditRecords(): Promise<AuditRecord[]> {
-    return Array.from(this.audits.values());
+  async getAudits(): Promise<Audit[]> {
+    return await db.select().from(audits).orderBy(desc(audits.createdAt));
+  }
+
+  async getAuditById(id: number): Promise<Audit | undefined> {
+    const [audit] = await db.select().from(audits).where(eq(audits.id, id));
+    return audit;
+  }
+
+  async createLead(leadData: InsertLead): Promise<DbLead> {
+    const [lead] = await db.insert(leads).values(leadData).returning();
+    return lead;
+  }
+
+  async getLeads(): Promise<DbLead[]> {
+    return await db.select().from(leads).orderBy(desc(leads.createdAt));
+  }
+
+  async getLeadById(id: number): Promise<DbLead | undefined> {
+    const [lead] = await db.select().from(leads).where(eq(leads.id, id));
+    return lead;
+  }
+
+  async updateLeadStatus(id: number, status: string): Promise<DbLead | undefined> {
+    const [lead] = await db
+      .update(leads)
+      .set({ status, updatedAt: new Date() })
+      .where(eq(leads.id, id))
+      .returning();
+    return lead;
+  }
+
+  async getAuditsWithLeads(): Promise<(Audit & { lead?: DbLead })[]> {
+    const allAudits = await db.select().from(audits).orderBy(desc(audits.createdAt));
+    const allLeads = await db.select().from(leads);
+    
+    const leadsByAuditId = new Map<number, DbLead>();
+    for (const lead of allLeads) {
+      if (lead.auditId) {
+        leadsByAuditId.set(lead.auditId, lead);
+      }
+    }
+    
+    return allAudits.map(audit => ({
+      ...audit,
+      lead: leadsByAuditId.get(audit.id),
+    }));
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
