@@ -148,6 +148,7 @@ export const leadSchema = z.object({
   phone: z.string().min(1, "Phone number is required"),
   businessName: z.string(),
   auditScore: z.number(),
+  auditId: z.number().optional(),
 });
 
 export type Lead = z.infer<typeof leadSchema>;

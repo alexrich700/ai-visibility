@@ -35,8 +35,12 @@ The frontend uses a single-page application pattern with the main audit workflow
 - **Build**: esbuild for production bundling with dependency allowlist optimization
 
 Key endpoints:
-- `POST /api/audit` - Runs visibility audit across AI platforms
-- `POST /api/leads` - Captures lead information from audit results
+- `POST /api/audit` - Runs visibility audit across AI platforms (returns auditId)
+- `POST /api/leads` - Captures lead information from audit results (links to auditId)
+- `POST /api/admin/login` - Admin portal authentication
+- `GET /api/admin/audits` - Get all audits with associated lead info
+- `PATCH /api/admin/leads/:id` - Update lead status (new, contacted, not_reached, closed)
+- `GET /api/admin/audits/:id` - Get single audit details
 
 ### AI Service Integration
 The backend integrates with three AI platforms:
@@ -57,12 +61,21 @@ Fallback simulation is provided when API keys are unavailable or errors occur.
 - **ORM**: Drizzle ORM with PostgreSQL dialect
 - **Schema Location**: `shared/schema.ts`
 - **Migrations**: Managed via `drizzle-kit push`
-- **Current Storage**: In-memory storage implementation with database schema ready for migration
+- **Current Storage**: PostgreSQL database with Drizzle ORM
 
 Data models include:
 - Users (authentication ready)
-- Audit records (business visibility results)
-- Leads (contact capture from audits)
+- Audits (full audit results with scores, stored as JSON)
+- Leads (contact capture linked to audits with status tracking)
+
+### Admin Portal
+- **Route**: `/admin`
+- **Authentication**: Password-based (ADMIN_PASSWORD env var, defaults to "admin123")
+- **Features**:
+  - Dashboard table showing all audit submissions
+  - Lead status management (New, Contacted, Not Reached, Closed)
+  - Visual indicators for leads who submitted contact info
+  - Detailed audit view with scores and lead contact info
 
 ### Shared Code
 The `shared/` directory contains TypeScript schemas and types used by both frontend and backend, ensuring type safety across the stack. Zod is used for runtime validation.
@@ -90,3 +103,4 @@ The `shared/` directory contains TypeScript schemas and types used by both front
 - `OPENAI_API_KEY` - OpenAI API key for ChatGPT visibility checks (required for full functionality)
 - `GEMINI_API_KEY` - Google Gemini API access (optional, uses Replit AI Integrations if not set)
 - `PERPLEXITY_API_KEY` - Perplexity API access (optional, falls back to simulation)
+- `ADMIN_PASSWORD` - Password for admin portal access (defaults to "admin123" if not set)

@@ -67,7 +67,7 @@ export async function registerRoutes(
       const validatedData = leadSchema.parse(req.body);
       
       const lead = await storage.createLead({
-        auditId: req.body.auditId || null,
+        auditId: validatedData.auditId || null,
         name: validatedData.name,
         email: validatedData.email,
         phone: validatedData.phone,
