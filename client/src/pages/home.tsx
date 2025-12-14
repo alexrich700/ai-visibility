@@ -331,11 +331,11 @@ export default function Home() {
 
         <main className="flex-1 flex flex-col items-center justify-center px-4 -mt-10">
           <div className="max-w-3xl w-full text-center space-y-12">
-            <div className="space-y-4">
+            <div className="space-y-4 pt-8">
               <h1 className="text-4xl md:text-5xl font-bold text-[#010400] tracking-tighter leading-tight">
                 Your competitors are getting recommended.
               </h1>
-              <p className="text-2xl md:text-3xl font-bold text-[#5599f9] tracking-tight">
+              <p className="text-3xl md:text-4xl font-bold text-[#010400] tracking-tight italic">
                 Are you?
               </p>
               <p className="text-lg md:text-xl text-gray-500 max-w-xl mx-auto leading-relaxed font-light pt-4">
