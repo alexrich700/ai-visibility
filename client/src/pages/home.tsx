@@ -32,6 +32,8 @@ import {
   TrendingUp,
 } from "lucide-react";
 import type { AuditRequest, AuditResults, PromptResult, SentimentResult } from "@shared/schema";
+import logoFull from "@assets/RMG-Logo-Black-1920w_(1)_1765741951083.webp";
+import logoIcon from "@assets/images_1765741951084.png";
 
 type Step = "input" | "scanning" | "results" | "fullReport";
 
@@ -261,11 +263,9 @@ export default function Home() {
   };
 
   const Branding = () => (
-    <div className="flex items-center gap-3 font-bold text-2xl tracking-tighter text-[#010400]">
-      <div className="flex h-8 w-8 relative overflow-hidden rounded-md bg-[#5599f9]">
-        <div className="absolute top-0 right-0 w-4 h-8 bg-[#ffb41c] skew-x-12 transform translate-x-1"></div>
-      </div>
-      <span>ROSSMAN<span className="font-light">MEDIA</span></span>
+    <div className="flex items-center gap-3">
+      <img src={logoIcon} alt="Rossman Media" className="h-8 w-8 rounded-md" />
+      <img src={logoFull} alt="ROSSMAN MEDIA" className="h-6" />
     </div>
   );
 
@@ -597,11 +597,9 @@ export default function Home() {
 
             <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-8">
               <div className="space-y-6">
-                <div className="flex items-center gap-3 font-bold text-3xl tracking-tighter">
-                  <div className="flex h-10 w-10 relative overflow-hidden rounded-md bg-[#5599f9]">
-                    <div className="absolute top-0 right-0 w-5 h-10 bg-[#ffb41c] skew-x-12 transform translate-x-1"></div>
-                  </div>
-                  <span>ROSSMAN<span className="font-light">MEDIA</span></span>
+                <div className="flex items-center gap-3">
+                  <img src={logoIcon} alt="Rossman Media" className="h-10 w-10 rounded-md" />
+                  <img src={logoFull} alt="ROSSMAN MEDIA" className="h-8 invert" />
                 </div>
                 <div>
                   <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-2" data-testid="full-report-title">AI Visibility Audit</h1>
@@ -1437,11 +1435,9 @@ export default function Home() {
 
         {/* Footer */}
         <div className="border-t border-gray-100 pt-8 text-center space-y-4">
-          <div className="flex items-center justify-center gap-2 text-sm font-bold text-gray-400 tracking-wide">
-            <div className="flex h-5 w-5 relative overflow-hidden rounded bg-[#5599f9]">
-              <div className="absolute top-0 right-0 w-2.5 h-5 bg-[#ffb41c] skew-x-12 transform translate-x-0.5"></div>
-            </div>
-            ROSSMAN MEDIA
+          <div className="flex items-center justify-center gap-2">
+            <img src={logoIcon} alt="Rossman Media" className="h-5 w-5 rounded" />
+            <img src={logoFull} alt="ROSSMAN MEDIA" className="h-4 opacity-50" />
           </div>
           <p className="text-xs text-gray-400 max-w-md mx-auto">
             *This audit is a simulation based on public LLM behavior patterns and typical industry prompts.
