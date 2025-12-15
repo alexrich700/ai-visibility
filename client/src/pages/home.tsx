@@ -1105,11 +1105,8 @@ export default function Home() {
           <h3 className="text-2xl md:text-3xl font-bold text-[#010400] tracking-tight mb-4">
             Ready to start showing up?
           </h3>
-          <p className="text-gray-500 mb-6 max-w-xl mx-auto">
+          <p className="text-gray-500 mb-8 max-w-xl mx-auto">
             Book a 15-minute call. We'll walk through your report, answer questions, and show you exactly what it would take to start showing up.
-          </p>
-          <p className="text-sm text-gray-600 font-medium mb-8">
-            No pitch. Just clarity.
           </p>
           <a
             href="https://calendly.com/rossmanmedia"
