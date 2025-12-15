@@ -920,11 +920,104 @@ export default function Home() {
           </p>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left Column - First 5 Prompts */}
-            <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
-              {auditResults?.promptResults?.slice(0, 5).map((result, index) => (
-                <PromptResultRow key={index} result={result} index={index} />
-              ))}
+            {/* Left Column - All Prompts with Platform Toggle */}
+            <div className="lg:col-span-2 space-y-4">
+              {/* Platform Toggle Buttons */}
+              <div className="flex gap-2" data-testid="prompt-platform-toggle">
+                <button
+                  onClick={() => setPromptLogTab("chatgpt")}
+                  className={`flex-1 py-3 px-4 text-sm font-bold tracking-wide rounded-lg transition-all flex items-center justify-center gap-2 ${
+                    promptLogTab === "chatgpt"
+                      ? "bg-[#5599f9] text-white shadow-md"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  }`}
+                  data-testid="button-toggle-chatgpt"
+                >
+                  ChatGPT Responses
+                </button>
+                <button
+                  onClick={() => setPromptLogTab("google")}
+                  className={`flex-1 py-3 px-4 text-sm font-bold tracking-wide rounded-lg transition-all flex items-center justify-center gap-2 ${
+                    promptLogTab === "google"
+                      ? "bg-[#5599f9] text-white shadow-md"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  }`}
+                  data-testid="button-toggle-google"
+                >
+                  Google AI Responses
+                </button>
+              </div>
+
+              {/* All Prompts List */}
+              <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100 max-h-[600px] overflow-y-auto">
+                {auditResults?.promptResults?.map((result, index) => {
+                  const platformData = promptLogTab === "chatgpt" ? result.chatgpt : result.googleAI;
+                  const isFound = platformData.found;
+                  const rowKey = `${index}`;
+                  const isExpanded = expandedRows[rowKey];
+                  
+                  return (
+                    <div key={index} data-testid={`prompt-result-${index}`}>
+                      <div 
+                        className="flex items-start gap-4 p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                        onClick={() => toggleRowExpansion(rowKey)}
+                        data-testid={`prompt-row-${index}`}
+                      >
+                        <div className="mt-1">
+                          {isFound ? (
+                            <CheckCircle className="text-[#5599f9]" size={20} />
+                          ) : (
+                            <div className="w-5 h-5 rounded-full border-2 border-red-200 flex items-center justify-center">
+                              <X className="w-3 h-3 text-red-500" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-mono text-xs text-gray-400 uppercase tracking-wider mb-1">Prompt #{index + 1}</div>
+                          <p className="font-medium text-[#010400] text-base">"{result.prompt}"</p>
+                          <p className={`text-sm mt-1 ${isFound ? 'text-green-600' : 'text-red-500 font-medium'}`}>
+                            {isFound 
+                              ? `Your brand was cited by ${promptLogTab === "chatgpt" ? "ChatGPT" : "Google AI"}.`
+                              : `Not found. ${platformData.competitors?.length ? `${platformData.competitors.slice(0, 2).join(", ")} cited instead.` : "Competitors were recommended."}`
+                            }
+                          </p>
+                        </div>
+                        <div className="mt-1 shrink-0">
+                          {isExpanded ? (
+                            <ChevronUp className="text-gray-400" size={20} />
+                          ) : (
+                            <ChevronDown className="text-gray-400" size={20} />
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Expanded Response */}
+                      {isExpanded && (
+                        <div className="px-4 pb-4 pt-0 ml-9 mr-4 bg-gray-50 rounded-lg mb-4 mx-4">
+                          <div className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-3 pt-4">
+                            {promptLogTab === "chatgpt" ? "ChatGPT" : "Google AI"} Response
+                          </div>
+                          <div className="text-sm text-gray-700 leading-relaxed">
+                            {renderMarkdown(platformData.response || "")}
+                          </div>
+                          {platformData.competitors && platformData.competitors.length > 0 && (
+                            <div className="mt-4 pt-3 border-t border-gray-200">
+                              <div className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Competitors Mentioned</div>
+                              <div className="flex flex-wrap gap-2">
+                                {platformData.competitors.map((comp, i) => (
+                                  <span key={i} className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded font-medium">
+                                    {comp}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Right Column - Stats */}
@@ -966,15 +1059,45 @@ export default function Home() {
                   )}
                 </div>
               </div>
+
+              {/* Platform Stats Summary */}
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <div className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-4">
+                  {promptLogTab === "chatgpt" ? "ChatGPT" : "Google AI"} Summary
+                </div>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Found</span>
+                    <span className="font-bold text-green-600">
+                      {auditResults?.promptResults?.filter(r => 
+                        promptLogTab === "chatgpt" ? r.chatgpt.found : r.googleAI.found
+                      ).length || 0}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Not Found</span>
+                    <span className="font-bold text-red-500">
+                      {auditResults?.promptResults?.filter(r => 
+                        promptLogTab === "chatgpt" ? !r.chatgpt.found : !r.googleAI.found
+                      ).length || 0}
+                    </span>
+                  </div>
+                  <div className="pt-2 border-t border-gray-100">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Visibility Rate</span>
+                      <span className="font-bold text-[#5599f9]">
+                        {Math.round(((auditResults?.promptResults?.filter(r => 
+                          promptLogTab === "chatgpt" ? r.chatgpt.found : r.googleAI.found
+                        ).length || 0) / (auditResults?.promptResults?.length || 1)) * 100)}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-
-          {/* Footer text */}
-          <p className="text-center text-sm text-gray-400 italic">
-            + {Math.max((auditResults?.promptResults?.length || 20) - 5, 15)} other prompt variations analyzed in full report.
-          </p>
-          </div>
-          </div>
+        </div>
+        </div>
         </div>
 
         {/* CTA - Gray Design */}
