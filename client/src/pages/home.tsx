@@ -35,7 +35,7 @@ import type { AuditRequest, AuditResults, PromptResult, SentimentResult } from "
 import logoFull from "@assets/RMG-Logo-Black-1920w_(1)_1765741951083.webp";
 import logoIcon from "@assets/images_1765741951084.png";
 
-type Step = "input" | "scanning" | "results" | "fullReport";
+type Step = "input" | "scanning" | "results";
 
 interface ScanProgress {
   progress: number;
@@ -46,6 +46,7 @@ interface ScanProgress {
 export default function Home() {
   const [step, setStep] = useState<Step>("input");
   const [showLeadForm, setShowLeadForm] = useState(false);
+  const [isReportUnlocked, setIsReportUnlocked] = useState(false);
 
   // Input State
   const [businessName, setBusinessName] = useState("");
@@ -201,7 +202,7 @@ export default function Home() {
     },
     onSuccess: () => {
       setShowLeadForm(false);
-      setStep("fullReport");
+      setIsReportUnlocked(true);
     },
   });
 
@@ -508,473 +509,6 @@ export default function Home() {
     );
   }
 
-  // --- View: Full Report (After Lead Submission) ---
-  if (step === "fullReport") {
-    // Guard: redirect to results if no audit data
-    if (!auditResults) {
-      setStep("results");
-      return null;
-    }
-
-    const handlePrintReport = () => {
-      setIsPrinting(true);
-      setTimeout(() => {
-        window.print();
-        setIsPrinting(false);
-      }, 100);
-    };
-
-    const getScoreColorFull = (score: number) => {
-      if (score >= 70) return "text-green-600";
-      if (score >= 40) return "text-[#ffb41c]";
-      return "text-red-500";
-    };
-
-    const getScoreLabelFull = (score: number) => {
-      if (score >= 70) return "Strong";
-      if (score >= 40) return "Moderate";
-      return "Critical";
-    };
-
-    const currentDate = new Date().toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    });
-
-    const SectionHeader = ({ title, icon: Icon }: { title: string; icon: any }) => (
-      <div className="flex items-center gap-3 border-b border-gray-200 pb-4 mb-6">
-        <div className="p-2 bg-[#5599f9]/10 rounded-lg">
-          <Icon className="text-[#5599f9]" size={24} />
-        </div>
-        <h2 className="text-2xl font-bold text-[#010400] tracking-tight">{title}</h2>
-      </div>
-    );
-
-    return (
-      <div className="min-h-screen bg-gray-100 py-10 font-sans text-[#010400] print:py-0 print:bg-white" id="full-report">
-        {/* Print Styles */}
-        <style>{`
-          @media print {
-            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            .no-print { display: none !important; }
-            .print-break { page-break-before: always; }
-            td p { white-space: normal !important; }
-          }
-        `}</style>
-
-        {/* Floating Action Bar */}
-        <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-[#010400] text-white px-6 py-3 rounded-full shadow-2xl z-50 flex items-center gap-6 no-print">
-          <span className="text-sm font-bold hidden md:inline">Your Report is Ready</span>
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={handlePrintReport}
-              className="flex items-center gap-2 hover:text-[#5599f9] transition-colors text-sm font-medium"
-              data-testid="button-print-report"
-            >
-              <Printer size={16} /> Print
-            </button>
-            <div className="w-px h-4 bg-gray-700"></div>
-            <button 
-              onClick={handlePrintReport}
-              className="flex items-center gap-2 hover:text-[#5599f9] transition-colors text-sm font-bold"
-              data-testid="button-download-pdf"
-            >
-              <Download size={16} /> Download PDF
-            </button>
-            <div className="w-px h-4 bg-gray-700"></div>
-            <button 
-              onClick={() => setStep("input")}
-              className="flex items-center gap-2 hover:text-[#5599f9] transition-colors text-sm font-medium"
-              data-testid="button-new-audit-full"
-            >
-              New Audit
-            </button>
-          </div>
-        </div>
-
-        {/* Main Report Container */}
-        <div className="max-w-5xl mx-auto bg-white shadow-xl min-h-[1200px] overflow-hidden print:shadow-none">
-          
-          {/* 1. Header / Cover - Black with decorative shapes */}
-          <header className="bg-[#010400] text-white p-12 relative overflow-hidden">
-            {/* Abstract Brand Shapes */}
-            <div className="absolute top-0 right-0 w-64 h-64 bg-[#5599f9] rounded-full mix-blend-multiply opacity-20 transform translate-x-1/2 -translate-y-1/2 blur-3xl"></div>
-            <div className="absolute bottom-0 left-0 w-48 h-48 bg-[#ffb41c] rounded-full mix-blend-multiply opacity-20 transform -translate-x-1/2 translate-y-1/2 blur-3xl"></div>
-
-            <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-8">
-              <div className="space-y-6">
-                <div className="flex items-center gap-3">
-                  <img src={logoIcon} alt="Rossman Media" className="h-10 w-10 rounded-md" />
-                  <img src={logoFull} alt="ROSSMAN MEDIA" className="h-8 invert" />
-                </div>
-                <div>
-                  <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-2" data-testid="full-report-title">AI Visibility Audit</h1>
-                  <p className="text-gray-400 text-lg">Comprehensive Analysis & Strategic Roadmap</p>
-                </div>
-              </div>
-              
-              <div className="text-right space-y-2">
-                <div className="inline-block bg-[#5599f9] text-white text-xs font-bold px-3 py-1 rounded uppercase tracking-wider mb-2">
-                  Confidential Report
-                </div>
-                <p className="text-sm text-gray-400 font-mono">
-                  {auditResults.businessName} | {auditResults.keyword}
-                  {auditResults.scope === "local" && auditResults.city && ` | ${auditResults.city}`}
-                </p>
-                <p className="text-lg font-bold">{currentDate}</p>
-              </div>
-            </div>
-          </header>
-
-          {/* 2. Executive Summary */}
-          <section className="p-12 border-b border-gray-200">
-            <SectionHeader title="Executive Summary" icon={Zap} />
-            
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-12">
-              <div className="md:col-span-8 space-y-6">
-                <p className="text-lg text-gray-600 leading-relaxed" data-testid="full-executive-summary">
-                  {auditResults.executiveSummary || `We analyzed ${auditResults.businessName} across 20 high-intent AI prompts on ChatGPT and Google AI. The results indicate a visibility score of ${auditResults.overallScore}/100.`}
-                </p>
-                
-                {auditResults.overallScore < 40 && (
-                  <div className="bg-red-50 border-l-4 border-red-500 p-6 rounded-r-lg space-y-2">
-                    <h4 className="font-bold text-red-900 flex items-center gap-2">
-                      <AlertTriangle size={18} /> Primary Issue Detected
-                    </h4>
-                    <p className="text-red-800">
-                      AI models lack sufficient data about your brand. When users ask recommendation queries, AI cannot find structured comparisons to validate your authority, defaulting to competitors who have this content.
-                    </p>
-                  </div>
-                )}
-                {auditResults.overallScore >= 40 && auditResults.overallScore < 70 && (
-                  <div className="bg-yellow-50 border-l-4 border-[#ffb41c] p-6 rounded-r-lg space-y-2">
-                    <h4 className="font-bold text-yellow-900 flex items-center gap-2">
-                      <AlertTriangle size={18} /> Improvement Opportunities
-                    </h4>
-                    <p className="text-yellow-800">
-                      Your brand has moderate visibility but there are opportunities to improve. Focus on building more authoritative content and increasing brand mentions across the web.
-                    </p>
-                  </div>
-                )}
-                {auditResults.overallScore >= 70 && (
-                  <div className="bg-green-50 border-l-4 border-green-500 p-6 rounded-r-lg space-y-2">
-                    <h4 className="font-bold text-green-900 flex items-center gap-2">
-                      <CheckCircle size={18} /> Strong AI Presence
-                    </h4>
-                    <p className="text-green-800">
-                      Your brand has excellent visibility across AI platforms. Continue maintaining your content strategy and monitor for any changes in AI recommendations.
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <div className="md:col-span-4 flex flex-col gap-4">
-                <div className={`p-6 rounded-xl border flex flex-col justify-between h-full ${
-                  auditResults.overallScore >= 70 ? "bg-green-50 border-green-100" :
-                  auditResults.overallScore >= 40 ? "bg-yellow-50 border-yellow-100" :
-                  "bg-red-50 border-red-100"
-                }`}>
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wider mb-2 text-gray-500">Overall Visibility Score</p>
-                    <p className={`text-4xl font-bold mb-1 ${getScoreColorFull(auditResults.overallScore)}`} data-testid="full-report-overall-score">
-                      {auditResults.overallScore}/100
-                    </p>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-2">{getScoreLabelFull(auditResults.overallScore)} Visibility</p>
-                </div>
-                <div className="p-6 rounded-xl border bg-[#010400] text-white border-[#010400] flex flex-col justify-between h-full">
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wider mb-2 text-gray-400">Platforms Analyzed</p>
-                    <p className="text-3xl font-bold mb-1">2</p>
-                  </div>
-                  <p className="text-xs text-gray-400 mt-2">ChatGPT & Google AI</p>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* 3. Simulated Prompt Log - Table Format with Tabs */}
-          <section className="p-12 border-b border-gray-200 bg-gray-50">
-            <SectionHeader title="Simulated Prompt Log" icon={Cpu} />
-            <p className="mb-4 text-gray-600">We simulated the following user queries to test brand presence across AI platforms.</p>
-            <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-6">
-              <p className="text-sm text-gray-700">
-                <span className="font-bold text-[#5599f9]">How to read this:</span> These are generic questions users might ask AI—your brand name is <span className="font-medium">not included</span> in the prompt. 
-                If AI doesn't recommend you here, it means you're invisible to organic AI-assisted discovery, even if AI knows about your brand when asked directly.
-              </p>
-            </div>
-
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-              {/* Platform Tabs */}
-              <div className="flex border-b border-gray-200 no-print">
-                <button
-                  type="button"
-                  onClick={() => setPromptLogTab("chatgpt")}
-                  className={`flex-1 py-4 text-sm font-bold tracking-widest uppercase transition-all flex items-center justify-center gap-2 ${
-                    promptLogTab === "chatgpt"
-                      ? "bg-gray-50 text-[#010400] border-b-2 border-[#5599f9]"
-                      : "bg-white text-gray-400 hover:text-gray-600 hover:bg-gray-50"
-                  }`}
-                  data-testid="button-tab-chatgpt-home"
-                >
-                  <Cpu size={16} className={promptLogTab === "chatgpt" ? "text-[#5599f9]" : ""} /> ChatGPT
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPromptLogTab("google")}
-                  className={`flex-1 py-4 text-sm font-bold tracking-widest uppercase transition-all flex items-center justify-center gap-2 ${
-                    promptLogTab === "google"
-                      ? "bg-gray-50 text-[#010400] border-b-2 border-[#5599f9]"
-                      : "bg-white text-gray-400 hover:text-gray-600 hover:bg-gray-50"
-                  }`}
-                  data-testid="button-tab-google-home"
-                >
-                  <Globe size={16} className={promptLogTab === "google" ? "text-[#5599f9]" : ""} /> Google AI
-                </button>
-              </div>
-
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200 text-xs uppercase tracking-wider text-gray-500 font-bold">
-                    <th className="p-4 w-16 text-center">Status</th>
-                    <th className="p-4">Simulated User Query</th>
-                    <th className="p-4 hidden md:table-cell">AI Response</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {auditResults.promptResults?.map((result, idx) => {
-                    const platformData = promptLogTab === "chatgpt" ? result.chatgpt : result.googleAI;
-                    const response = platformData.response || "";
-                    const rowKey = `${idx}-${promptLogTab}`;
-                    const isExpanded = expandedRows[rowKey] || isPrinting;
-                    
-                    return (
-                      <tr key={rowKey} className="hover:bg-gray-50 transition-colors align-top" data-testid={`full-prompt-result-${idx}-${promptLogTab}`}>
-                        <td className="p-4 text-center">
-                          {platformData.found ? (
-                            <CheckCircle className="text-green-500 mx-auto" size={20} />
-                          ) : (
-                            <div className="w-5 h-5 mx-auto rounded-full border-2 border-red-200 flex items-center justify-center">
-                              <X className="w-3 h-3 text-red-500" />
-                            </div>
-                          )}
-                        </td>
-                        <td className="p-4 font-medium text-[#010400] text-sm">"{result.prompt}"</td>
-                        <td className="p-4 text-sm hidden md:table-cell">
-                          <div>
-                            {isExpanded ? (
-                              renderMarkdown(response)
-                            ) : (
-                              <p className="text-gray-600">{getResponsePreview(response)}</p>
-                            )}
-                            {response.length > 150 && (
-                              <button
-                                onClick={() => toggleRowExpansion(rowKey)}
-                                className="text-xs font-medium text-[#5599f9] hover:text-[#4a8ce8] flex items-center gap-1 mt-2 no-print"
-                                data-testid={`button-expand-response-${idx}-${promptLogTab}`}
-                              >
-                                {isExpanded ? (
-                                  <>View Less <ChevronUp size={14} /></>
-                                ) : (
-                                  <>View Full Response <ChevronDown size={14} /></>
-                                )}
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              <div className="p-4 bg-gray-50 text-center border-t border-gray-200 text-sm text-gray-500 font-medium">
-                {auditResults.promptResults?.length || 20} prompts analyzed across ChatGPT and Google AI
-              </div>
-            </div>
-          </section>
-
-          {/* 4. Brand Sentiment & Platform Breakdown */}
-          <section className="grid grid-cols-1 md:grid-cols-2">
-            {/* Sentiment */}
-            <div className="p-12 border-b md:border-b-0 md:border-r border-gray-200">
-              <SectionHeader title="Brand Sentiment" icon={BarChart2} />
-              
-              {auditResults.sentimentAnalysis && (
-                <div className="space-y-6">
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">
-                    <div>
-                      <p className="text-xs font-bold text-gray-400 uppercase">Dominant Sentiment</p>
-                      <p className="text-xl font-bold text-[#010400]" data-testid="full-sentiment-overall">
-                        {auditResults.sentimentAnalysis.overall.charAt(0).toUpperCase() + auditResults.sentimentAnalysis.overall.slice(1)}
-                      </p>
-                    </div>
-                    {auditResults.sentimentAnalysis.overall === "positive" && <ThumbsUp size={32} className="text-green-500" />}
-                    {auditResults.sentimentAnalysis.overall === "negative" && <ThumbsDown size={32} className="text-red-500" />}
-                    {auditResults.sentimentAnalysis.overall === "neutral" && <Minus size={32} className="text-gray-400" />}
-                  </div>
-
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-2"><ThumbsUp size={16} className="text-green-500" /> Positive Signals</span>
-                      <span className="font-bold" data-testid="full-sentiment-positive">{auditResults.sentimentAnalysis.positiveCount}</span>
-                    </div>
-                    <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-                      <div className="bg-green-500 h-full" style={{ width: `${(auditResults.sentimentAnalysis.positiveCount / 10) * 100}%` }}></div>
-                    </div>
-
-                    <div className="flex items-center justify-between text-sm pt-2">
-                      <span className="flex items-center gap-2"><Minus size={16} className="text-gray-400" /> Neutral/Unknown</span>
-                      <span className="font-bold" data-testid="full-sentiment-neutral">{auditResults.sentimentAnalysis.neutralCount}</span>
-                    </div>
-                    <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-                      <div className="bg-gray-400 h-full" style={{ width: `${(auditResults.sentimentAnalysis.neutralCount / 10) * 100}%` }}></div>
-                    </div>
-
-                    <div className="flex items-center justify-between text-sm pt-2">
-                      <span className="flex items-center gap-2"><ThumbsDown size={16} className="text-red-500" /> Negative Signals</span>
-                      <span className="font-bold" data-testid="full-sentiment-negative">{auditResults.sentimentAnalysis.negativeCount}</span>
-                    </div>
-                    <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-                      <div className="bg-red-500 h-full" style={{ width: `${(auditResults.sentimentAnalysis.negativeCount / 10) * 100}%` }}></div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Platform Scores */}
-            <div className="p-12 border-b border-gray-200">
-              <SectionHeader title="Platform Breakdown" icon={Globe} />
-              <div className="space-y-4">
-                <div className="flex gap-4 items-start p-4 bg-gray-50 rounded-xl border border-gray-100">
-                  <Cpu size={24} className="text-green-600 shrink-0" />
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-bold text-[#010400]">ChatGPT</h4>
-                      <span className={`text-2xl font-bold ${getScoreColorFull(auditResults.chatgptScore)}`} data-testid="full-report-chatgpt-score">
-                        {auditResults.chatgptScore}%
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">Visibility across ChatGPT responses</p>
-                  </div>
-                </div>
-
-                <div className="flex gap-4 items-start p-4 bg-gray-50 rounded-xl border border-gray-100">
-                  <Globe size={24} className="text-blue-600 shrink-0" />
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-bold text-[#010400]">Google AI</h4>
-                      <span className={`text-2xl font-bold ${getScoreColorFull(auditResults.googleAIScore)}`} data-testid="full-report-google-score">
-                        {auditResults.googleAIScore}%
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">Visibility across Google AI Overviews</p>
-                  </div>
-                </div>
-
-                {/* Competitors */}
-                {auditResults.competitors && auditResults.competitors.length > 0 && (
-                  <div className="mt-6">
-                    <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-3">Top Competitors Cited</p>
-                    <div className="space-y-2">
-                      {auditResults.competitors.slice(0, 3).map((competitor, idx) => (
-                        <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg" data-testid={`full-competitor-${idx}`}>
-                          <span className="font-medium text-[#010400]">{competitor.name}</span>
-                          <span className="text-xs text-gray-500">{competitor.mentions} mentions</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </section>
-
-          {/* 5. 90-Day Roadmap */}
-          <section className="p-12 bg-[#010400] text-white">
-            <div className="flex items-center gap-3 border-b border-gray-800 pb-4 mb-8">
-              <div className="p-2 bg-[#5599f9] rounded-lg text-white">
-                <MapPin size={24} />
-              </div>
-              <h2 className="text-2xl font-bold tracking-tight">Proposed 90-Day Remediation Plan</h2>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-[#5599f9] font-bold uppercase tracking-widest text-xs">
-                  <Calendar size={14} /> Month 1
-                </div>
-                <h3 className="text-xl font-bold">Foundation & Fixes</h3>
-                <ul className="space-y-3 text-sm text-gray-400">
-                  <li className="flex gap-2"><CheckCircle size={16} className="text-[#5599f9] shrink-0" /> Install llms.txt & Schema</li>
-                  <li className="flex gap-2"><CheckCircle size={16} className="text-[#5599f9] shrink-0" /> Fix Citation Gaps (Directories)</li>
-                  <li className="flex gap-2"><CheckCircle size={16} className="text-[#5599f9] shrink-0" /> Publish 2 Comparison Articles</li>
-                  <li className="flex gap-2"><CheckCircle size={16} className="text-[#5599f9] shrink-0" /> Optimize 5 Service FAQs</li>
-                </ul>
-              </div>
-
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-[#ffb41c] font-bold uppercase tracking-widest text-xs">
-                  <Calendar size={14} /> Month 2
-                </div>
-                <h3 className="text-xl font-bold">Scale Content</h3>
-                <ul className="space-y-3 text-sm text-gray-400">
-                  <li className="flex gap-2"><CheckCircle size={16} className="text-[#ffb41c] shrink-0" /> 2 Additional 'Best Of' Lists</li>
-                  <li className="flex gap-2"><CheckCircle size={16} className="text-[#ffb41c] shrink-0" /> Press Release Distribution</li>
-                  <li className="flex gap-2"><CheckCircle size={16} className="text-[#ffb41c] shrink-0" /> Expand FAQ Coverage</li>
-                  <li className="flex gap-2"><CheckCircle size={16} className="text-[#ffb41c] shrink-0" /> Mid-Campaign Visibility Check</li>
-                </ul>
-              </div>
-
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-white font-bold uppercase tracking-widest text-xs">
-                  <Calendar size={14} /> Month 3
-                </div>
-                <h3 className="text-xl font-bold">Measure & Dominate</h3>
-                <ul className="space-y-3 text-sm text-gray-400">
-                  <li className="flex gap-2"><CheckCircle size={16} className="text-white shrink-0" /> Final 2 Comparison Assets</li>
-                  <li className="flex gap-2"><CheckCircle size={16} className="text-white shrink-0" /> Content Freshness Updates</li>
-                  <li className="flex gap-2"><CheckCircle size={16} className="text-white shrink-0" /> Final Scorecard Analysis</li>
-                  <li className="flex gap-2"><CheckCircle size={16} className="text-white shrink-0" /> Phase 2 Strategy Roadmap</li>
-                </ul>
-              </div>
-            </div>
-          </section>
-
-          {/* 6. Footer / CTA */}
-          <footer className="p-12 bg-gray-50 flex flex-col md:flex-row justify-between items-center gap-8 no-print">
-            <div>
-              <h3 className="font-bold text-xl mb-2">Ready to fix this?</h3>
-              <p className="text-gray-500 max-w-sm">
-                We can implement this entire roadmap for a flat fee. Schedule a strategy call to discuss the details.
-              </p>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-4">
-              <a 
-                href="mailto:contact@rossmanmedia.com"
-                className="flex items-center justify-center gap-2 px-8 py-4 bg-white border-2 border-[#010400] text-[#010400] font-bold rounded-xl hover:bg-gray-50 transition-colors"
-              >
-                <Mail size={18} /> Email Strategy Team
-              </a>
-              <a 
-                href="mailto:contact@rossmanmedia.com"
-                className="flex items-center justify-center gap-2 px-8 py-4 bg-[#5599f9] text-white font-bold rounded-xl hover:bg-[#4a8ce8] transition-colors shadow-lg shadow-blue-500/20"
-                data-testid="button-contact-us"
-              >
-                Book Consultation <ArrowRight size={18} />
-              </a>
-            </div>
-          </footer>
-
-        </div>
-        
-        <div className="text-center mt-12 text-gray-400 text-sm no-print">
-          <p>&copy; {new Date().getFullYear()} Rossman Media. All Rights Reserved.</p>
-        </div>
-      </div>
-    );
-  }
 
   // --- View: Results ---
   const getScoreColor = (score: number) => {
@@ -1091,14 +625,14 @@ export default function Home() {
                   {leadMutation.isPending ? (
                     <Loader2 className="animate-spin" size={20} />
                   ) : (
-                    <>Get My Full Report <ArrowRight size={20} /></>
+                    <>Unlock Full Insights <ArrowRight size={20} /></>
                   )}
                 </button>
               </form>
 
               <div className="text-center">
                 <p className="text-xs text-gray-400">
-                  Your detailed report will be emailed to you immediately.
+                  Your complete visibility analysis will be revealed instantly.
                 </p>
               </div>
             </div>
@@ -1215,23 +749,54 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Visibility Score Explanation */}
-        <div className="bg-blue-50 border border-blue-100 rounded-xl p-5" data-testid="visibility-explanation">
-          <div className="flex gap-4">
-            <div className="shrink-0">
-              <div className="w-10 h-10 bg-[#5599f9] rounded-lg flex items-center justify-center">
-                <Search className="text-white" size={20} />
+        {/* Blurred Section Container - Unlock to view full report */}
+        <div className="relative">
+          {/* Blur Overlay when not unlocked */}
+          {!isReportUnlocked && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60 backdrop-blur-[2px] rounded-xl">
+              <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md text-center border border-gray-200">
+                <div className="w-16 h-16 bg-[#5599f9] rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Lock className="text-white" size={28} />
+                </div>
+                <h3 className="text-2xl font-bold text-[#010400] tracking-tight mb-2">
+                  Unlock Full Report
+                </h3>
+                <p className="text-gray-500 mb-6">
+                  Get complete visibility insights including sentiment analysis, full prompt breakdown, and competitor details.
+                </p>
+                <button
+                  onClick={() => setShowLeadForm(true)}
+                  className="w-full bg-[#5599f9] hover:bg-[#4a8ce8] text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2"
+                  data-testid="button-unlock-report"
+                >
+                  <Lock size={18} /> Unlock Now - Free
+                </button>
+                <p className="text-xs text-gray-400 mt-4">
+                  Just enter your contact info to access the full report.
+                </p>
               </div>
             </div>
-            <div>
-              <h4 className="font-bold text-[#010400] mb-1">What does this score mean?</h4>
-              <p className="text-sm text-gray-600 leading-relaxed">
-                Your visibility score measures how often AI assistants <span className="font-medium">organically recommend</span> your brand when users ask generic questions like "best {auditResults?.keyword} in {auditResults?.scope === "local" ? auditResults?.city : "the country"}." 
-                A low score means AI doesn't naturally suggest your business—even if it knows about you. This is different from sentiment, which measures what AI says <span className="font-medium">when asked directly about your brand</span>.
-              </p>
+          )}
+
+          {/* Content - blurred when not unlocked */}
+          <div className={`space-y-12 ${!isReportUnlocked ? 'blur-sm select-none pointer-events-none' : ''}`}>
+            {/* Visibility Score Explanation */}
+            <div className="bg-blue-50 border border-blue-100 rounded-xl p-5" data-testid="visibility-explanation">
+              <div className="flex gap-4">
+                <div className="shrink-0">
+                  <div className="w-10 h-10 bg-[#5599f9] rounded-lg flex items-center justify-center">
+                    <Search className="text-white" size={20} />
+                  </div>
+                </div>
+                <div>
+                  <h4 className="font-bold text-[#010400] mb-1">What does this score mean?</h4>
+                  <p className="text-sm text-gray-600 leading-relaxed">
+                    Your visibility score measures how often AI assistants <span className="font-medium">organically recommend</span> your brand when users ask generic questions like "best {auditResults?.keyword} in {auditResults?.scope === "local" ? auditResults?.city : "the country"}." 
+                    A low score means AI doesn't naturally suggest your business—even if it knows about you. This is different from sentiment, which measures what AI says <span className="font-medium">when asked directly about your brand</span>.
+                  </p>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
 
         {/* Sentiment Analysis Section */}
         {auditResults?.sentimentAnalysis && (
@@ -1403,6 +968,8 @@ export default function Home() {
           <p className="text-center text-sm text-gray-400 italic">
             + {Math.max((auditResults?.promptResults?.length || 20) - 5, 15)} other prompt variations analyzed in full report.
           </p>
+          </div>
+          </div>
         </div>
 
         {/* CTA - Gray Design */}
@@ -1416,24 +983,15 @@ export default function Home() {
           <p className="text-sm text-gray-600 font-medium mb-8">
             No pitch. Just clarity.
           </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <a
-              href="https://calendly.com/rossmanmedia"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="bg-[#5599f9] hover:bg-[#4a8ce8] text-white font-bold px-8 py-4 rounded-xl shadow-lg shadow-blue-500/20 transition-all inline-flex items-center gap-2"
-              data-testid="button-book-call"
-            >
-              <Calendar size={20} /> Book 15-Min Call
-            </a>
-            <button
-              onClick={() => setShowLeadForm(true)}
-              className="bg-white hover:bg-gray-50 text-[#010400] font-bold px-8 py-4 rounded-xl border border-gray-200 transition-all inline-flex items-center gap-2"
-              data-testid="button-get-report"
-            >
-              <Download size={20} /> Get Full Report
-            </button>
-          </div>
+          <a
+            href="https://calendly.com/rossmanmedia"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-[#5599f9] hover:bg-[#4a8ce8] text-white font-bold px-8 py-4 rounded-xl shadow-lg shadow-blue-500/20 transition-all inline-flex items-center gap-2"
+            data-testid="button-book-call"
+          >
+            <Calendar size={20} /> Book 15-Min Call
+          </a>
           <div className="mt-8 p-4 bg-white/60 rounded-xl border border-gray-200 max-w-md mx-auto">
             <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">What happens next?</p>
             <p className="text-sm text-gray-600">
