@@ -1064,6 +1064,7 @@ export default function Home() {
               </div>
             </div>
           </div>
+          </div>
 
           {/* Unlock Overlay - positioned on top of blurred content */}
           {!isReportUnlocked && (
