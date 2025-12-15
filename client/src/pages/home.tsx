@@ -753,29 +753,34 @@ export default function Home() {
         <div className="relative">
           {/* Blur Overlay when not unlocked */}
           {!isReportUnlocked && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60 backdrop-blur-[2px] rounded-xl">
-              <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md text-center border border-gray-200">
-                <div className="w-16 h-16 bg-[#5599f9] rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Lock className="text-white" size={28} />
+            <>
+              {/* Background blur overlay */}
+              <div className="absolute inset-0 z-10 bg-white/60 backdrop-blur-[2px] rounded-xl pointer-events-none" />
+              {/* Sticky unlock box - centered in viewport */}
+              <div className="sticky top-1/2 -translate-y-1/2 z-20 flex justify-center pointer-events-none">
+                <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-8 max-w-md text-center border border-gray-200 pointer-events-auto mx-4">
+                  <div className="w-16 h-16 bg-[#5599f9] rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Lock className="text-white" size={28} />
+                  </div>
+                  <h3 className="text-2xl font-bold text-[#010400] tracking-tight mb-2">
+                    Unlock Full Report
+                  </h3>
+                  <p className="text-gray-500 mb-6">
+                    Get complete visibility insights including sentiment analysis, full prompt breakdown, and competitor details.
+                  </p>
+                  <button
+                    onClick={() => setShowLeadForm(true)}
+                    className="w-full bg-[#5599f9] hover:bg-[#4a8ce8] text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2"
+                    data-testid="button-unlock-report"
+                  >
+                    <Lock size={18} /> Unlock Now - Free
+                  </button>
+                  <p className="text-xs text-gray-400 mt-4">
+                    Just enter your contact info to access the full report.
+                  </p>
                 </div>
-                <h3 className="text-2xl font-bold text-[#010400] tracking-tight mb-2">
-                  Unlock Full Report
-                </h3>
-                <p className="text-gray-500 mb-6">
-                  Get complete visibility insights including sentiment analysis, full prompt breakdown, and competitor details.
-                </p>
-                <button
-                  onClick={() => setShowLeadForm(true)}
-                  className="w-full bg-[#5599f9] hover:bg-[#4a8ce8] text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2"
-                  data-testid="button-unlock-report"
-                >
-                  <Lock size={18} /> Unlock Now - Free
-                </button>
-                <p className="text-xs text-gray-400 mt-4">
-                  Just enter your contact info to access the full report.
-                </p>
               </div>
-            </div>
+            </>
           )}
 
           {/* Content - blurred when not unlocked */}
