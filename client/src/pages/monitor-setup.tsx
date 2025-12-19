@@ -97,22 +97,30 @@ export default function MonitorSetup() {
   const generatePromptsMutation = useMutation({
     mutationFn: async () => {
       const activeGroups = groups.filter(g => g.isActive);
+      
+      // Generate prompts for all groups in a single request
+      // High-level category groups get fewer prompts (5 vs 20) - handled by backend
       const response = await apiRequest("POST", "/api/monitoring/generate-prompts", { 
         businessName, 
         domain,
         industry, 
         scope, 
         city,
-        groups: activeGroups.map(g => ({ name: g.name, description: g.description }))
+        groups: activeGroups.map(g => ({ 
+          name: g.name, 
+          description: g.description,
+          isHighLevelCategory: g.isHighLevelCategory || false
+        }))
       });
-      return await response.json() as { prompts: { groupName: string; prompts: string[] }[] };
+      const data = await response.json() as { prompts: { groupName: string; prompts: string[] }[] };
+      
+      return { prompts: data.prompts, activeGroups };
     },
     onSuccess: (data) => {
-      const activeGroups = groups.filter(g => g.isActive);
       const allPrompts: PromptItem[] = [];
       
       data.prompts.forEach((groupData) => {
-        const group = activeGroups.find(g => g.name === groupData.groupName);
+        const group = data.activeGroups.find(g => g.name === groupData.groupName);
         if (group) {
           groupData.prompts.forEach((promptText, i) => {
             allPrompts.push({
@@ -126,8 +134,8 @@ export default function MonitorSetup() {
       });
       
       setPrompts(allPrompts);
-      if (activeGroups.length > 0) {
-        setActiveGroupTab(activeGroups[0].id);
+      if (data.activeGroups.length > 0) {
+        setActiveGroupTab(data.activeGroups[0].id);
       }
       setIsLoadingPrompts(false);
     },
@@ -157,6 +165,7 @@ export default function MonitorSetup() {
         groups: activeGroups.map(g => ({
           name: g.name,
           description: g.description,
+          isHighLevelCategory: g.isHighLevelCategory || false,
         })),
         prompts: prompts.filter(p => activeGroups.some(g => g.id === p.groupId)).map(p => ({
           groupName: activeGroups.find(g => g.id === p.groupId)?.name,

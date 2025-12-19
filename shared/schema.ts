@@ -203,6 +203,7 @@ export const monitoringGroups = pgTable("monitoring_groups", {
   clientId: integer("client_id").references(() => monitoringClients.id).notNull(),
   name: text("name").notNull(),
   description: text("description"),
+  isHighLevelCategory: boolean("is_high_level_category").notNull().default(false), // True for umbrella term (e.g., "Plumber", "HVAC Contractor")
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

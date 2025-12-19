@@ -1144,9 +1144,11 @@ export async function generatePromptsForGroups(
   industry: string,
   scope: string,
   city: string | undefined,
-  groups: { name: string; description: string }[]
+  groups: { name: string; description: string }[],
+  maxPromptsPerGroup?: number // Optional: limit prompts per group (default 20, use 5 for high-level categories)
 ): Promise<{ groupName: string; prompts: string[] }[]> {
-  console.log(`Generating prompts for ${groups.length} groups using unified generateResearchPrompts...`);
+  const promptLimit = maxPromptsPerGroup || 20;
+  console.log(`Generating prompts for ${groups.length} groups (max ${promptLimit} per group)...`);
   
   // Generate prompts for each group sequentially (to avoid rate limiting)
   const results: { groupName: string; prompts: string[] }[] = [];
@@ -1155,13 +1157,18 @@ export async function generatePromptsForGroups(
     console.log(`Generating prompts for group: ${group.name}`);
     
     // Use the unified generateResearchPrompts with serviceCategory parameter
-    const prompts = await generateResearchPrompts(
+    let prompts = await generateResearchPrompts(
       industry,
       scope as "local" | "national",
       city,
       undefined, // no URL scraping for group-specific prompts
       group.name // serviceCategory - this focuses prompts on this specific service
     );
+    
+    // Limit prompts if maxPromptsPerGroup is specified
+    if (promptLimit < 20 && prompts.length > promptLimit) {
+      prompts = prompts.slice(0, promptLimit);
+    }
     
     results.push({
       groupName: group.name,
