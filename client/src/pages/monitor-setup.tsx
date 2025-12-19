@@ -60,6 +60,11 @@ export default function MonitorSetup() {
   // Scanning state
   const [scanProgress, setScanProgress] = useState(0);
   const [scanStatus, setScanStatus] = useState("");
+  const [scanSubStatus, setScanSubStatus] = useState("");
+  const [currentGroupName, setCurrentGroupName] = useState("");
+  const [currentPromptIndex, setCurrentPromptIndex] = useState(0);
+  const [totalPrompts, setTotalPrompts] = useState(0);
+  const [isScanning, setIsScanning] = useState(false);
   const [createdClientId, setCreatedClientId] = useState<number | null>(null);
 
   // Generate groups mutation
@@ -149,40 +154,69 @@ export default function MonitorSetup() {
     },
   });
 
-  // Create client and run initial scan
-  const runScanMutation = useMutation({
-    mutationFn: async () => {
-      const activeGroups = groups.filter(g => g.isActive);
-      const response = await apiRequest("POST", "/api/monitoring/create-and-scan", {
-        client: {
-          businessName,
-          domain,
-          industry,
-          scope,
-          city: scope === "local" ? city : undefined,
-          checkFrequencyDays,
-        },
-        groups: activeGroups.map(g => ({
-          name: g.name,
-          description: g.description,
-          isHighLevelCategory: g.isHighLevelCategory || false,
-        })),
-        prompts: prompts.filter(p => activeGroups.some(g => g.id === p.groupId)).map(p => ({
-          groupName: activeGroups.find(g => g.id === p.groupId)?.name,
-          text: p.text,
-        })),
+  // Run scan with streaming progress updates
+  const runScanWithStreaming = async () => {
+    setIsScanning(true);
+    const activeGroups = groups.filter(g => g.isActive);
+    
+    try {
+      const response = await fetch("/api/monitoring/scan-stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          client: {
+            businessName,
+            domain,
+            industry,
+            scope,
+            city: scope === "local" ? city : undefined,
+            checkFrequencyDays,
+          },
+          groups: activeGroups.map(g => ({
+            name: g.name,
+            description: g.description,
+            isHighLevelCategory: g.isHighLevelCategory || false,
+          })),
+          prompts: prompts.filter(p => activeGroups.some(g => g.id === p.groupId)).map(p => ({
+            groupName: activeGroups.find(g => g.id === p.groupId)?.name,
+            text: p.text,
+          })),
+        }),
       });
-      return await response.json() as { clientId: number; sessionId: number };
-    },
-    onSuccess: (data) => {
-      setCreatedClientId(data.clientId);
-      setScanProgress(100);
-      setScanStatus("Complete!");
-      setTimeout(() => {
-        setLocation(`/monitor/dashboard/${data.clientId}`);
-      }, 1500);
-    },
-    onError: (error) => {
+
+      if (!response.ok) {
+        throw new Error("Failed to start scan");
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error("No response stream available");
+      }
+
+      // Process SSE events
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              handleStreamEvent(data);
+            } catch (e) {
+              console.error("Failed to parse SSE event:", e);
+            }
+          }
+        }
+      }
+    } catch (error) {
       toast({
         title: "Error running scan",
         description: error instanceof Error ? error.message : "Unknown error",
@@ -190,8 +224,72 @@ export default function MonitorSetup() {
       });
       setScanProgress(0);
       setScanStatus("Failed");
-    },
-  });
+      setIsScanning(false);
+    }
+  };
+
+  // Handle individual stream events
+  const handleStreamEvent = (event: {
+    type: string;
+    message?: string;
+    progress?: number;
+    groupName?: string;
+    promptIndex?: number;
+    totalPrompts?: number;
+    promptText?: string;
+    chatgptFound?: boolean;
+    googleAIFound?: boolean;
+    clientId?: number;
+    sessionId?: number;
+    overallScore?: number;
+  }) => {
+    switch (event.type) {
+      case "heartbeat":
+        // Stream confirmed active
+        console.log("SSE stream connected");
+        break;
+      case "status":
+        setScanStatus(event.message || "");
+        setScanSubStatus("");
+        if (event.progress !== undefined) setScanProgress(event.progress);
+        break;
+      case "testing":
+        setCurrentGroupName(event.groupName || "");
+        setCurrentPromptIndex(event.promptIndex || 0);
+        setTotalPrompts(event.totalPrompts || 0);
+        setScanStatus(`Testing ${event.groupName}`);
+        setScanSubStatus(event.promptText || "");
+        if (event.progress !== undefined) setScanProgress(event.progress);
+        break;
+      case "prompt_complete":
+        // Could show checkmark indicators here
+        if (event.progress !== undefined) setScanProgress(event.progress);
+        break;
+      case "group_complete":
+        // Could show group completion animation
+        break;
+      case "complete":
+        setCreatedClientId(event.clientId || null);
+        setScanProgress(100);
+        setScanStatus("Scan Complete!");
+        setScanSubStatus(`Overall Score: ${event.overallScore}%`);
+        setIsScanning(false);
+        setTimeout(() => {
+          if (event.clientId) {
+            setLocation(`/monitor/dashboard/${event.clientId}`);
+          }
+        }, 2000);
+        break;
+      case "error":
+        toast({
+          title: "Scan Error",
+          description: event.message || "Unknown error occurred",
+          variant: "destructive",
+        });
+        setIsScanning(false);
+        break;
+    }
+  };
 
   const handleNextStep = () => {
     if (currentStep === "business") {
@@ -229,9 +327,9 @@ export default function MonitorSetup() {
       generatePromptsMutation.mutate();
     } else if (currentStep === "prompts") {
       setCurrentStep("scanning");
-      setScanProgress(10);
-      setScanStatus("Creating client profile...");
-      runScanMutation.mutate();
+      setScanProgress(5);
+      setScanStatus("Initializing scan...");
+      runScanWithStreaming();
     }
   };
 
@@ -750,11 +848,21 @@ export default function MonitorSetup() {
                     style={{ width: `${scanProgress}%` }}
                   />
                 </div>
-                <div className="text-center">
-                  <div className="text-4xl font-bold text-[#5599f9]">{scanProgress}%</div>
-                  <div className="text-gray-500 mt-2">{scanStatus}</div>
+                <div className="text-center space-y-2">
+                  <div className="text-4xl font-bold text-[#5599f9]" data-testid="text-scan-progress">{scanProgress}%</div>
+                  <div className="text-lg font-medium text-gray-700" data-testid="text-scan-status">{scanStatus}</div>
+                  {scanSubStatus && (
+                    <div className="text-sm text-gray-500 truncate max-w-full" data-testid="text-scan-substatus">
+                      {scanSubStatus}
+                    </div>
+                  )}
+                  {currentPromptIndex > 0 && totalPrompts > 0 && (
+                    <div className="text-xs text-gray-400 mt-1" data-testid="text-scan-counter">
+                      Prompt {currentPromptIndex} of {totalPrompts}
+                    </div>
+                  )}
                 </div>
-                {runScanMutation.isPending && (
+                {isScanning && (
                   <div className="flex justify-center">
                     <Loader2 className="w-8 h-8 text-[#5599f9] animate-spin" />
                   </div>

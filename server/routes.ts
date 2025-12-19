@@ -345,6 +345,234 @@ export async function registerRoutes(
     }
   });
 
+  // SSE endpoint for real-time scan progress
+  // Streams progress events as each prompt is tested on each platform
+  app.post("/api/monitoring/scan-stream", async (req, res) => {
+    // Set SSE headers
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no"); // Disable nginx buffering
+    res.flushHeaders();
+
+    // Track if client disconnected to cancel remaining work
+    let isClientConnected = true;
+    req.on("close", () => {
+      isClientConnected = false;
+      console.log("Client disconnected from scan stream");
+    });
+
+    // Helper to send SSE events with immediate flush
+    const sendEvent = (type: string, data: Record<string, unknown>) => {
+      if (!isClientConnected) return;
+      res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`);
+      // Force flush to ensure immediate delivery
+      if (typeof (res as any).flush === 'function') {
+        (res as any).flush();
+      }
+    };
+
+    try {
+      const { client: clientData, groups, prompts } = req.body;
+      
+      // Send immediate heartbeat to confirm stream is active
+      sendEvent("heartbeat", { message: "Stream connected" });
+      
+      // Validate client data
+      const validatedClient = monitoringClientRequestSchema.parse(clientData);
+      
+      sendEvent("status", { message: "Creating client profile...", progress: 5 });
+      
+      // Create monitoring client
+      const client = await storage.createMonitoringClient({
+        businessName: validatedClient.businessName,
+        domain: validatedClient.domain,
+        industry: validatedClient.industry,
+        scope: validatedClient.scope,
+        city: validatedClient.city || null,
+        checkFrequencyDays: validatedClient.checkFrequencyDays,
+        isActive: true,
+      });
+      
+      sendEvent("status", { message: "Setting up service groups...", progress: 8 });
+      
+      // Create groups and map their IDs
+      const groupIdMap: Record<string, number> = {};
+      const groupNames: string[] = [];
+      for (const group of groups) {
+        const createdGroup = await storage.createGroup({
+          clientId: client.id,
+          name: group.name,
+          description: group.description || null,
+          isHighLevelCategory: group.isHighLevelCategory || false,
+          isActive: true,
+        });
+        groupIdMap[group.name] = createdGroup.id;
+        groupNames.push(group.name);
+      }
+      
+      sendEvent("status", { message: "Preparing prompts...", progress: 10 });
+      
+      // Create prompts and organize by group
+      const promptsByGroup: Record<string, { id: number; groupId: number; text: string }[]> = {};
+      for (const prompt of prompts) {
+        const groupId = groupIdMap[prompt.groupName];
+        if (groupId) {
+          const createdPrompt = await storage.createPrompt({
+            groupId,
+            promptText: prompt.text,
+            isActive: true,
+          });
+          if (!promptsByGroup[prompt.groupName]) {
+            promptsByGroup[prompt.groupName] = [];
+          }
+          promptsByGroup[prompt.groupName].push({ id: createdPrompt.id, groupId, text: prompt.text });
+        }
+      }
+      
+      const allPrompts = Object.values(promptsByGroup).flat();
+      const totalPrompts = allPrompts.length;
+      
+      // Create check session
+      const session = await storage.createCheckSession({
+        clientId: client.id,
+        overallScore: 0,
+        chatgptScore: 0,
+        googleAIScore: 0,
+        totalPrompts,
+        foundCount: 0,
+        citedCount: 0,
+      });
+      
+      // Run visibility checks with progress updates
+      let foundCount = 0;
+      let citedCount = 0;
+      let chatgptFoundCount = 0;
+      let googleAIFoundCount = 0;
+      let promptIndex = 0;
+      
+      const location = client.city || undefined;
+      
+      // Process prompts group by group for better UX
+      for (const groupName of groupNames) {
+        // Exit early if client disconnected
+        if (!isClientConnected) {
+          console.log("Scan cancelled - client disconnected");
+          return;
+        }
+        
+        const groupPrompts = promptsByGroup[groupName] || [];
+        
+        for (const prompt of groupPrompts) {
+          // Exit early if client disconnected
+          if (!isClientConnected) {
+            console.log("Scan cancelled - client disconnected");
+            return;
+          }
+          
+          promptIndex++;
+          const progressPercent = 10 + Math.round((promptIndex / totalPrompts) * 85); // 10-95%
+          
+          // Send progress event for this prompt BEFORE the blocking check
+          sendEvent("testing", { 
+            groupName,
+            promptIndex,
+            totalPrompts,
+            promptText: prompt.text.slice(0, 60) + (prompt.text.length > 60 ? "..." : ""),
+            progress: progressPercent,
+          });
+          
+          // Run the check (ChatGPT and Google AI in parallel for speed)
+          const result = await runPromptCheck(
+            prompt.text,
+            client.businessName,
+            client.domain,
+            location
+          );
+          
+          // Skip storing if client disconnected during the check
+          if (!isClientConnected) {
+            console.log("Scan cancelled - client disconnected during prompt check");
+            return;
+          }
+          
+          // Store result
+          await storage.createCheckResult({
+            sessionId: session.id,
+            clientId: client.id,
+            groupId: prompt.groupId,
+            promptId: prompt.id,
+            promptText: prompt.text,
+            chatgptFound: result.chatgpt.found,
+            chatgptResponse: result.chatgpt.response,
+            chatgptCited: result.chatgpt.cited,
+            googleAIFound: result.googleAI.found,
+            googleAIResponse: result.googleAI.response,
+            googleAICited: result.googleAI.cited,
+            competitors: JSON.stringify(result.competitors),
+          });
+          
+          if (result.chatgpt.found || result.googleAI.found) foundCount++;
+          if (result.chatgpt.cited || result.googleAI.cited) citedCount++;
+          if (result.chatgpt.found) chatgptFoundCount++;
+          if (result.googleAI.found) googleAIFoundCount++;
+          
+          // Send completion event for this prompt
+          sendEvent("prompt_complete", {
+            groupName,
+            promptIndex,
+            totalPrompts,
+            chatgptFound: result.chatgpt.found,
+            googleAIFound: result.googleAI.found,
+            progress: progressPercent,
+          });
+        }
+        
+        // Send group completion event
+        sendEvent("group_complete", { groupName });
+      }
+      
+      // Calculate final scores
+      const overallScore = totalPrompts > 0 ? Math.round((foundCount / totalPrompts) * 100) : 0;
+      const chatgptScore = totalPrompts > 0 ? Math.round((chatgptFoundCount / totalPrompts) * 100) : 0;
+      const googleAIScore = totalPrompts > 0 ? Math.round((googleAIFoundCount / totalPrompts) * 100) : 0;
+      
+      sendEvent("status", { message: "Calculating final scores...", progress: 97 });
+      
+      // Update session with final scores
+      await storage.updateCheckSession(session.id, {
+        overallScore,
+        chatgptScore,
+        googleAIScore,
+        foundCount,
+        citedCount,
+      });
+      
+      // Update client
+      await storage.updateMonitoringClient(client.id, {
+        checkFrequencyDays: validatedClient.checkFrequencyDays,
+      });
+      
+      // Send completion event with final data
+      sendEvent("complete", { 
+        clientId: client.id, 
+        sessionId: session.id,
+        overallScore,
+        chatgptScore,
+        googleAIScore,
+        progress: 100,
+      });
+      
+      res.end();
+    } catch (error) {
+      console.error("Scan stream error:", error);
+      sendEvent("error", { 
+        message: error instanceof Error ? error.message : "Unknown error occurred",
+      });
+      res.end();
+    }
+  });
+
   // Get dashboard data for a client
   app.get("/api/monitoring/dashboard/:id", async (req, res) => {
     try {
