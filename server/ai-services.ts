@@ -1136,6 +1136,38 @@ export interface PromptCheckResult {
   competitors: string[];
 }
 
+// Helper function to query OpenAI/ChatGPT for monitoring
+async function queryOpenAI(prompt: string, businessName: string, domain: string): Promise<{ found: boolean; response: string; cited: boolean; competitors: string[] }> {
+  try {
+    const result = await queryChatGPT(prompt, businessName, domain);
+    return {
+      found: result.found,
+      response: result.response,
+      cited: result.response.toLowerCase().includes(domain.toLowerCase()),
+      competitors: result.competitors,
+    };
+  } catch (error) {
+    console.error("queryOpenAI error:", error);
+    return { found: false, response: "Error querying ChatGPT", cited: false, competitors: [] };
+  }
+}
+
+// Helper function to query Google AI/Gemini for monitoring
+async function queryGoogleAI(prompt: string, businessName: string, domain: string): Promise<{ found: boolean; response: string; cited: boolean; competitors: string[] }> {
+  try {
+    const result = await queryGemini(prompt, businessName, domain);
+    return {
+      found: result.found,
+      response: result.response,
+      cited: result.response.toLowerCase().includes(domain.toLowerCase()),
+      competitors: result.competitors,
+    };
+  } catch (error) {
+    console.error("queryGoogleAI error:", error);
+    return { found: false, response: "Error querying Google AI", cited: false, competitors: [] };
+  }
+}
+
 export async function runPromptCheck(
   prompt: string,
   businessName: string,
