@@ -1141,10 +1141,12 @@ export interface PromptCheckResult {
   competitors: string[];
 }
 
-// Helper function to query OpenAI/ChatGPT for monitoring
-async function queryOpenAI(prompt: string, businessName: string, domain: string): Promise<{ found: boolean; response: string; cited: boolean; competitors: string[] }> {
+// Helper function to query OpenAI/ChatGPT for monitoring (with location for web search grounding)
+async function queryOpenAI(prompt: string, businessName: string, domain: string, location?: string): Promise<{ found: boolean; response: string; cited: boolean; competitors: string[] }> {
   try {
-    const result = await queryChatGPT(prompt, businessName, domain);
+    console.log(`[queryOpenAI] Calling ChatGPT with location: "${location || 'none'}"`);
+    const result = await queryChatGPT(prompt, businessName, domain, location);
+    console.log(`[queryOpenAI] Result - found: ${result.found}, response length: ${result.response.length}`);
     return {
       found: result.found,
       response: result.response,
@@ -1152,7 +1154,7 @@ async function queryOpenAI(prompt: string, businessName: string, domain: string)
       competitors: result.competitors,
     };
   } catch (error) {
-    console.error("queryOpenAI error:", error);
+    console.error("queryOpenAI error (full):", error);
     return { found: false, response: "Error querying ChatGPT", cited: false, competitors: [] };
   }
 }
@@ -1160,7 +1162,9 @@ async function queryOpenAI(prompt: string, businessName: string, domain: string)
 // Helper function to query Google AI/Gemini for monitoring
 async function queryGoogleAI(prompt: string, businessName: string, domain: string): Promise<{ found: boolean; response: string; cited: boolean; competitors: string[] }> {
   try {
+    console.log(`[queryGoogleAI] Calling Gemini...`);
     const result = await queryGemini(prompt, businessName, domain);
+    console.log(`[queryGoogleAI] Result - found: ${result.found}, response length: ${result.response.length}`);
     return {
       found: result.found,
       response: result.response,
@@ -1168,20 +1172,24 @@ async function queryGoogleAI(prompt: string, businessName: string, domain: strin
       competitors: result.competitors,
     };
   } catch (error) {
-    console.error("queryGoogleAI error:", error);
+    console.error("queryGoogleAI error (full):", error);
     return { found: false, response: "Error querying Google AI", cited: false, competitors: [] };
   }
 }
 
+// Run visibility check for a single prompt across ChatGPT and Google AI
+// Location parameter enables web search grounding for better local results
 export async function runPromptCheck(
   prompt: string,
   businessName: string,
-  domain: string
+  domain: string,
+  location?: string
 ): Promise<PromptCheckResult> {
   try {
+    console.log(`[runPromptCheck] Checking visibility for "${businessName}" with location: "${location || 'none'}"`);
     // Run both checks in parallel
     const [chatgptResult, googleAIResult] = await Promise.all([
-      queryOpenAI(prompt, businessName, domain),
+      queryOpenAI(prompt, businessName, domain, location),
       queryGoogleAI(prompt, businessName, domain)
     ]);
     

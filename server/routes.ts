@@ -263,11 +263,15 @@ export async function registerRoutes(
       let chatgptFoundCount = 0;
       let googleAIFoundCount = 0;
       
+      // Build location string for web search grounding (same format as lead gen audit)
+      const location = client.city || undefined;
+      
       for (const prompt of createdPrompts) {
         const result = await runPromptCheck(
           prompt.text,
           client.businessName,
-          client.domain
+          client.domain,
+          location
         );
         
         // Store result with sessionId
