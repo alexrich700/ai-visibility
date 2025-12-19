@@ -968,12 +968,18 @@ export async function runAudit(
 // MONITORING SERVICE FUNCTIONS
 // ============================================
 
+// Return type includes high-level category plus specific service groups
+export interface ServiceGroupsResult {
+  highLevelCategory: { name: string; description: string };
+  groups: { name: string; description: string }[];
+}
+
 export async function generateServiceGroups(
   businessName: string,
   industry: string,
   scope: string,
   city?: string
-): Promise<{ name: string; description: string }[]> {
+): Promise<ServiceGroupsResult> {
   try {
     const locationContext = scope === "local" && city ? ` in ${city}` : "";
     
@@ -982,23 +988,33 @@ export async function generateServiceGroups(
       messages: [
         {
           role: "system",
-          content: `You are an expert marketing strategist specializing in service/product categorization for AI visibility tracking. Your task is to generate exactly 10 distinct service/product groups that represent specific offerings a business would be searched for.
+          content: `You are an expert marketing strategist specializing in service/product categorization for AI visibility tracking. Your task is to:
+1. Identify ONE high-level category (umbrella term) that best describes the business type
+2. Generate exactly 10 distinct service/product groups that represent specific offerings
 
-# Guidelines
+# High-Level Category Guidelines
+- This is the broadest, most common search term for this type of business
+- 1-3 words maximum
+- What someone would search if they just needed "any" provider of this type
+- Examples: "HVAC Contractor", "Plumber", "Marketing Agency", "Personal Injury Lawyer", "Handyman", "Electrician", "Dentist"
+
+# Service Group Guidelines
 - Generate granular, search-intent-focused groups (how real customers would search)
 - Each group should represent a distinct, searchable service or product category
 - Include variations customers actually use (e.g., "heater repair" not just "HVAC repair")
-- Consider both broad category terms AND specific service variations
 - Groups should cover the full spectrum of typical offerings for this industry
 - Names should be 1-4 words, matching natural search language
 
 # Output Format
-Return a JSON object with a "groups" array containing exactly 10 objects, each with "name" and "description" fields.
+Return a JSON object with:
+- "highLevelCategory": object with "name" and "description" fields
+- "groups": array of exactly 10 objects, each with "name" and "description" fields
 
 # Examples
 
 For a local HVAC company:
 {
+  "highLevelCategory": {"name": "HVAC Contractor", "description": "Heating, ventilation, and air conditioning services"},
   "groups": [
     {"name": "AC Repair", "description": "Air conditioning system repairs and troubleshooting"},
     {"name": "AC Installation", "description": "New air conditioning system installations"},
@@ -1015,6 +1031,7 @@ For a local HVAC company:
 
 For a marketing agency:
 {
+  "highLevelCategory": {"name": "Marketing Agency", "description": "Full-service marketing and advertising agency"},
   "groups": [
     {"name": "SEO Services", "description": "Search engine optimization and organic visibility"},
     {"name": "PPC Management", "description": "Pay-per-click advertising and Google Ads management"},
@@ -1031,6 +1048,7 @@ For a marketing agency:
 
 For a personal injury law firm:
 {
+  "highLevelCategory": {"name": "Personal Injury Lawyer", "description": "Legal representation for accident and injury victims"},
   "groups": [
     {"name": "Car Accident Lawyer", "description": "Legal representation for auto accident victims"},
     {"name": "Truck Accident Attorney", "description": "Commercial truck and 18-wheeler accident cases"},
@@ -1043,13 +1061,25 @@ For a personal injury law firm:
     {"name": "Pedestrian Accident Lawyer", "description": "Legal help for injured pedestrians"},
     {"name": "Product Liability Attorney", "description": "Cases involving defective products"}
   ]
+}
+
+For Smart Fix Handyman:
+{
+  "highLevelCategory": {"name": "Handyman", "description": "General home repair and maintenance services"},
+  "groups": [...]
+}
+
+For Roto-Rooter:
+{
+  "highLevelCategory": {"name": "Plumber", "description": "Plumbing repair and installation services"},
+  "groups": [...]
 }`
         },
         {
           role: "user",
-          content: `Generate exactly 10 service/product groups for "${businessName}", a ${industry} business${locationContext}.
+          content: `Generate the high-level category and exactly 10 service/product groups for "${businessName}", a ${industry} business${locationContext}.
 
-Consider what real customers would search for when looking for this type of business. Return groups that are specific enough to track AI visibility by individual service/product offering.`
+Consider what real customers would search for when looking for this type of business. The high-level category should be the broadest umbrella term, while groups should be specific enough to track AI visibility by individual service/product offering.`
         }
       ],
       temperature: 0.7,
@@ -1059,19 +1089,35 @@ Consider what real customers would search for when looking for this type of busi
     const content = response.choices[0]?.message?.content || "{}";
     const parsed = JSON.parse(content);
     
-    // Handle different response formats
-    const groups = Array.isArray(parsed) ? parsed : (parsed.groups || parsed.categories || []);
+    // Extract high-level category
+    const highLevelCategory = parsed.highLevelCategory || {
+      name: industry,
+      description: `${industry} services and products`
+    };
+    
+    // Handle different response formats for groups
+    const groups = Array.isArray(parsed.groups) ? parsed.groups : 
+                   (parsed.categories || []);
     
     if (groups.length === 0) {
-      // Return default 10 groups based on industry
-      return getDefaultGroups(industry);
+      // Return default with fallback high-level category
+      return {
+        highLevelCategory,
+        groups: getDefaultGroups(industry)
+      };
     }
     
-    return groups;
+    return { highLevelCategory, groups };
   } catch (error) {
     console.error("Error generating service groups:", error);
-    // Return fallback 10 groups
-    return getDefaultGroups(industry);
+    // Return fallback with industry as high-level category
+    return {
+      highLevelCategory: {
+        name: industry,
+        description: `${industry} services and products`
+      },
+      groups: getDefaultGroups(industry)
+    };
   }
 }
 
@@ -1195,7 +1241,7 @@ export async function runPromptCheck(
     
     // Collect competitors from both results
     const allCompetitors = [...chatgptResult.competitors, ...googleAIResult.competitors];
-    const uniqueCompetitors = [...new Set(allCompetitors)].filter(c => 
+    const uniqueCompetitors = Array.from(new Set(allCompetitors)).filter(c => 
       c.toLowerCase() !== businessName.toLowerCase()
     );
     

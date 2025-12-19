@@ -174,8 +174,23 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Business name and industry are required" });
       }
 
-      const groups = await generateServiceGroups(businessName, industry, scope, city);
-      res.json({ groups });
+      const result = await generateServiceGroups(businessName, industry, scope, city);
+      
+      // Return high-level category as the first group, followed by specific groups
+      // This gives 11 total groups: 1 umbrella + 10 specific
+      const allGroups = [
+        { 
+          name: result.highLevelCategory.name, 
+          description: result.highLevelCategory.description,
+          isHighLevelCategory: true 
+        },
+        ...result.groups.map(g => ({ ...g, isHighLevelCategory: false }))
+      ];
+      
+      res.json({ 
+        groups: allGroups,
+        highLevelCategory: result.highLevelCategory 
+      });
     } catch (error) {
       console.error("Generate groups error:", error);
       res.status(500).json({ error: "Failed to generate groups" });
