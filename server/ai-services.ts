@@ -562,31 +562,32 @@ async function scrapeWebsite(url: string): Promise<string | null> {
 
 // Fallback research prompts (NO brand name - for visibility testing)
 // These prompts explicitly request specific named businesses to avoid generic advice responses
-// Note: These are GENERIC prompts that work for any industry - no hardcoded service types
-function getFallbackResearchPrompts(keyword: string, location: string): string[] {
+// serviceCategory can override keyword for service-specific prompts (e.g., "AC Repair" within "HVAC")
+function getFallbackResearchPrompts(keyword: string, location: string, serviceCategory?: string): string[] {
   const loc = location !== "nationwide" ? ` in ${location}` : "";
   const year = new Date().getFullYear();
+  const target = serviceCategory || keyword;
   return [
-    `Give me a list of the top 3 ${keyword} companies${loc}`,
-    `Name 5 specific ${keyword} businesses I can call today${loc}`,
-    `What are the best reviewed ${keyword} services${loc}?`,
-    `List the top-rated ${keyword} companies${loc}`,
-    `Which ${keyword} businesses${loc} have the best reputation?`,
-    `Can you recommend specific ${keyword} companies${loc}?`,
-    `Name the most trusted ${keyword} services${loc}`,
-    `What ${keyword} companies${loc} have the best Google reviews in ${year}?`,
-    `List 3 ${keyword} businesses that offer same-day service${loc}`,
-    `Which specific ${keyword} companies do you recommend${loc}?`,
-    `Give me the names of reliable ${keyword} services${loc}`,
-    `What are 5 ${keyword} companies I should get quotes from${loc}?`,
-    `Name some well-known ${keyword} franchises${loc}`,
-    `List ${keyword} businesses${loc} with 4.5+ star ratings`,
-    `Which ${keyword} companies${loc} are best for residential work?`,
-    `Can you name the leading ${keyword} providers${loc}?`,
-    `What are the top ${keyword} companies for emergencies${loc}?`,
-    `List specific ${keyword} providers I can hire${loc}`,
-    `Name ${keyword} businesses${loc} that offer free estimates`,
-    `Which ${keyword} companies${loc} are best for commercial jobs?`,
+    `Give me a list of the top 3 ${target} companies${loc}`,
+    `Name 5 specific ${target} businesses I can call today${loc}`,
+    `What are the best reviewed ${target} services${loc}?`,
+    `List the top-rated ${target} companies${loc}`,
+    `Which ${target} businesses${loc} have the best reputation?`,
+    `Can you recommend specific ${target} companies${loc}?`,
+    `Name the most trusted ${target} services${loc}`,
+    `What ${target} companies${loc} have the best Google reviews in ${year}?`,
+    `List 3 ${target} businesses that offer same-day service${loc}`,
+    `Which specific ${target} companies do you recommend${loc}?`,
+    `Give me the names of reliable ${target} services${loc}`,
+    `What are 5 ${target} companies I should get quotes from${loc}?`,
+    `Name some well-known ${target} franchises${loc}`,
+    `List ${target} businesses${loc} with 4.5+ star ratings`,
+    `Which ${target} companies${loc} are best for residential work?`,
+    `Can you name the leading ${target} providers${loc}?`,
+    `What are the top ${target} companies for emergencies${loc}?`,
+    `List specific ${target} providers I can hire${loc}`,
+    `Name ${target} businesses${loc} that offer free estimates`,
+    `Which ${target} companies${loc} are best for commercial jobs?`,
   ];
 }
 
@@ -603,17 +604,24 @@ function getFallbackSentimentPrompts(businessName: string, keyword: string, loca
 }
 
 // Generate 20 RESEARCH-BASED prompts (NO brand name - for visibility testing)
+// Optional serviceCategory param allows generating prompts for specific service groups (e.g., "AC Repair")
 export async function generateResearchPrompts(
   keyword: string,
   scope: "local" | "national",
   city?: string,
-  url?: string
+  url?: string,
+  serviceCategory?: string
 ): Promise<string[]> {
   const location = scope === "local" && city ? city : "nationwide";
+  const locationStr = location !== "nationwide" ? ` in ${location}` : "";
   
-  // Try to scrape homepage for context about services
+  // If serviceCategory is provided, focus prompts on that specific service
+  const targetService = serviceCategory || keyword;
+  const industryContext = serviceCategory ? `${keyword} industry, specifically ${serviceCategory}` : keyword;
+  
+  // Try to scrape homepage for context about services (only for general prompts, not group-specific)
   let homepageContent: string | null = null;
-  if (url) {
+  if (url && !serviceCategory) {
     console.log(`Scraping website: ${url}`);
     homepageContent = await scrapeWebsite(url);
     if (homepageContent) {
@@ -622,42 +630,44 @@ export async function generateResearchPrompts(
   }
   
   // Build prompt for OpenAI - explicitly exclude brand name but request specific business names in responses
-  const systemPrompt = `You are a marketing expert specializing in AI search optimization. Generate exactly 20 research-based search queries that potential customers would type into AI assistants (like ChatGPT or Google AI) when actively looking to hire a ${keyword} business${location !== "nationwide" ? ` in ${location}` : ""}.
+  const systemPrompt = `You are a marketing expert specializing in AI search optimization. Generate exactly 20 research-based search queries that potential customers would type into AI assistants (like ChatGPT or Google AI) when actively looking for ${targetService} services${locationStr}.
 
 CRITICAL REQUIREMENTS:
 1. These must be GENERIC research queries that do NOT include any specific business or brand names
 2. Each query MUST explicitly ask for SPECIFIC BUSINESS NAMES to be listed - avoid vague queries that result in generic advice
 3. Use long-tail, specific queries that will trigger AI to list actual company names
-4. Include service types that are RELEVANT TO THE "${keyword.toUpperCase()}" INDUSTRY - do NOT use services from other industries
+4. ALL prompts must be focused on "${targetService}" - this is the specific service category we're testing visibility for
 
 INCLUDE these types of prompts (MUST request specific business names):
-- "Give me the top 3 ${keyword} companies in ${location !== "nationwide" ? location : "my area"}"
-- "Name 5 specific ${keyword} businesses I can call today"
-- "List the best reviewed ${keyword} services for [specific ${keyword}-related service]"
-- "Which ${keyword} companies do you recommend for [specific ${keyword}-related task]?"
-- "Can you name ${keyword} services that specialize in [specific ${keyword}-related specialty]?"
+- "Give me the top 3 ${targetService} companies${locationStr}"
+- "Name 5 specific ${targetService} businesses I can call today"
+- "List the best reviewed ${targetService} services${locationStr}"
+- "Which ${targetService} companies do you recommend${locationStr}?"
+- "Can you name ${targetService} providers that specialize in [specific aspect]?"
 
-IMPORTANT: Generate service types that are SPECIFIC TO THE ${keyword.toUpperCase()} INDUSTRY. For example:
-- If keyword is "plumbing": use pipe repair, drain cleaning, water heater installation, sewer line repair, leak detection
-- If keyword is "electrician": use panel upgrades, outlet installation, lighting repair, wiring, circuit breaker replacement
-- If keyword is "handyman": use drywall repair, door installation, furniture assembly, TV mounting, painting touch-ups
-- If keyword is "roofing": use shingle replacement, leak repair, gutter installation, roof inspection, storm damage repair
-- If keyword is "HVAC": use AC repair, furnace installation, duct cleaning, thermostat replacement, heating maintenance
+PROMPT VARIETY - include different intent types:
+- Transactional: "Who can I hire for ${targetService}${locationStr}?"
+- Comparison: "Compare the top ${targetService} companies${locationStr}"
+- Specific needs: "Best ${targetService} for [specific use case]${locationStr}"
+- Emergency: "Emergency ${targetService} services available now${locationStr}"
+- Cost-focused: "Affordable ${targetService} services${locationStr}"
+- Quality-focused: "Highest rated ${targetService} providers${locationStr}"
 
 DO NOT generate prompts that will result in generic advice like:
-- "Who should I hire for ${keyword}?" (too vague - will get generic tips)
-- "What to look for in a ${keyword}" (educational, not transactional)
-- "Pros and cons of hiring ${keyword}" (informational, won't list businesses)
+- "What to look for in ${targetService}" (educational, not transactional)
+- "Pros and cons of ${targetService}" (informational, won't list businesses)
+- Generic prompts without asking for specific business names
 
 Return ONLY a valid JSON array of exactly 20 strings. No explanations, no markdown, just the JSON array.`;
   
-  let userPrompt = `Generate 20 specific, long-tail AI search queries for the ${keyword} industry${location !== "nationwide" ? ` in ${location}` : ""}.
+  let userPrompt = `Generate 20 specific, long-tail AI search queries for ${targetService} services${locationStr}.
+${serviceCategory ? `\nThis is for the "${serviceCategory}" service category within the ${keyword} industry.` : ''}
 
 IMPORTANT:
 - Each query should explicitly request a LIST of specific business names (e.g., "List 3 companies", "Name 5 businesses", "Which companies do you recommend")
-- Include queries for specific services that are RELEVANT TO ${keyword.toUpperCase()} - NOT services from other industries
+- ALL queries must be focused on ${targetService} - do not mix in other service types
 - NO brand names in the queries themselves, but queries should request brand names in the response
-- Avoid vague queries like "best ${keyword}" - use "Give me the top 3 ${keyword} companies" instead`;
+- Include variety: transactional, comparison, emergency, cost-focused, quality-focused queries`;
   
   if (homepageContent) {
     userPrompt += `
@@ -667,7 +677,7 @@ ${homepageContent}`;
   }
   
   try {
-    console.log("Generating research prompts with GPT-4o...");
+    console.log("Generating research prompts with GPT-5.2...");
     const response = await openai.chat.completions.create({
       model: "gpt-5.2",
       messages: [
@@ -701,7 +711,7 @@ ${homepageContent}`;
   }
   
   console.log("Using fallback research prompts");
-  return getFallbackResearchPrompts(keyword, location);
+  return getFallbackResearchPrompts(keyword, location, serviceCategory);
 }
 
 // Generate 5 SENTIMENT prompts (WITH brand name - for sentiment analysis)
@@ -733,7 +743,7 @@ Example formats:
 - "What do customers say about [business name]?"`;
   
   try {
-    console.log("Generating sentiment prompts with GPT-4o...");
+    console.log("Generating sentiment prompts with GPT-5.2...");
     const response = await openai.chat.completions.create({
       model: "gpt-5.2",
       messages: [
@@ -1080,6 +1090,8 @@ function getDefaultGroups(industry: string): { name: string; description: string
   ];
 }
 
+// Generate prompts for each group by reusing the unified generateResearchPrompts function
+// This ensures one source of truth for prompt generation logic - edit once, apply everywhere
 export async function generatePromptsForGroups(
   businessName: string,
   domain: string,
@@ -1088,99 +1100,31 @@ export async function generatePromptsForGroups(
   city: string | undefined,
   groups: { name: string; description: string }[]
 ): Promise<{ groupName: string; prompts: string[] }[]> {
-  try {
-    const locationContext = scope === "local" && city ? ` in ${city}` : "";
-    
-    const groupsList = groups.map(g => `- ${g.name}: ${g.description}`).join("\n");
-    
-    const response = await openai.chat.completions.create({
-      model: "gpt-5.2",
-      messages: [
-        {
-          role: "system",
-          content: `You are an expert SEO and AI visibility strategist. Generate search prompts that potential customers might use when looking for services in each category. These prompts will be used to test how visible the business is in AI assistants like ChatGPT and Google AI.
-
-Generate exactly 20 prompts for EACH group. Prompts should:
-1. Be natural questions a customer would ask an AI assistant
-2. Include local variations if relevant (e.g., "in [city]")
-3. Cover different intent types: informational, transactional, comparison
-4. Include both general and specific queries
-5. Vary between asking for recommendations, comparisons, and specific information
-
-Return your response as a JSON object with a "prompts" array containing objects with "groupName" and "prompts" (array of 20 strings) fields.`
-        },
-        {
-          role: "user",
-          content: `Generate 20 search prompts for each service group for "${businessName}", a ${industry} business${locationContext}.
-
-Service Groups:
-${groupsList}
-
-For each group, create 20 prompts that potential customers would ask AI assistants. Make sure the prompts are realistic and cover various search intents.`
-        }
-      ],
-      temperature: 0.8,
-      response_format: { type: "json_object" }
-    });
-
-    const content = response.choices[0]?.message?.content || "{}";
-    const parsed = JSON.parse(content);
-    
-    // Handle different response formats
-    const promptGroups = parsed.prompts || parsed.groups || [];
-    
-    if (promptGroups.length === 0) {
-      // Generate fallback prompts for each group
-      return groups.map(group => ({
-        groupName: group.name,
-        prompts: generateFallbackPrompts(group.name, industry, locationContext, 20)
-      }));
-    }
-    
-    // Ensure each group has exactly 20 prompts
-    return promptGroups.map((pg: { groupName: string; prompts: string[] }) => ({
-      groupName: pg.groupName,
-      prompts: pg.prompts.slice(0, 20).concat(
-        pg.prompts.length < 20 
-          ? generateFallbackPrompts(pg.groupName, industry, locationContext, 20 - pg.prompts.length)
-          : []
-      )
-    }));
-  } catch (error) {
-    console.error("Error generating prompts:", error);
-    // Return fallback prompts for each group
-    return groups.map(group => ({
-      groupName: group.name,
-      prompts: generateFallbackPrompts(group.name, industry, "", 20)
-    }));
-  }
-}
-
-function generateFallbackPrompts(groupName: string, industry: string, location: string, count: number): string[] {
-  const templates = [
-    `Best ${groupName.toLowerCase()} services${location}`,
-    `Who offers ${groupName.toLowerCase()}${location}?`,
-    `Top rated ${groupName.toLowerCase()} companies${location}`,
-    `${groupName} near me`,
-    `How much does ${groupName.toLowerCase()} cost?`,
-    `Recommended ${groupName.toLowerCase()} providers${location}`,
-    `${groupName} reviews and ratings`,
-    `Professional ${groupName.toLowerCase()} services`,
-    `Affordable ${groupName.toLowerCase()}${location}`,
-    `Compare ${groupName.toLowerCase()} services`,
-    `${groupName} specialists${location}`,
-    `Best ${industry} company for ${groupName.toLowerCase()}`,
-    `${groupName} experts near me`,
-    `Quality ${groupName.toLowerCase()} providers`,
-    `Emergency ${groupName.toLowerCase()} services${location}`,
-    `${groupName} consultation`,
-    `${groupName} pricing and quotes`,
-    `Local ${groupName.toLowerCase()} businesses`,
-    `${groupName} service options`,
-    `${groupName} recommendations`
-  ];
+  console.log(`Generating prompts for ${groups.length} groups using unified generateResearchPrompts...`);
   
-  return templates.slice(0, count);
+  // Generate prompts for each group sequentially (to avoid rate limiting)
+  const results: { groupName: string; prompts: string[] }[] = [];
+  
+  for (const group of groups) {
+    console.log(`Generating prompts for group: ${group.name}`);
+    
+    // Use the unified generateResearchPrompts with serviceCategory parameter
+    const prompts = await generateResearchPrompts(
+      industry,
+      scope as "local" | "national",
+      city,
+      undefined, // no URL scraping for group-specific prompts
+      group.name // serviceCategory - this focuses prompts on this specific service
+    );
+    
+    results.push({
+      groupName: group.name,
+      prompts
+    });
+  }
+  
+  console.log(`Generated prompts for all ${results.length} groups`);
+  return results;
 }
 
 export interface PromptCheckResult {
