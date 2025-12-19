@@ -518,7 +518,7 @@ Describe what this means for AI visibility. Be professional.`;
         { role: "system", content: "You write professional, matter-of-fact executive summaries for AI visibility audit reports. Be concise and data-driven." },
         { role: "user", content: userPrompt }
       ],
-      max_tokens: 512,
+      max_completion_tokens: 512,
     });
     return response.choices[0]?.message?.content || `We analyzed ${businessName} across 20 high-intent AI prompts on ChatGPT and Google AI. The results indicate a visibility score of ${overallScore}/100 with ${sentimentOverall} brand sentiment.`;
   } catch (error) {
@@ -685,7 +685,7 @@ ${homepageContent}`;
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt }
       ],
-      max_tokens: 1024,
+      max_completion_tokens: 1024,
     });
     
     const text = response.choices[0]?.message?.content || "";
@@ -758,7 +758,7 @@ Example formats:
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt }
       ],
-      max_tokens: 512,
+      max_completion_tokens: 512,
     });
     
     const text = response.choices[0]?.message?.content || "";
