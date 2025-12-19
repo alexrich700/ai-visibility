@@ -54,8 +54,8 @@ Each service is queried with business-specific prompts, and responses are analyz
 When generating service groups for monitoring clients:
 - AI returns both a **high-level category** (umbrella term like "Plumber", "HVAC Contractor") AND 10 specific service groups
 - The umbrella category is marked with `isHighLevelCategory: true` in the database
-- Prompt counts differ: 5 prompts for umbrella categories (broader), 20 for service groups (specific)
-- Total per client: 11 groups, ~205 prompts (5 + 200)
+- Prompt counts: 5 prompts per group (configurable via `PROMPTS_PER_GROUP` constant in `server/ai-services.ts`)
+- Total per client: 11 groups, ~55 prompts (11 × 5)
 - Frontend displays "Primary Category" badge for umbrella groups 
 
 **Citation Detection Logic:**
