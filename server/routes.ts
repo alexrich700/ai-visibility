@@ -206,19 +206,10 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Business name, industry, and groups are required" });
       }
 
-      // Separate high-level categories from service groups for different prompt counts
-      const serviceGroups = groups.filter((g: any) => !g.isHighLevelCategory);
-      const highLevelGroups = groups.filter((g: any) => g.isHighLevelCategory);
+      // Generate prompts for all groups using the shared PROMPTS_PER_GROUP constant
+      const prompts = await generatePromptsForGroups(businessName, domain, industry, scope, city, groups);
       
-      // Generate prompts: 20 for service groups, 5 for high-level categories
-      const servicePrompts = serviceGroups.length > 0 
-        ? await generatePromptsForGroups(businessName, domain, industry, scope, city, serviceGroups, 20)
-        : [];
-      const highLevelPrompts = highLevelGroups.length > 0
-        ? await generatePromptsForGroups(businessName, domain, industry, scope, city, highLevelGroups, 5)
-        : [];
-      
-      res.json({ prompts: [...highLevelPrompts, ...servicePrompts] });
+      res.json({ prompts });
     } catch (error) {
       console.error("Generate prompts error:", error);
       res.status(500).json({ error: "Failed to generate prompts" });

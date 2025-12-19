@@ -1,5 +1,8 @@
 import OpenAI from "openai";
 
+// Configuration constants for prompt generation
+export const PROMPTS_PER_GROUP = 5; // Number of prompts to generate per service group
+
 // OpenAI client using user's direct API key
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -1145,9 +1148,9 @@ export async function generatePromptsForGroups(
   scope: string,
   city: string | undefined,
   groups: { name: string; description: string }[],
-  maxPromptsPerGroup?: number // Optional: limit prompts per group (default 20, use 5 for high-level categories)
+  maxPromptsPerGroup?: number // Optional: limit prompts per group (default uses PROMPTS_PER_GROUP constant)
 ): Promise<{ groupName: string; prompts: string[] }[]> {
-  const promptLimit = maxPromptsPerGroup || 20;
+  const promptLimit = maxPromptsPerGroup || PROMPTS_PER_GROUP;
   console.log(`Generating prompts for ${groups.length} groups (max ${promptLimit} per group)...`);
   
   // Generate prompts for each group sequentially (to avoid rate limiting)
@@ -1165,8 +1168,8 @@ export async function generatePromptsForGroups(
       group.name // serviceCategory - this focuses prompts on this specific service
     );
     
-    // Limit prompts if maxPromptsPerGroup is specified
-    if (promptLimit < 20 && prompts.length > promptLimit) {
+    // Limit prompts to the configured limit
+    if (prompts.length > promptLimit) {
       prompts = prompts.slice(0, promptLimit);
     }
     
