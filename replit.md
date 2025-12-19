@@ -44,11 +44,19 @@ Key endpoints:
 
 ### AI Service Integration
 The backend integrates with three AI platforms:
-1. **OpenAI/ChatGPT** - Uses user's direct `OPENAI_API_KEY` with gpt-4o model via chat.completions API
+1. **OpenAI/ChatGPT** - Uses user's direct `OPENAI_API_KEY` with gpt-5.2 model via chat.completions API (with web search enabled)
 2. **Google Gemini** - Uses Replit AI Integrations (no API key needed, billed to credits)
 3. **Perplexity** - Requires `PERPLEXITY_API_KEY` environment variable
 
-Each service is queried with business-specific prompts, and responses are analyzed for business mentions and competitor identification. 
+Each service is queried with business-specific prompts, and responses are analyzed for business mentions and competitor identification.
+
+### High-Level Category (Umbrella Term) Feature
+When generating service groups for monitoring clients:
+- AI returns both a **high-level category** (umbrella term like "Plumber", "HVAC Contractor") AND 10 specific service groups
+- The umbrella category is marked with `isHighLevelCategory: true` in the database
+- Prompt counts differ: 5 prompts for umbrella categories (broader), 20 for service groups (specific)
+- Total per client: 11 groups, ~205 prompts (5 + 200)
+- Frontend displays "Primary Category" badge for umbrella groups 
 
 **Citation Detection Logic:**
 1. First checks if brand's exact domain is cited in AI response URLs
