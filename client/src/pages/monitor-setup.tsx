@@ -21,6 +21,7 @@ interface GroupItem {
   description: string;
   isActive: boolean;
   isEditing: boolean;
+  isHighLevelCategory?: boolean; // True for the umbrella category (e.g., "Plumber", "HVAC Contractor")
 }
 
 interface PromptItem {
@@ -65,7 +66,7 @@ export default function MonitorSetup() {
   const generateGroupsMutation = useMutation({
     mutationFn: async () => {
       const response = await apiRequest("POST", "/api/monitoring/generate-groups", { businessName, industry, scope, city });
-      return await response.json() as { groups: { name: string; description: string }[] };
+      return await response.json() as { groups: { name: string; description: string; isHighLevelCategory?: boolean }[] };
     },
     onSuccess: (data) => {
       const newGroups = data.groups.map((g, i) => ({
@@ -74,6 +75,7 @@ export default function MonitorSetup() {
         description: g.description,
         isActive: true,
         isEditing: false,
+        isHighLevelCategory: g.isHighLevelCategory || false,
       }));
       setGroups(newGroups);
       if (newGroups.length > 0) {
@@ -545,7 +547,14 @@ export default function MonitorSetup() {
                           />
                         ) : (
                           <div>
-                            <div className="font-bold text-gray-900">{group.name}</div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-bold text-gray-900">{group.name}</span>
+                              {group.isHighLevelCategory && (
+                                <Badge variant="secondary" className="text-xs bg-[#ffb41c]/20 text-[#b07800] border-[#ffb41c]/30">
+                                  Primary Category
+                                </Badge>
+                              )}
+                            </div>
                             {group.description && (
                               <div className="text-sm text-gray-500">{group.description}</div>
                             )}
