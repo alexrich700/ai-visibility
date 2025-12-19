@@ -1,8 +1,8 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { runAudit } from "./ai-services";
-import { auditRequestSchema, leadSchema } from "@shared/schema";
+import { runAudit, generateServiceGroups, generatePromptsForGroups, runPromptCheck } from "./ai-services";
+import { auditRequestSchema, leadSchema, monitoringClientRequestSchema } from "@shared/schema";
 import { z } from "zod";
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
@@ -158,6 +158,218 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Get audit error:", error);
       res.status(500).json({ error: "Failed to get audit" });
+    }
+  });
+
+  // ============================================
+  // MONITORING ENDPOINTS
+  // ============================================
+
+  // Generate service groups using AI
+  app.post("/api/monitoring/generate-groups", async (req, res) => {
+    try {
+      const { businessName, industry, scope, city } = req.body;
+      
+      if (!businessName || !industry) {
+        return res.status(400).json({ error: "Business name and industry are required" });
+      }
+
+      const groups = await generateServiceGroups(businessName, industry, scope, city);
+      res.json({ groups });
+    } catch (error) {
+      console.error("Generate groups error:", error);
+      res.status(500).json({ error: "Failed to generate groups" });
+    }
+  });
+
+  // Generate prompts for groups using AI
+  app.post("/api/monitoring/generate-prompts", async (req, res) => {
+    try {
+      const { businessName, domain, industry, scope, city, groups } = req.body;
+      
+      if (!businessName || !industry || !groups || !Array.isArray(groups)) {
+        return res.status(400).json({ error: "Business name, industry, and groups are required" });
+      }
+
+      const prompts = await generatePromptsForGroups(businessName, domain, industry, scope, city, groups);
+      res.json({ prompts });
+    } catch (error) {
+      console.error("Generate prompts error:", error);
+      res.status(500).json({ error: "Failed to generate prompts" });
+    }
+  });
+
+  // Create client and run initial scan
+  app.post("/api/monitoring/create-and-scan", async (req, res) => {
+    try {
+      const { client: clientData, groups, prompts } = req.body;
+      
+      // Validate client data
+      const validatedClient = monitoringClientRequestSchema.parse(clientData);
+      
+      // Create monitoring client
+      const client = await storage.createMonitoringClient({
+        businessName: validatedClient.businessName,
+        domain: validatedClient.domain,
+        industry: validatedClient.industry,
+        scope: validatedClient.scope,
+        city: validatedClient.city || null,
+        checkFrequencyDays: validatedClient.checkFrequencyDays,
+        isActive: true,
+      });
+      
+      // Create groups and map their IDs
+      const groupIdMap: Record<string, number> = {};
+      for (const group of groups) {
+        const createdGroup = await storage.createGroup({
+          clientId: client.id,
+          name: group.name,
+          description: group.description || null,
+          isActive: true,
+        });
+        groupIdMap[group.name] = createdGroup.id;
+      }
+      
+      // Create prompts
+      const createdPrompts: { id: number; groupId: number; text: string }[] = [];
+      for (const prompt of prompts) {
+        const groupId = groupIdMap[prompt.groupName];
+        if (groupId) {
+          const createdPrompt = await storage.createPrompt({
+            groupId,
+            promptText: prompt.text,
+            isActive: true,
+          });
+          createdPrompts.push({ id: createdPrompt.id, groupId, text: prompt.text });
+        }
+      }
+      
+      const totalPrompts = createdPrompts.length;
+      
+      // Create check session first with initial values (will update with final scores)
+      const session = await storage.createCheckSession({
+        clientId: client.id,
+        overallScore: 0,
+        chatgptScore: 0,
+        googleAIScore: 0,
+        totalPrompts,
+        foundCount: 0,
+        citedCount: 0,
+      });
+      
+      // Run visibility check on all prompts
+      let foundCount = 0;
+      let citedCount = 0;
+      let chatgptFoundCount = 0;
+      let googleAIFoundCount = 0;
+      
+      for (const prompt of createdPrompts) {
+        const result = await runPromptCheck(
+          prompt.text,
+          client.businessName,
+          client.domain
+        );
+        
+        // Store result with sessionId
+        await storage.createCheckResult({
+          sessionId: session.id,
+          clientId: client.id,
+          groupId: prompt.groupId,
+          promptId: prompt.id,
+          promptText: prompt.text,
+          chatgptFound: result.chatgpt.found,
+          chatgptResponse: result.chatgpt.response,
+          chatgptCited: result.chatgpt.cited,
+          googleAIFound: result.googleAI.found,
+          googleAIResponse: result.googleAI.response,
+          googleAICited: result.googleAI.cited,
+          competitors: JSON.stringify(result.competitors),
+        });
+        
+        if (result.chatgpt.found || result.googleAI.found) foundCount++;
+        if (result.chatgpt.cited || result.googleAI.cited) citedCount++;
+        if (result.chatgpt.found) chatgptFoundCount++;
+        if (result.googleAI.found) googleAIFoundCount++;
+      }
+      
+      // Calculate final scores
+      const overallScore = totalPrompts > 0 ? Math.round((foundCount / totalPrompts) * 100) : 0;
+      const chatgptScore = totalPrompts > 0 ? Math.round((chatgptFoundCount / totalPrompts) * 100) : 0;
+      const googleAIScore = totalPrompts > 0 ? Math.round((googleAIFoundCount / totalPrompts) * 100) : 0;
+      
+      // Update session with final scores
+      await storage.updateCheckSession(session.id, {
+        overallScore,
+        chatgptScore,
+        googleAIScore,
+        foundCount,
+        citedCount,
+      });
+      
+      // Update client with last check time and calculate next check
+      const nextCheckAt = new Date();
+      nextCheckAt.setDate(nextCheckAt.getDate() + validatedClient.checkFrequencyDays);
+      await storage.updateMonitoringClient(client.id, {
+        checkFrequencyDays: validatedClient.checkFrequencyDays,
+      });
+      
+      res.json({ clientId: client.id, sessionId: session.id });
+    } catch (error) {
+      console.error("Create and scan error:", error);
+      res.status(500).json({ 
+        error: "Failed to create client and run scan",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Get dashboard data for a client
+  app.get("/api/monitoring/dashboard/:id", async (req, res) => {
+    try {
+      const clientId = parseInt(req.params.id);
+      
+      const client = await storage.getMonitoringClientById(clientId);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+      
+      const groups = await storage.getGroupsByClientId(clientId);
+      const sessions = await storage.getCheckSessionsByClientId(clientId);
+      
+      // Get results from the latest session (if any)
+      let latestResults: any[] = [];
+      if (sessions.length > 0) {
+        latestResults = await storage.getCheckResultsBySessionId(sessions[0].id);
+      }
+      
+      // Group results by group
+      const resultsByGroup = groups.map(group => ({
+        groupId: group.id,
+        groupName: group.name,
+        results: latestResults.filter(r => r.groupId === group.id),
+      }));
+      
+      res.json({
+        client,
+        groups,
+        sessions,
+        latestResults,
+        resultsByGroup,
+      });
+    } catch (error) {
+      console.error("Get dashboard error:", error);
+      res.status(500).json({ error: "Failed to get dashboard data" });
+    }
+  });
+
+  // Get all monitoring clients
+  app.get("/api/monitoring/clients", async (req, res) => {
+    try {
+      const clients = await storage.getMonitoringClients();
+      res.json(clients);
+    } catch (error) {
+      console.error("Get clients error:", error);
+      res.status(500).json({ error: "Failed to get clients" });
     }
   });
 

@@ -953,3 +953,226 @@ export async function runAudit(
     },
   };
 }
+
+// ============================================
+// MONITORING SERVICE FUNCTIONS
+// ============================================
+
+export async function generateServiceGroups(
+  businessName: string,
+  industry: string,
+  scope: string,
+  city?: string
+): Promise<{ name: string; description: string }[]> {
+  try {
+    const locationContext = scope === "local" && city ? ` in ${city}` : "";
+    
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: `You are an expert marketing strategist. Generate 3-5 service/product groups for a business that represent their main offerings. Each group should represent a distinct category of services or products the business offers.
+
+Return your response as a JSON array with objects containing "name" and "description" fields.
+Example format:
+[
+  {"name": "HVAC Repair", "description": "Emergency and routine heating and cooling system repairs"},
+  {"name": "HVAC Installation", "description": "New system installations and replacements"}
+]`
+        },
+        {
+          role: "user",
+          content: `Generate service/product groups for "${businessName}", a ${industry} business${locationContext}. 
+
+Consider the typical services and products that a ${industry} company would offer. Return 3-5 distinct groups that cover their main offerings.`
+        }
+      ],
+      temperature: 0.7,
+      response_format: { type: "json_object" }
+    });
+
+    const content = response.choices[0]?.message?.content || "{}";
+    const parsed = JSON.parse(content);
+    
+    // Handle different response formats
+    const groups = Array.isArray(parsed) ? parsed : (parsed.groups || parsed.categories || []);
+    
+    if (groups.length === 0) {
+      // Return default groups based on industry
+      return [
+        { name: "Core Services", description: `Primary ${industry} services offered` },
+        { name: "Specialty Services", description: `Specialized ${industry} solutions` },
+        { name: "Maintenance & Support", description: `Ongoing support and maintenance services` }
+      ];
+    }
+    
+    return groups;
+  } catch (error) {
+    console.error("Error generating service groups:", error);
+    // Return fallback groups
+    return [
+      { name: "Core Services", description: `Primary ${industry} services offered` },
+      { name: "Specialty Services", description: `Specialized ${industry} solutions` },
+      { name: "Maintenance & Support", description: `Ongoing support and maintenance services` }
+    ];
+  }
+}
+
+export async function generatePromptsForGroups(
+  businessName: string,
+  domain: string,
+  industry: string,
+  scope: string,
+  city: string | undefined,
+  groups: { name: string; description: string }[]
+): Promise<{ groupName: string; prompts: string[] }[]> {
+  try {
+    const locationContext = scope === "local" && city ? ` in ${city}` : "";
+    
+    const groupsList = groups.map(g => `- ${g.name}: ${g.description}`).join("\n");
+    
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: `You are an expert SEO and AI visibility strategist. Generate search prompts that potential customers might use when looking for services in each category. These prompts will be used to test how visible the business is in AI assistants like ChatGPT and Google AI.
+
+Generate exactly 20 prompts for EACH group. Prompts should:
+1. Be natural questions a customer would ask an AI assistant
+2. Include local variations if relevant (e.g., "in [city]")
+3. Cover different intent types: informational, transactional, comparison
+4. Include both general and specific queries
+5. Vary between asking for recommendations, comparisons, and specific information
+
+Return your response as a JSON object with a "prompts" array containing objects with "groupName" and "prompts" (array of 20 strings) fields.`
+        },
+        {
+          role: "user",
+          content: `Generate 20 search prompts for each service group for "${businessName}", a ${industry} business${locationContext}.
+
+Service Groups:
+${groupsList}
+
+For each group, create 20 prompts that potential customers would ask AI assistants. Make sure the prompts are realistic and cover various search intents.`
+        }
+      ],
+      temperature: 0.8,
+      response_format: { type: "json_object" }
+    });
+
+    const content = response.choices[0]?.message?.content || "{}";
+    const parsed = JSON.parse(content);
+    
+    // Handle different response formats
+    const promptGroups = parsed.prompts || parsed.groups || [];
+    
+    if (promptGroups.length === 0) {
+      // Generate fallback prompts for each group
+      return groups.map(group => ({
+        groupName: group.name,
+        prompts: generateFallbackPrompts(group.name, industry, locationContext, 20)
+      }));
+    }
+    
+    // Ensure each group has exactly 20 prompts
+    return promptGroups.map((pg: { groupName: string; prompts: string[] }) => ({
+      groupName: pg.groupName,
+      prompts: pg.prompts.slice(0, 20).concat(
+        pg.prompts.length < 20 
+          ? generateFallbackPrompts(pg.groupName, industry, locationContext, 20 - pg.prompts.length)
+          : []
+      )
+    }));
+  } catch (error) {
+    console.error("Error generating prompts:", error);
+    // Return fallback prompts for each group
+    return groups.map(group => ({
+      groupName: group.name,
+      prompts: generateFallbackPrompts(group.name, industry, "", 20)
+    }));
+  }
+}
+
+function generateFallbackPrompts(groupName: string, industry: string, location: string, count: number): string[] {
+  const templates = [
+    `Best ${groupName.toLowerCase()} services${location}`,
+    `Who offers ${groupName.toLowerCase()}${location}?`,
+    `Top rated ${groupName.toLowerCase()} companies${location}`,
+    `${groupName} near me`,
+    `How much does ${groupName.toLowerCase()} cost?`,
+    `Recommended ${groupName.toLowerCase()} providers${location}`,
+    `${groupName} reviews and ratings`,
+    `Professional ${groupName.toLowerCase()} services`,
+    `Affordable ${groupName.toLowerCase()}${location}`,
+    `Compare ${groupName.toLowerCase()} services`,
+    `${groupName} specialists${location}`,
+    `Best ${industry} company for ${groupName.toLowerCase()}`,
+    `${groupName} experts near me`,
+    `Quality ${groupName.toLowerCase()} providers`,
+    `Emergency ${groupName.toLowerCase()} services${location}`,
+    `${groupName} consultation`,
+    `${groupName} pricing and quotes`,
+    `Local ${groupName.toLowerCase()} businesses`,
+    `${groupName} service options`,
+    `${groupName} recommendations`
+  ];
+  
+  return templates.slice(0, count);
+}
+
+export interface PromptCheckResult {
+  chatgpt: {
+    found: boolean;
+    response: string;
+    cited: boolean;
+  };
+  googleAI: {
+    found: boolean;
+    response: string;
+    cited: boolean;
+  };
+  competitors: string[];
+}
+
+export async function runPromptCheck(
+  prompt: string,
+  businessName: string,
+  domain: string
+): Promise<PromptCheckResult> {
+  try {
+    // Run both checks in parallel
+    const [chatgptResult, googleAIResult] = await Promise.all([
+      queryOpenAI(prompt, businessName, domain),
+      queryGoogleAI(prompt, businessName, domain)
+    ]);
+    
+    // Collect competitors from both results
+    const allCompetitors = [...chatgptResult.competitors, ...googleAIResult.competitors];
+    const uniqueCompetitors = [...new Set(allCompetitors)].filter(c => 
+      c.toLowerCase() !== businessName.toLowerCase()
+    );
+    
+    return {
+      chatgpt: {
+        found: chatgptResult.found,
+        response: chatgptResult.response,
+        cited: chatgptResult.cited,
+      },
+      googleAI: {
+        found: googleAIResult.found,
+        response: googleAIResult.response,
+        cited: googleAIResult.cited,
+      },
+      competitors: uniqueCompetitors.slice(0, 10),
+    };
+  } catch (error) {
+    console.error("Error running prompt check:", error);
+    return {
+      chatgpt: { found: false, response: "Error occurred during check", cited: false },
+      googleAI: { found: false, response: "Error occurred during check", cited: false },
+      competitors: [],
+    };
+  }
+}

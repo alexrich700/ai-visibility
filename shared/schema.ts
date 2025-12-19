@@ -163,3 +163,149 @@ export const scanProgressSchema = z.object({
 });
 
 export type ScanProgress = z.infer<typeof scanProgressSchema>;
+
+// ============================================
+// MONITORING CLIENTS - For ongoing visibility tracking
+// ============================================
+
+export const monitoringClients = pgTable("monitoring_clients", {
+  id: serial("id").primaryKey(),
+  businessName: text("business_name").notNull(),
+  domain: text("domain").notNull(),
+  industry: text("industry").notNull(),
+  scope: text("scope").notNull(), // "local" or "national"
+  city: text("city"),
+  checkFrequencyDays: integer("check_frequency_days").notNull().default(14),
+  lastCheckAt: timestamp("last_check_at"),
+  nextCheckAt: timestamp("next_check_at"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertMonitoringClientSchema = createInsertSchema(monitoringClients).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastCheckAt: true,
+  nextCheckAt: true,
+});
+
+export type InsertMonitoringClient = z.infer<typeof insertMonitoringClientSchema>;
+export type MonitoringClient = typeof monitoringClients.$inferSelect;
+
+// ============================================
+// GROUPS - Service/product line categories
+// ============================================
+
+export const monitoringGroups = pgTable("monitoring_groups", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").references(() => monitoringClients.id).notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertMonitoringGroupSchema = createInsertSchema(monitoringGroups).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertMonitoringGroup = z.infer<typeof insertMonitoringGroupSchema>;
+export type MonitoringGroup = typeof monitoringGroups.$inferSelect;
+
+// ============================================
+// PROMPTS - Individual prompts within groups
+// ============================================
+
+export const monitoringPrompts = pgTable("monitoring_prompts", {
+  id: serial("id").primaryKey(),
+  groupId: integer("group_id").references(() => monitoringGroups.id).notNull(),
+  promptText: text("prompt_text").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertMonitoringPromptSchema = createInsertSchema(monitoringPrompts).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertMonitoringPrompt = z.infer<typeof insertMonitoringPromptSchema>;
+export type MonitoringPrompt = typeof monitoringPrompts.$inferSelect;
+
+// ============================================
+// CHECK SESSIONS - Aggregated check run data
+// ============================================
+
+export const checkSessions = pgTable("check_sessions", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").references(() => monitoringClients.id).notNull(),
+  overallScore: integer("overall_score").notNull(),
+  chatgptScore: integer("chatgpt_score").notNull(),
+  googleAIScore: integer("google_ai_score").notNull(),
+  totalPrompts: integer("total_prompts").notNull(),
+  foundCount: integer("found_count").notNull(),
+  citedCount: integer("cited_count").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertCheckSessionSchema = createInsertSchema(checkSessions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertCheckSession = z.infer<typeof insertCheckSessionSchema>;
+export type CheckSession = typeof checkSessions.$inferSelect;
+
+// ============================================
+// CHECK RESULTS - Historical visibility data
+// ============================================
+
+export const checkResults = pgTable("check_results", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").references(() => checkSessions.id),
+  clientId: integer("client_id").references(() => monitoringClients.id).notNull(),
+  groupId: integer("group_id").references(() => monitoringGroups.id).notNull(),
+  promptId: integer("prompt_id").references(() => monitoringPrompts.id).notNull(),
+  promptText: text("prompt_text").notNull(),
+  chatgptFound: boolean("chatgpt_found").notNull(),
+  chatgptResponse: text("chatgpt_response"),
+  chatgptCited: boolean("chatgpt_cited").default(false),
+  googleAIFound: boolean("google_ai_found").notNull(),
+  googleAIResponse: text("google_ai_response"),
+  googleAICited: boolean("google_ai_cited").default(false),
+  competitors: text("competitors"), // JSON string of competitor names
+  checkedAt: timestamp("checked_at").defaultNow().notNull(),
+});
+
+export const insertCheckResultSchema = createInsertSchema(checkResults).omit({
+  id: true,
+  checkedAt: true,
+});
+
+export type InsertCheckResult = z.infer<typeof insertCheckResultSchema>;
+export type CheckResult = typeof checkResults.$inferSelect;
+
+// ============================================
+// Frontend Request Schemas
+// ============================================
+
+export const monitoringClientRequestSchema = z.object({
+  businessName: z.string().min(1, "Business name is required"),
+  domain: z.string().min(1, "Domain is required"),
+  industry: z.string().min(1, "Industry is required"),
+  scope: z.enum(["local", "national"]),
+  city: z.string().optional(),
+  checkFrequencyDays: z.number().min(1).max(90).default(14),
+});
+
+export type MonitoringClientRequest = z.infer<typeof monitoringClientRequestSchema>;
+
+export const groupSuggestionSchema = z.object({
+  name: z.string(),
+  description: z.string(),
+});
+
+export type GroupSuggestion = z.infer<typeof groupSuggestionSchema>;
