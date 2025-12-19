@@ -226,9 +226,9 @@ async function queryChatGPT(prompt: string, businessName: string, url?: string, 
       };
     }
     
-    // Use gpt-4o-search-preview with web_search_options for real-time search results
+    // Use gpt-5.2 with web_search_options for real-time search results
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-search-preview",
+      model: "gpt-5.2",
       web_search_options: webSearchOptions,
       messages: [
         { role: "system", content: "You are a helpful assistant that provides factual, detailed answers about local and national businesses. When asked about service providers, list specific company names with their website URLs when possible. At the end of your response, provide a clean bullet list of just the business names you mentioned (no ratings, reviews, hours, or other details)." },
@@ -510,7 +510,7 @@ Key findings: overall score ${overallScore}/100, ChatGPT ${chatgptScore}%, Googl
 Describe what this means for AI visibility. Be professional.`;
     
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-5.2",
       messages: [
         { role: "system", content: "You write professional, matter-of-fact executive summaries for AI visibility audit reports. Be concise and data-driven." },
         { role: "user", content: userPrompt }
@@ -669,7 +669,7 @@ ${homepageContent}`;
   try {
     console.log("Generating research prompts with GPT-4o...");
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-5.2",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt }
@@ -735,7 +735,7 @@ Example formats:
   try {
     console.log("Generating sentiment prompts with GPT-4o...");
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-5.2",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt }
@@ -968,24 +968,78 @@ export async function generateServiceGroups(
     const locationContext = scope === "local" && city ? ` in ${city}` : "";
     
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-5.2",
       messages: [
         {
           role: "system",
-          content: `You are an expert marketing strategist. Generate 3-5 service/product groups for a business that represent their main offerings. Each group should represent a distinct category of services or products the business offers.
+          content: `You are an expert marketing strategist specializing in service/product categorization for AI visibility tracking. Your task is to generate exactly 10 distinct service/product groups that represent specific offerings a business would be searched for.
 
-Return your response as a JSON array with objects containing "name" and "description" fields.
-Example format:
-[
-  {"name": "HVAC Repair", "description": "Emergency and routine heating and cooling system repairs"},
-  {"name": "HVAC Installation", "description": "New system installations and replacements"}
-]`
+# Guidelines
+- Generate granular, search-intent-focused groups (how real customers would search)
+- Each group should represent a distinct, searchable service or product category
+- Include variations customers actually use (e.g., "heater repair" not just "HVAC repair")
+- Consider both broad category terms AND specific service variations
+- Groups should cover the full spectrum of typical offerings for this industry
+- Names should be 1-4 words, matching natural search language
+
+# Output Format
+Return a JSON object with a "groups" array containing exactly 10 objects, each with "name" and "description" fields.
+
+# Examples
+
+For a local HVAC company:
+{
+  "groups": [
+    {"name": "AC Repair", "description": "Air conditioning system repairs and troubleshooting"},
+    {"name": "AC Installation", "description": "New air conditioning system installations"},
+    {"name": "Heater Repair", "description": "Furnace and heating system repairs"},
+    {"name": "Furnace Installation", "description": "New furnace and heating system installations"},
+    {"name": "HVAC Maintenance", "description": "Preventive maintenance and tune-ups for heating and cooling systems"},
+    {"name": "Duct Cleaning", "description": "Air duct cleaning and indoor air quality services"},
+    {"name": "Thermostat Installation", "description": "Smart thermostat and temperature control installations"},
+    {"name": "Water Heater Repair", "description": "Water heater troubleshooting and repairs"},
+    {"name": "Water Heater Installation", "description": "New water heater installations and replacements"},
+    {"name": "Emergency HVAC Service", "description": "24/7 emergency heating and cooling repairs"}
+  ]
+}
+
+For a marketing agency:
+{
+  "groups": [
+    {"name": "SEO Services", "description": "Search engine optimization and organic visibility"},
+    {"name": "PPC Management", "description": "Pay-per-click advertising and Google Ads management"},
+    {"name": "Web Design", "description": "Website design and development"},
+    {"name": "Social Media Marketing", "description": "Social media management and advertising"},
+    {"name": "Content Marketing", "description": "Blog writing, content strategy, and copywriting"},
+    {"name": "Branding", "description": "Brand identity, logo design, and brand strategy"},
+    {"name": "Email Marketing", "description": "Email campaigns, automation, and newsletter management"},
+    {"name": "Graphic Design", "description": "Visual design for print and digital materials"},
+    {"name": "Video Production", "description": "Video marketing and production services"},
+    {"name": "Marketing Strategy", "description": "Marketing consulting and strategic planning"}
+  ]
+}
+
+For a personal injury law firm:
+{
+  "groups": [
+    {"name": "Car Accident Lawyer", "description": "Legal representation for auto accident victims"},
+    {"name": "Truck Accident Attorney", "description": "Commercial truck and 18-wheeler accident cases"},
+    {"name": "Motorcycle Accident Lawyer", "description": "Legal help for motorcycle crash injuries"},
+    {"name": "Slip and Fall Attorney", "description": "Premises liability and slip and fall cases"},
+    {"name": "Wrongful Death Lawyer", "description": "Legal claims for families who lost loved ones"},
+    {"name": "Medical Malpractice Attorney", "description": "Cases against negligent healthcare providers"},
+    {"name": "Work Injury Lawyer", "description": "Workplace accident and workers compensation cases"},
+    {"name": "Dog Bite Attorney", "description": "Animal attack injury claims"},
+    {"name": "Pedestrian Accident Lawyer", "description": "Legal help for injured pedestrians"},
+    {"name": "Product Liability Attorney", "description": "Cases involving defective products"}
+  ]
+}`
         },
         {
           role: "user",
-          content: `Generate service/product groups for "${businessName}", a ${industry} business${locationContext}. 
+          content: `Generate exactly 10 service/product groups for "${businessName}", a ${industry} business${locationContext}.
 
-Consider the typical services and products that a ${industry} company would offer. Return 3-5 distinct groups that cover their main offerings.`
+Consider what real customers would search for when looking for this type of business. Return groups that are specific enough to track AI visibility by individual service/product offering.`
         }
       ],
       temperature: 0.7,
@@ -999,24 +1053,31 @@ Consider the typical services and products that a ${industry} company would offe
     const groups = Array.isArray(parsed) ? parsed : (parsed.groups || parsed.categories || []);
     
     if (groups.length === 0) {
-      // Return default groups based on industry
-      return [
-        { name: "Core Services", description: `Primary ${industry} services offered` },
-        { name: "Specialty Services", description: `Specialized ${industry} solutions` },
-        { name: "Maintenance & Support", description: `Ongoing support and maintenance services` }
-      ];
+      // Return default 10 groups based on industry
+      return getDefaultGroups(industry);
     }
     
     return groups;
   } catch (error) {
     console.error("Error generating service groups:", error);
-    // Return fallback groups
-    return [
-      { name: "Core Services", description: `Primary ${industry} services offered` },
-      { name: "Specialty Services", description: `Specialized ${industry} solutions` },
-      { name: "Maintenance & Support", description: `Ongoing support and maintenance services` }
-    ];
+    // Return fallback 10 groups
+    return getDefaultGroups(industry);
   }
+}
+
+function getDefaultGroups(industry: string): { name: string; description: string }[] {
+  return [
+    { name: "Core Services", description: `Primary ${industry} services offered` },
+    { name: "Specialty Services", description: `Specialized ${industry} solutions` },
+    { name: "Maintenance & Support", description: `Ongoing support and maintenance services` },
+    { name: "Consulting", description: `${industry} consulting and advisory services` },
+    { name: "Emergency Services", description: `Urgent and emergency ${industry} assistance` },
+    { name: "Installation", description: `New ${industry} installations and setup` },
+    { name: "Repair Services", description: `${industry} repair and troubleshooting` },
+    { name: "Custom Solutions", description: `Custom and tailored ${industry} solutions` },
+    { name: "Training & Education", description: `${industry} training and workshops` },
+    { name: "Planning & Strategy", description: `${industry} planning and strategic services` }
+  ];
 }
 
 export async function generatePromptsForGroups(
@@ -1033,7 +1094,7 @@ export async function generatePromptsForGroups(
     const groupsList = groups.map(g => `- ${g.name}: ${g.description}`).join("\n");
     
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-5.2",
       messages: [
         {
           role: "system",
