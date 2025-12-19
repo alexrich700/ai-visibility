@@ -65,6 +65,13 @@ When generating service groups for monitoring clients:
 
 Fallback simulation is provided when API keys are unavailable or errors occur.
 
+**Real-time Progress Streaming:**
+- SSE endpoint `/api/monitoring/scan-stream` for real-time scan updates
+- Sends heartbeat on connection, then progress events for each prompt tested
+- Event types: heartbeat, status, testing, prompt_complete, group_complete, complete, error
+- Disconnect handling: cancels remaining work when client navigates away
+- Progress updates show: current group name, prompt text preview, prompt counter (X of Y)
+
 ### Data Layer
 - **ORM**: Drizzle ORM with PostgreSQL dialect
 - **Schema Location**: `shared/schema.ts`
