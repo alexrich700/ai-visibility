@@ -627,7 +627,7 @@ export default function MonitorSetup() {
                 Review Prompts
               </CardTitle>
               <p className="text-gray-500">
-                We've generated 20 prompts per group. Review, edit, or add prompts to track.
+                We've generated 5 prompts per group. Review, edit, or add prompts to track.
               </p>
             </CardHeader>
             <CardContent>

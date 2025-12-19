@@ -606,7 +606,8 @@ function getFallbackSentimentPrompts(businessName: string, keyword: string, loca
   ];
 }
 
-// Generate 20 RESEARCH-BASED prompts (NO brand name - for visibility testing)
+// Generate RESEARCH-BASED prompts (NO brand name - for visibility testing)
+// Uses PROMPTS_PER_GROUP constant to determine how many prompts to generate
 // Optional serviceCategory param allows generating prompts for specific service groups (e.g., "AC Repair")
 export async function generateResearchPrompts(
   keyword: string,
@@ -617,6 +618,7 @@ export async function generateResearchPrompts(
 ): Promise<string[]> {
   const location = scope === "local" && city ? city : "nationwide";
   const locationStr = location !== "nationwide" ? ` in ${location}` : "";
+  const promptCount = PROMPTS_PER_GROUP; // Use the shared constant
   
   // If serviceCategory is provided, focus prompts on that specific service
   const targetService = serviceCategory || keyword;
@@ -633,20 +635,14 @@ export async function generateResearchPrompts(
   }
   
   // Build prompt for OpenAI - explicitly exclude brand name but request specific business names in responses
-  const systemPrompt = `You are a marketing expert specializing in AI search optimization. Generate exactly 20 research-based search queries that potential customers would type into AI assistants (like ChatGPT or Google AI) when actively looking for ${targetService} services${locationStr}.
+  const systemPrompt = `You are a marketing expert specializing in AI search optimization. Generate exactly ${promptCount} unique research-based search queries that potential customers would type into AI assistants (like ChatGPT or Google AI) when actively looking for ${targetService} services${locationStr}.
 
 CRITICAL REQUIREMENTS:
 1. These must be GENERIC research queries that do NOT include any specific business or brand names
 2. Each query MUST explicitly ask for SPECIFIC BUSINESS NAMES to be listed - avoid vague queries that result in generic advice
 3. Use long-tail, specific queries that will trigger AI to list actual company names
 4. ALL prompts must be focused on "${targetService}" - this is the specific service category we're testing visibility for
-
-INCLUDE these types of prompts (MUST request specific business names):
-- "Give me the top 3 ${targetService} companies${locationStr}"
-- "Name 5 specific ${targetService} businesses I can call today"
-- "List the best reviewed ${targetService} services${locationStr}"
-- "Which ${targetService} companies do you recommend${locationStr}?"
-- "Can you name ${targetService} providers that specialize in [specific aspect]?"
+5. Each query must be UNIQUE and different from the others - vary the phrasing, intent, and focus
 
 PROMPT VARIETY - include different intent types:
 - Transactional: "Who can I hire for ${targetService}${locationStr}?"
@@ -655,19 +651,21 @@ PROMPT VARIETY - include different intent types:
 - Emergency: "Emergency ${targetService} services available now${locationStr}"
 - Cost-focused: "Affordable ${targetService} services${locationStr}"
 - Quality-focused: "Highest rated ${targetService} providers${locationStr}"
+- Recommendation: "Which ${targetService} companies do you recommend${locationStr}?"
 
 DO NOT generate prompts that will result in generic advice like:
 - "What to look for in ${targetService}" (educational, not transactional)
 - "Pros and cons of ${targetService}" (informational, won't list businesses)
 - Generic prompts without asking for specific business names
 
-Return ONLY a valid JSON array of exactly 20 strings. No explanations, no markdown, just the JSON array.`;
+Return ONLY a valid JSON array of exactly ${promptCount} strings. No explanations, no markdown, just the JSON array.`;
   
-  let userPrompt = `Generate 20 specific, long-tail AI search queries for ${targetService} services${locationStr}.
+  let userPrompt = `Generate ${promptCount} unique, specific, long-tail AI search queries for ${targetService} services${locationStr}.
 ${serviceCategory ? `\nThis is for the "${serviceCategory}" service category within the ${keyword} industry.` : ''}
 
 IMPORTANT:
-- Each query should explicitly request a LIST of specific business names (e.g., "List 3 companies", "Name 5 businesses", "Which companies do you recommend")
+- Each query must be UNIQUE - do not repeat similar phrasing
+- Each query should explicitly request a LIST of specific business names
 - ALL queries must be focused on ${targetService} - do not mix in other service types
 - NO brand names in the queries themselves, but queries should request brand names in the response
 - Include variety: transactional, comparison, emergency, cost-focused, quality-focused queries`;
@@ -680,14 +678,14 @@ ${homepageContent}`;
   }
   
   try {
-    console.log("Generating research prompts with GPT-5.2...");
+    console.log(`Generating ${promptCount} research prompts with GPT-5.2 for "${targetService}"...`);
     const response = await openai.chat.completions.create({
       model: "gpt-5.2",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt }
       ],
-      max_tokens: 2048,
+      max_tokens: 1024,
     });
     
     const text = response.choices[0]?.message?.content || "";
@@ -700,21 +698,28 @@ ${homepageContent}`;
       const validPrompts = parsed
         .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
         .map(s => s.trim())
-        .slice(0, 20);
+        .slice(0, promptCount);
       
-      if (validPrompts.length === 20) {
-        console.log(`Generated 20 valid research prompts`);
-        return validPrompts;
+      // Accept if we got at least the required number of prompts (more flexible than exact match)
+      if (validPrompts.length >= promptCount) {
+        console.log(`Generated ${validPrompts.length} valid research prompts for "${targetService}"`);
+        return validPrompts.slice(0, promptCount);
+      } else if (validPrompts.length >= 3) {
+        // Accept fewer prompts if we got at least 3 (pad with fallback if needed)
+        console.log(`OpenAI returned ${validPrompts.length} prompts, padding with fallback for "${targetService}"`);
+        const fallbackPrompts = getFallbackResearchPrompts(keyword, location, serviceCategory);
+        const combined = [...validPrompts, ...fallbackPrompts.slice(0, promptCount - validPrompts.length)];
+        return combined.slice(0, promptCount);
       } else {
-        console.log(`OpenAI returned ${validPrompts.length} valid prompts (need 20), using fallback`);
+        console.log(`OpenAI returned only ${validPrompts.length} valid prompts (need ${promptCount}), using fallback`);
       }
     }
   } catch (error) {
     console.error("Research prompt generation error:", error);
   }
   
-  console.log("Using fallback research prompts");
-  return getFallbackResearchPrompts(keyword, location, serviceCategory);
+  console.log(`Using fallback research prompts for "${targetService}"`);
+  return getFallbackResearchPrompts(keyword, location, serviceCategory).slice(0, promptCount);
 }
 
 // Generate 5 SENTIMENT prompts (WITH brand name - for sentiment analysis)
