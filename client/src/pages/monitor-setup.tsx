@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -66,6 +66,19 @@ export default function MonitorSetup() {
   const [totalPrompts, setTotalPrompts] = useState(0);
   const [isScanning, setIsScanning] = useState(false);
   const [createdClientId, setCreatedClientId] = useState<number | null>(null);
+  
+  // EventSource ref for cleanup on unmount
+  const eventSourceRef = useRef<EventSource | null>(null);
+  
+  // Cleanup EventSource on unmount or navigation
+  useEffect(() => {
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+    };
+  }, []);
 
   // Generate groups mutation
   const generateGroupsMutation = useMutation({
@@ -154,13 +167,14 @@ export default function MonitorSetup() {
     },
   });
 
-  // Run scan with streaming progress updates
+  // Run scan with streaming progress updates using EventSource
   const runScanWithStreaming = async () => {
     setIsScanning(true);
     const activeGroups = groups.filter(g => g.isActive);
     
     try {
-      const response = await fetch("/api/monitoring/scan-stream", {
+      // Step 1: Prepare the scan (POST with data)
+      const prepareResponse = await fetch("/api/monitoring/scan-prepare", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -184,38 +198,49 @@ export default function MonitorSetup() {
         }),
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to start scan");
+      if (!prepareResponse.ok) {
+        throw new Error("Failed to prepare scan");
       }
 
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
+      const { prepareId } = await prepareResponse.json();
 
-      if (!reader) {
-        throw new Error("No response stream available");
+      // Step 2: Connect to SSE stream using EventSource (GET request)
+      // Close any existing EventSource before creating a new one
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
       }
-
-      // Process SSE events
-      let buffer = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              handleStreamEvent(data);
-            } catch (e) {
-              console.error("Failed to parse SSE event:", e);
-            }
+      
+      const eventSource = new EventSource(`/api/monitoring/scan-stream/${prepareId}`);
+      eventSourceRef.current = eventSource;
+      
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          handleStreamEvent(data);
+          
+          // Close EventSource when scan is complete or errored
+          if (data.type === "complete" || data.type === "error") {
+            eventSource.close();
+            eventSourceRef.current = null;
           }
+        } catch (e) {
+          console.error("Failed to parse SSE event:", e);
         }
-      }
+      };
+      
+      eventSource.onerror = (error) => {
+        console.error("EventSource error:", error);
+        eventSource.close();
+        eventSourceRef.current = null;
+        toast({
+          title: "Connection lost",
+          description: "Lost connection to the scan. Please try again.",
+          variant: "destructive",
+        });
+        setScanProgress(0);
+        setScanStatus("Failed");
+        setIsScanning(false);
+      };
     } catch (error) {
       toast({
         title: "Error running scan",

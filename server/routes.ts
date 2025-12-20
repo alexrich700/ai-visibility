@@ -4,8 +4,30 @@ import { storage } from "./storage";
 import { runAudit, generateServiceGroups, generatePromptsForGroups, runPromptCheck } from "./ai-services";
 import { auditRequestSchema, leadSchema, monitoringClientRequestSchema } from "@shared/schema";
 import { z } from "zod";
+import { randomUUID } from "crypto";
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
+
+// Temporary cache for pending scan configurations (for SSE handshake only)
+// Actual scan data is persisted in the database
+interface PendingScanConfig {
+  client: z.infer<typeof monitoringClientRequestSchema>;
+  groups: { name: string; description: string; isHighLevelCategory: boolean }[];
+  prompts: { groupName: string; text: string }[];
+  createdAt: number;
+}
+const pendingScanConfigs = new Map<string, PendingScanConfig>();
+
+// Clean up stale configs older than 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  const entries = Array.from(pendingScanConfigs.entries());
+  for (const [id, config] of entries) {
+    if (now - config.createdAt > 5 * 60 * 1000) {
+      pendingScanConfigs.delete(id);
+    }
+  }
+}, 60 * 1000);
 
 export async function registerRoutes(
   httpServer: Server,
@@ -345,14 +367,54 @@ export async function registerRoutes(
     }
   });
 
-  // SSE endpoint for real-time scan progress
-  // Streams progress events as each prompt is tested on each platform
-  app.post("/api/monitoring/scan-stream", async (req, res) => {
+  // Step 1: Prepare scan - stores config temporarily and returns a prepareId
+  // This allows the frontend to then connect via EventSource (GET) for proper SSE
+  app.post("/api/monitoring/scan-prepare", async (req, res) => {
+    try {
+      const { client: clientData, groups, prompts } = req.body;
+      
+      // Validate client data upfront
+      const validatedClient = monitoringClientRequestSchema.parse(clientData);
+      
+      // Generate unique ID for this scan preparation
+      const prepareId = randomUUID();
+      
+      // Store config temporarily (will be consumed by SSE endpoint)
+      pendingScanConfigs.set(prepareId, {
+        client: validatedClient,
+        groups: groups || [],
+        prompts: prompts || [],
+        createdAt: Date.now(),
+      });
+      
+      res.json({ prepareId });
+    } catch (error) {
+      console.error("Scan prepare error:", error);
+      res.status(400).json({ 
+        error: "Failed to prepare scan",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Step 2: SSE endpoint (GET) for real-time scan progress
+  // Using GET allows proper EventSource connection from browser
+  app.get("/api/monitoring/scan-stream/:prepareId", async (req, res) => {
+    const { prepareId } = req.params;
+    
+    // Retrieve and consume the pending config
+    const config = pendingScanConfigs.get(prepareId);
+    if (!config) {
+      res.status(404).json({ error: "Scan configuration not found or expired" });
+      return;
+    }
+    pendingScanConfigs.delete(prepareId);
+    
     // Set SSE headers
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
-    res.setHeader("X-Accel-Buffering", "no"); // Disable nginx buffering
+    res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders();
 
     // Track if client disconnected to cancel remaining work
@@ -362,24 +424,17 @@ export async function registerRoutes(
       console.log("Client disconnected from scan stream");
     });
 
-    // Helper to send SSE events with immediate flush
+    // Helper to send SSE events
     const sendEvent = (type: string, data: Record<string, unknown>) => {
       if (!isClientConnected) return;
       res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`);
-      // Force flush to ensure immediate delivery
-      if (typeof (res as any).flush === 'function') {
-        (res as any).flush();
-      }
     };
 
     try {
-      const { client: clientData, groups, prompts } = req.body;
+      const { client: validatedClient, groups, prompts } = config;
       
       // Send immediate heartbeat to confirm stream is active
       sendEvent("heartbeat", { message: "Stream connected" });
-      
-      // Validate client data
-      const validatedClient = monitoringClientRequestSchema.parse(clientData);
       
       sendEvent("status", { message: "Creating client profile...", progress: 5 });
       
