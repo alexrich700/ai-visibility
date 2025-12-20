@@ -66,11 +66,15 @@ When generating service groups for monitoring clients:
 Fallback simulation is provided when API keys are unavailable or errors occur.
 
 **Real-time Progress Streaming:**
-- SSE endpoint `/api/monitoring/scan-stream` for real-time scan updates
-- Sends heartbeat on connection, then progress events for each prompt tested
+- Two-step SSE flow:
+  1. POST `/api/monitoring/scan-prepare` - validates and stores scan config temporarily, returns `prepareId`
+  2. GET `/api/monitoring/scan-stream/:prepareId` - EventSource connection for real-time updates
+- Uses browser's native EventSource API (not fetch) for proper SSE handling
+- Frontend stores EventSource in ref with cleanup on component unmount
 - Event types: heartbeat, status, testing, prompt_complete, group_complete, complete, error
-- Disconnect handling: cancels remaining work when client navigates away
+- Disconnect handling: cancels remaining work when client navigates away (via req.on('close'))
 - Progress updates show: current group name, prompt text preview, prompt counter (X of Y)
+- Temporary config cache auto-cleans entries older than 5 minutes
 
 ### Data Layer
 - **ORM**: Drizzle ORM with PostgreSQL dialect
