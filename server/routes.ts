@@ -8,6 +8,7 @@ import { randomUUID } from "crypto";
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 
+
 // Temporary cache for pending scan configurations (for SSE handshake only)
 // Actual scan data is persisted in the database
 interface PendingScanConfig {
@@ -499,7 +500,8 @@ export async function registerRoutes(
         citedCount: 0,
       });
       
-      // Run visibility checks with progress updates
+      // Run visibility checks sequentially with ChatGPT/Gemini calls parallelized within each prompt
+      // Note: runPromptCheck already parallelizes ChatGPT and Gemini API calls internally
       let foundCount = 0;
       let citedCount = 0;
       let chatgptFoundCount = 0;
@@ -508,7 +510,7 @@ export async function registerRoutes(
       
       const location = client.city || undefined;
       
-      // Process prompts group by group for better UX
+      // Process prompts group by group for organized progress updates
       for (const groupName of groupNames) {
         // Exit early if client disconnected
         if (!isClientConnected) {
@@ -537,7 +539,7 @@ export async function registerRoutes(
             progress: progressPercent,
           });
           
-          // Run the check (ChatGPT and Google AI in parallel for speed)
+          // Run the check (ChatGPT and Google AI are called in parallel within runPromptCheck)
           const result = await runPromptCheck(
             prompt.text,
             client.businessName,
@@ -585,6 +587,12 @@ export async function registerRoutes(
         
         // Send group completion event
         sendEvent("group_complete", { groupName });
+      }
+      
+      // Exit early if client disconnected
+      if (!isClientConnected) {
+        console.log("Scan cancelled - client disconnected");
+        return;
       }
       
       // Calculate final scores

@@ -44,9 +44,15 @@ Key endpoints:
 
 ### AI Service Integration
 The backend integrates with three AI platforms:
-1. **OpenAI/ChatGPT** - Uses user's direct `OPENAI_API_KEY` with gpt-5.2 model via chat.completions API (with web search enabled)
-2. **Google Gemini** - Uses Replit AI Integrations (no API key needed, billed to credits)
+1. **OpenAI/ChatGPT** - Uses user's direct `OPENAI_API_KEY` with gpt-5.2 model via Responses API with `web_search` tool for proper grounding
+2. **Google Gemini** - Uses Replit AI Integrations (no API key needed, billed to credits) with `googleSearch` tool for grounding
 3. **Perplexity** - Requires `PERPLEXITY_API_KEY` environment variable
+
+### Scan Performance Optimization
+- **Parallel AI calls**: Each prompt runs ChatGPT and Gemini API calls in parallel (via Promise.all in runPromptCheck)
+- **Sequential prompt processing**: Prompts are processed one at a time for reliable progress tracking
+- **Early termination**: Checks `isClientConnected` flag before/after each API call to stop wasted work
+- **In-flight API calls cannot be cancelled**: But checks immediately after prevent wasted database persistence
 
 Each service is queried with business-specific prompts, and responses are analyzed for business mentions and competitor identification.
 

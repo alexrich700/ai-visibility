@@ -212,35 +212,38 @@ async function queryGemini(prompt: string, businessName: string, url?: string): 
   }
 }
 
-// ChatGPT client using user's direct OpenAI API key with web search enabled
+// ChatGPT client using Responses API with web_search tool for proper grounding
 async function queryChatGPT(prompt: string, businessName: string, url?: string, location?: string): Promise<{ found: boolean; response: string; competitors: string[] }> {
   try {
-    // Build web search options with location if provided
-    const webSearchOptions: any = {};
+    // Build web search tool config with location if provided
+    const webSearchTool: Record<string, any> = { type: "web_search" };
     if (location && location !== "nationwide") {
       const parts = location.split(',').map(p => p.trim());
-      webSearchOptions.user_location = {
+      webSearchTool.user_location = {
         type: "approximate",
-        approximate: {
-          country: "US",
-          city: parts[0] || undefined,
-          region: parts[1] || undefined
-        }
+        country: "US",
+        city: parts[0] || undefined,
+        region: parts[1] || undefined
       };
     }
     
-    // Use gpt-5.2 with web_search_options for real-time search results
-    const response = await openai.chat.completions.create({
+    // Use Responses API with web_search tool for real-time grounded search results
+    // The Responses API uses 'input' and 'instructions' instead of 'messages'
+    const response = await openai.responses.create({
       model: "gpt-5.2",
-      web_search_options: webSearchOptions,
-      messages: [
-        { role: "system", content: "You are a helpful assistant that provides factual, detailed answers about local and national businesses. When asked about service providers, list specific company names with their website URLs when possible. At the end of your response, provide a clean bullet list of just the business names you mentioned (no ratings, reviews, hours, or other details)." },
-        { role: "user", content: prompt }
-      ],
+      tools: [webSearchTool],
+      instructions: "You are a helpful assistant that provides factual, detailed answers about local and national businesses. When asked about service providers, list specific company names with their website URLs when possible. At the end of your response, provide a clean bullet list of just the business names you mentioned (no ratings, reviews, hours, or other details).",
+      input: prompt
     } as any);
 
-    // Extract text from response
-    const text = response.choices[0]?.message?.content || "";
+    // Extract text from Responses API response using output_text
+    const text = (response as any).output_text || "";
+    
+    // Debug: log the raw response structure if text is empty
+    if (!text) {
+      console.log("[CHATGPT] Empty output_text, response structure:", JSON.stringify(response).slice(0, 500));
+    }
+    
     const detection = checkForMentions(text, businessName, url);
     const competitors = extractCompetitors(text, businessName);
     
