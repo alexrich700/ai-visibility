@@ -5,6 +5,16 @@ import { runAudit, generateServiceGroups, generatePromptsForGroups, runPromptChe
 import { auditRequestSchema, leadSchema, monitoringClientRequestSchema } from "@shared/schema";
 import { z } from "zod";
 import { randomUUID } from "crypto";
+import { 
+  analyzeResponse, 
+  aggregateCitations, 
+  computeShareOfVoice, 
+  aggregateCompetitorMentions,
+  aggregateSentiment,
+  calculateAverageRank,
+  countFirstPlace,
+  type Citation
+} from "./services/scan-analytics";
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 
@@ -509,6 +519,15 @@ export async function registerRoutes(
       let googleAIFoundCount = 0;
       let completedCount = 0;
       
+      // Analytics collection for session-level aggregation
+      const allChatgptCitations: Citation[][] = [];
+      const allGoogleAICitations: Citation[][] = [];
+      const allChatgptRanks: (number | null)[] = [];
+      const allGoogleAIRanks: (number | null)[] = [];
+      const allChatgptSentiments: (string | null)[] = [];
+      const allGoogleAISentiments: (string | null)[] = [];
+      const storedResults: { competitors: string | null }[] = [];
+      
       const location = client.city || undefined;
       
       // Flatten all prompts with their group names and original indices for batch processing
@@ -587,7 +606,20 @@ export async function registerRoutes(
           completedCount++;
           const progressPercent = 10 + Math.round((completedCount / totalPrompts) * 85);
           
-          // Store result
+          // Analyze responses for analytics
+          const chatgptAnalytics = analyzeResponse(result.chatgpt.response, client.businessName);
+          const googleAIAnalytics = analyzeResponse(result.googleAI.response, client.businessName);
+          
+          // Collect for session-level aggregation
+          allChatgptCitations.push(chatgptAnalytics.citations);
+          allGoogleAICitations.push(googleAIAnalytics.citations);
+          allChatgptRanks.push(chatgptAnalytics.rank);
+          allGoogleAIRanks.push(googleAIAnalytics.rank);
+          allChatgptSentiments.push(chatgptAnalytics.sentiment);
+          allGoogleAISentiments.push(googleAIAnalytics.sentiment);
+          storedResults.push({ competitors: JSON.stringify(result.competitors) });
+          
+          // Store result with analytics
           await storage.createCheckResult({
             sessionId: session.id,
             clientId: client.id,
@@ -601,6 +633,15 @@ export async function registerRoutes(
             googleAIResponse: result.googleAI.response,
             googleAICited: result.googleAI.cited,
             competitors: JSON.stringify(result.competitors),
+            // Analytics fields
+            chatgptSentiment: chatgptAnalytics.sentiment,
+            googleAISentiment: googleAIAnalytics.sentiment,
+            chatgptRank: chatgptAnalytics.rank,
+            googleAIRank: googleAIAnalytics.rank,
+            chatgptCitations: chatgptAnalytics.citations,
+            googleAICitations: googleAIAnalytics.citations,
+            chatgptSnippet: chatgptAnalytics.snippet,
+            googleAISnippet: googleAIAnalytics.snippet,
           });
           
           if (result.chatgpt.found || result.googleAI.found) foundCount++;
@@ -650,13 +691,28 @@ export async function registerRoutes(
       
       sendEvent("status", { message: "Calculating final scores...", progress: 97 });
       
-      // Update session with final scores
+      // Aggregate session-level analytics
+      const competitorCounts = aggregateCompetitorMentions(storedResults);
+      const shareOfVoice = computeShareOfVoice(client.businessName, foundCount, competitorCounts, totalPrompts);
+      const avgChatgptRank = calculateAverageRank(allChatgptRanks);
+      const avgGoogleAIRank = calculateAverageRank(allGoogleAIRanks);
+      const firstPlaceCount = countFirstPlace(allChatgptRanks) + countFirstPlace(allGoogleAIRanks);
+      const sentimentBreakdown = aggregateSentiment([...allChatgptSentiments, ...allGoogleAISentiments]);
+      const topCitations = aggregateCitations([...allChatgptCitations, ...allGoogleAICitations]);
+      
+      // Update session with final scores and analytics
       await storage.updateCheckSession(session.id, {
         overallScore,
         chatgptScore,
         googleAIScore,
         foundCount,
         citedCount,
+        shareOfVoice,
+        avgChatgptRank,
+        avgGoogleAIRank,
+        firstPlaceCount,
+        sentimentBreakdown,
+        topCitations,
       });
       
       // Update client
