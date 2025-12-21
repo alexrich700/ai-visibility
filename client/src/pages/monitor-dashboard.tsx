@@ -37,8 +37,14 @@ interface Citation {
   count: number;
 }
 
+interface ShareOfVoiceItem {
+  name: string;
+  percentage: number;
+  mentionCount: number;
+}
+
 interface Analytics {
-  shareOfVoice: Record<string, number>;
+  shareOfVoice: ShareOfVoiceItem[];
   avgChatgptRank: number | null;
   avgGoogleAIRank: number | null;
   firstPlaceCount: number;
@@ -53,7 +59,7 @@ interface TrendDataPoint {
   googleAIScore: number;
   foundCount: number;
   citedCount: number;
-  shareOfVoice: Record<string, number> | null;
+  shareOfVoice: ShareOfVoiceItem[] | null;
   avgRank: number | null;
   sentiment: { positive: number; neutral: number; negative: number } | null;
 }
@@ -407,27 +413,26 @@ export default function MonitorDashboard() {
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
-                {Object.keys(analytics.shareOfVoice).length > 0 ? (
+                {analytics.shareOfVoice.length > 0 ? (
                   <div className="space-y-2">
-                    {Object.entries(analytics.shareOfVoice)
-                      .sort((a, b) => b[1] - a[1])
+                    {analytics.shareOfVoice
                       .slice(0, 5)
-                      .map(([name, percentage]) => {
-                        const isClient = name.toLowerCase() === client.businessName.toLowerCase();
+                      .map((item) => {
+                        const isClient = item.name.toLowerCase() === client.businessName.toLowerCase();
                         return (
-                          <div key={name} className="space-y-1">
+                          <div key={item.name} className="space-y-1">
                             <div className="flex items-center justify-between text-sm">
                               <span className={`truncate max-w-[120px] ${isClient ? "font-bold text-[#5599f9]" : "text-gray-700"}`}>
-                                {isClient ? "You" : name}
+                                {isClient ? "You" : item.name}
                               </span>
                               <span className={`${isClient ? "font-bold text-[#5599f9]" : "text-gray-500"}`}>
-                                {percentage}%
+                                {item.percentage}%
                               </span>
                             </div>
                             <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                               <div 
                                 className={`h-full rounded-full ${isClient ? "bg-[#5599f9]" : "bg-gray-300"}`}
-                                style={{ width: `${Math.min(percentage, 100)}%` }}
+                                style={{ width: `${Math.min(item.percentage, 100)}%` }}
                               />
                             </div>
                           </div>
