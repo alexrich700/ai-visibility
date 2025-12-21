@@ -1,4 +1,4 @@
-import { pgTable, text, varchar, integer, jsonb, timestamp, boolean, serial } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, jsonb, timestamp, boolean, serial, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -249,6 +249,13 @@ export const checkSessions = pgTable("check_sessions", {
   totalPrompts: integer("total_prompts").notNull(),
   foundCount: integer("found_count").notNull(),
   citedCount: integer("cited_count").notNull(),
+  // Session-level analytics
+  shareOfVoice: jsonb("share_of_voice"), // [{name, mentionCount, percentage}]
+  avgChatgptRank: real("avg_chatgpt_rank"),
+  avgGoogleAIRank: real("avg_google_ai_rank"),
+  firstPlaceCount: integer("first_place_count"), // How many times ranked #1
+  sentimentBreakdown: jsonb("sentiment_breakdown"), // {positive, neutral, negative}
+  topCitations: jsonb("top_citations"), // [{domain, count}]
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -278,6 +285,15 @@ export const checkResults = pgTable("check_results", {
   googleAIResponse: text("google_ai_response"),
   googleAICited: boolean("google_ai_cited").default(false),
   competitors: text("competitors"), // JSON string of competitor names
+  // Analytics fields
+  chatgptSentiment: text("chatgpt_sentiment"), // positive, neutral, negative
+  googleAISentiment: text("google_ai_sentiment"),
+  chatgptRank: integer("chatgpt_rank"), // Position in response (1 = first mentioned)
+  googleAIRank: integer("google_ai_rank"),
+  chatgptCitations: jsonb("chatgpt_citations"), // Array of {url, domain} objects
+  googleAICitations: jsonb("google_ai_citations"),
+  chatgptSnippet: text("chatgpt_snippet"), // Context around brand mention
+  googleAISnippet: text("google_ai_snippet"),
   checkedAt: timestamp("checked_at").defaultNow().notNull(),
 });
 
