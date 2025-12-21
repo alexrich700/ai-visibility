@@ -1,0 +1,410 @@
+# AI Visibility Tracker - Feedback & Enhancement Roadmap
+
+## Overview
+
+This document outlines feedback and recommended enhancements for our internal AI visibility tracking tool. The recommendations are based on competitive analysis of enterprise GEO platforms (Goodie, Profound, Writesonic, AthenaHQ, etc.) that charge $400-600/month for similar functionality.
+
+---
+
+## What's Working Well
+
+### Core Architecture
+- **Group-based organization** (10 service categories × 5 prompts each) is a scalable, manageable framework
+- **Multi-platform tracking** (ChatGPT + Google AI) captures the critical platform differential
+- **Prompt intent variety** covers the full buyer journey: highest-rated, affordable, emergency, comparison, direct hire
+
+### Current Metrics
+- Overall Score (84/100) ✓
+- Visibility Rate (84%) ✓
+- Citation Rate (53%) ✓
+- Platform-specific breakdowns ✓
+
+---
+
+## Priority Enhancements
+
+### P0 - Critical (Add First)
+
+#### 1. Competitor Share of Voice
+**Why:** This is the #1 feature every enterprise GEO tool emphasizes. Without it, we can't show clients *relative* performance.
+
+**Implementation:**
+- Add a `competitors` table linked to each client/business
+- For each prompt, track which competitors were mentioned in the AI response
+- Calculate: `(client_mentions / total_prompts) vs (competitor_mentions / total_prompts)`
+
+**UI Addition:**
+```
+Share of Voice (Last 30 Days)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Building Brands Marketing  ████████████████░░░░  84%
+Competitor A               ████████████░░░░░░░░  62%
+Competitor B               ████████░░░░░░░░░░░░  41%
+Competitor C               ████░░░░░░░░░░░░░░░░  23%
+```
+
+#### 2. Citation Source Extraction
+**Why:** Knowing *which sources* AI platforms reference tells us where to focus optimization (GBP, Yelp, directories, client website, etc.)
+
+**Implementation:**
+- Parse AI responses for URLs/domains mentioned
+- Store in a `citation_sources` table with fields: `prompt_id`, `source_url`, `source_domain`, `platform`
+- Aggregate to show which sources drive visibility
+
+**Data to Capture from API Responses:**
+- OpenAI: Parse response text for URLs, extract any citations embedded in the answer
+- Gemini: Extract grounding metadata that includes source URLs
+
+**UI Addition:**
+```
+Top Citation Sources
+━━━━━━━━━━━━━━━━━━━
+1. Google Business Profile (cited 23 times)
+2. buildingbrandsmarketing.com (cited 18 times)
+3. Yelp (cited 12 times)
+4. Clutch.co (cited 8 times)
+```
+
+#### 3. Response Position/Prominence Tracking
+**Why:** Being mentioned #1 in a list vs #7 has dramatically different value.
+
+**Implementation:**
+Add `position` field to prompt results:
+- `1` = First mentioned / Top recommendation
+- `2-3` = Top 3
+- `4-10` = Mentioned in list
+- `null` = Found but not in ranked context
+
+**New Metric:**
+```
+Average Position: 2.3 (across all mentions)
+#1 Recommendations: 12 of 46 mentions (26%)
+```
+
+---
+
+### P1 - High Priority (Add Second)
+
+#### 4. Sentiment Analysis
+**Why:** "You might consider Building Brands" vs "Building Brands is the top choice" are very different.
+
+**Implementation Options:**
+- **Simple:** Keyword-based (look for "best", "top", "recommended", "leading" vs neutral mentions)
+- **Better:** Run a secondary API call to classify sentiment of the mention context
+- Store as: `positive`, `neutral`, `negative`
+
+**UI Addition:**
+```
+Mention Sentiment
+━━━━━━━━━━━━━━━━
+Positive     ████████████████░░░░  78%
+Neutral      ████░░░░░░░░░░░░░░░░  18%
+Negative     █░░░░░░░░░░░░░░░░░░░   4%
+```
+
+#### 5. Full Response Storage & Snippets
+**Why:** For internal analysis and client proof, we need to see exactly what the AI said.
+
+**Implementation:**
+- Store full `response_text` for each prompt/platform
+- Extract and store the specific snippet where client was mentioned
+- Add screenshot capability for audit trails (optional but valuable)
+
+**UI Addition:**
+Add expandable "View Response" for each prompt result showing:
+- Full AI response
+- Highlighted mention of client
+- Competitors mentioned in same response
+
+#### 6. Historical Trending with Multiple Data Points
+**Why:** Current "Score Trend" shows only one point. We need to show improvement over time.
+
+**Implementation:**
+- Store snapshot data with timestamps
+- Run checks on a schedule (weekly recommended, bi-weekly minimum)
+- Build trend visualization with 4-8+ data points
+
+**UI Enhancement:**
+```
+Score Trend (Last 90 Days)
+100│                              ●
+ 75│          ●────●────●────●───╱
+ 50│    ●────╱
+ 25│───╱
+  0└────────────────────────────────
+    Oct 1   Nov 1   Dec 1   Dec 20
+```
+
+---
+
+### P2 - Nice to Have (Future Iterations)
+
+#### 7. Add Perplexity Tracking
+- Growing platform, differentiates our tracking
+- API available for programmatic queries
+
+#### 8. Add Claude Tracking
+- Anthropic's API can be used similarly
+- Captures different AI ecosystem
+
+#### 9. Prompt Performance Heatmap
+Show which prompt *types* perform best:
+```
+                    ChatGPT  Google AI
+Highest-rated         ●●●●●    ●●●●○
+Most affordable       ●●●○○    ●●●●●
+Emergency/urgent      ●●○○○    ●●●○○
+Comparison            ●●●●○    ●●●●○
+Direct hire           ●●●●●    ●●●●●
+
+● = Found/Cited  ○ = Not Found
+```
+
+#### 10. Actionable Recommendations Engine
+Based on gaps identified, auto-generate suggestions:
+- "Not appearing for 'affordable' prompts → Consider adding pricing to GBP"
+- "Competitor X mentioned more on Yelp-sourced answers → Improve Yelp profile"
+
+#### 11. Client-Facing Report Export
+- PDF export with charts
+- Executive summary auto-generated
+- Before/after comparisons
+
+---
+
+## Database Schema Additions
+
+```sql
+-- Competitors table
+CREATE TABLE competitors (
+    id SERIAL PRIMARY KEY,
+    client_id INTEGER REFERENCES clients(id),
+    name VARCHAR(255),
+    website VARCHAR(255),
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Enhanced prompt_results table additions
+ALTER TABLE prompt_results ADD COLUMN position INTEGER;
+ALTER TABLE prompt_results ADD COLUMN sentiment VARCHAR(20); -- positive, neutral, negative
+ALTER TABLE prompt_results ADD COLUMN full_response TEXT;
+ALTER TABLE prompt_results ADD COLUMN mention_snippet TEXT;
+
+-- Competitor mentions tracking
+CREATE TABLE competitor_mentions (
+    id SERIAL PRIMARY KEY,
+    prompt_result_id INTEGER REFERENCES prompt_results(id),
+    competitor_id INTEGER REFERENCES competitors(id),
+    position INTEGER,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Citation sources tracking
+CREATE TABLE citation_sources (
+    id SERIAL PRIMARY KEY,
+    prompt_result_id INTEGER REFERENCES prompt_results(id),
+    source_url TEXT,
+    source_domain VARCHAR(255),
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Historical snapshots for trending
+CREATE TABLE visibility_snapshots (
+    id SERIAL PRIMARY KEY,
+    client_id INTEGER REFERENCES clients(id),
+    snapshot_date DATE,
+    overall_score DECIMAL(5,2),
+    visibility_rate DECIMAL(5,2),
+    citation_rate DECIMAL(5,2),
+    chatgpt_score INTEGER,
+    google_ai_score INTEGER,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+---
+
+## API Response Parsing Enhancements
+
+### OpenAI (Responses API with web_search)
+
+```javascript
+// After getting response, extract additional data:
+
+function parseOpenAIResponse(response, clientName, competitors) {
+  const text = response.content.map(i => i.text || "").join("\n");
+  
+  return {
+    fullResponse: text,
+    
+    // Extract mention snippet
+    mentionSnippet: extractMentionContext(text, clientName),
+    
+    // Determine position (1st, 2nd, etc.)
+    position: findMentionPosition(text, clientName),
+    
+    // Simple sentiment analysis
+    sentiment: analyzeSentiment(text, clientName),
+    
+    // Find competitor mentions
+    competitorMentions: competitors.map(comp => ({
+      name: comp.name,
+      found: text.toLowerCase().includes(comp.name.toLowerCase()),
+      position: findMentionPosition(text, comp.name)
+    })),
+    
+    // Extract URLs/sources
+    citationSources: extractUrls(text)
+  };
+}
+
+function findMentionPosition(text, brandName) {
+  // Look for numbered lists, "first", "top", etc.
+  const lines = text.split('\n');
+  let position = null;
+  
+  lines.forEach((line, index) => {
+    if (line.toLowerCase().includes(brandName.toLowerCase())) {
+      // Check for numbered position
+      const numMatch = line.match(/^(\d+)[.\)]/);
+      if (numMatch) {
+        position = parseInt(numMatch[1]);
+      }
+    }
+  });
+  
+  return position;
+}
+
+function analyzeSentiment(text, brandName) {
+  const context = extractMentionContext(text, brandName);
+  if (!context) return null;
+  
+  const positiveWords = ['best', 'top', 'leading', 'excellent', 'highly recommended', 'outstanding'];
+  const negativeWords = ['avoid', 'poor', 'disappointing', 'issues', 'complaints'];
+  
+  const contextLower = context.toLowerCase();
+  const hasPositive = positiveWords.some(w => contextLower.includes(w));
+  const hasNegative = negativeWords.some(w => contextLower.includes(w));
+  
+  if (hasPositive && !hasNegative) return 'positive';
+  if (hasNegative && !hasPositive) return 'negative';
+  return 'neutral';
+}
+
+function extractUrls(text) {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const urls = text.match(urlRegex) || [];
+  return urls.map(url => ({
+    url: url,
+    domain: new URL(url).hostname
+  }));
+}
+```
+
+### Gemini (with googleSearch grounding)
+
+```javascript
+// Gemini returns grounding metadata - extract it:
+
+function parseGeminiResponse(response, clientName, competitors) {
+  const text = response.candidates[0].content.parts.map(p => p.text).join("\n");
+  
+  // Extract grounding sources if available
+  const groundingMetadata = response.candidates[0].groundingMetadata || {};
+  const groundingSources = groundingMetadata.groundingChunks || [];
+  
+  return {
+    fullResponse: text,
+    mentionSnippet: extractMentionContext(text, clientName),
+    position: findMentionPosition(text, clientName),
+    sentiment: analyzeSentiment(text, clientName),
+    competitorMentions: competitors.map(comp => ({
+      name: comp.name,
+      found: text.toLowerCase().includes(comp.name.toLowerCase()),
+      position: findMentionPosition(text, comp.name)
+    })),
+    
+    // Gemini-specific: grounding sources
+    citationSources: groundingSources.map(source => ({
+      url: source.web?.uri || null,
+      title: source.web?.title || null,
+      domain: source.web?.uri ? new URL(source.web.uri).hostname : null
+    }))
+  };
+}
+```
+
+---
+
+## UI Component Additions
+
+### 1. Competitor Comparison Card
+
+```jsx
+// New component for Share of Voice visualization
+<CompetitorComparison 
+  client={{ name: "Building Brands Marketing", score: 84 }}
+  competitors={[
+    { name: "Competitor A", score: 62 },
+    { name: "Competitor B", score: 41 },
+    { name: "Competitor C", score: 23 }
+  ]}
+/>
+```
+
+### 2. Citation Sources Panel
+
+```jsx
+// Show where AI is pulling information from
+<CitationSources 
+  sources={[
+    { domain: "google.com/business", count: 23, icon: "gbp" },
+    { domain: "buildingbrandsmarketing.com", count: 18, icon: "website" },
+    { domain: "yelp.com", count: 12, icon: "yelp" },
+    { domain: "clutch.co", count: 8, icon: "directory" }
+  ]}
+/>
+```
+
+### 3. Enhanced Prompt Results Table
+
+Add columns:
+- Position (1st, 2nd, 3rd, or just "Mentioned")
+- Sentiment indicator (green/yellow/red dot)
+- Competitors mentioned (expandable)
+- View full response (modal)
+
+---
+
+## Testing Recommendations
+
+### Response Variability
+- Run the same prompt 2-3x over a week
+- AI responses can vary; capturing this shows stability of visibility
+
+### Prompt Refinement
+- Track which prompt phrasings yield best results
+- A/B test prompt variations per category
+
+---
+
+## Questions for Discussion
+
+1. **Check frequency:** Weekly vs bi-weekly for historical trending?
+2. **Competitor limit:** How many competitors to track per client? (Suggest 3-5)
+3. **Storage:** Full response text could get large - archive older responses?
+4. **Perplexity/Claude:** Priority for adding these platforms?
+
+---
+
+## Summary
+
+The current tool captures the fundamentals well. The critical gaps for making this actionable for our internal team are:
+
+1. **Competitor Share of Voice** - Know relative performance
+2. **Citation Source Extraction** - Know where to optimize
+3. **Position Tracking** - Quantify quality of mentions
+4. **Historical Trending** - Show improvement over time
+
+These additions would bring our internal tool to parity with $500/month enterprise platforms, with the added benefit of being customized for local business use cases.
