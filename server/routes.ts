@@ -15,6 +15,7 @@ import {
   countFirstPlace,
   type Citation
 } from "./services/scan-analytics";
+import { streamExportZip } from "./services/export-generator";
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 
@@ -779,7 +780,7 @@ export async function registerRoutes(
       
       // Build historical trend data from all sessions
       const trendData = sessions.slice().reverse().map(s => ({
-        date: s.completedAt || s.startedAt,
+        date: s.createdAt,
         overallScore: s.overallScore,
         chatgptScore: s.chatgptScore,
         googleAIScore: s.googleAIScore,
@@ -804,6 +805,59 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Get dashboard error:", error);
       res.status(500).json({ error: "Failed to get dashboard data" });
+    }
+  });
+
+  // Export monitoring data as ZIP
+  app.get("/api/monitoring/exports/:id", async (req, res) => {
+    try {
+      const clientId = parseInt(req.params.id);
+      const { startDate, endDate } = req.query;
+      
+      const client = await storage.getMonitoringClientById(clientId);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+      
+      const groups = await storage.getGroupsByClientId(clientId);
+      const allSessions = await storage.getCheckSessionsByClientId(clientId);
+      
+      // Parse date range (default to last 30 days)
+      const end = endDate ? new Date(String(endDate)) : new Date();
+      const start = startDate 
+        ? new Date(String(startDate)) 
+        : new Date(end.getTime() - 30 * 24 * 60 * 60 * 1000);
+      
+      // Filter sessions by date range
+      const sessions = allSessions.filter(s => {
+        const sessionDate = new Date(s.createdAt);
+        return sessionDate >= start && sessionDate <= end;
+      });
+      
+      if (sessions.length === 0) {
+        return res.status(404).json({ error: "No data found for the selected date range" });
+      }
+      
+      // Get all results from sessions in range
+      const results: any[] = [];
+      for (const session of sessions) {
+        const sessionResults = await storage.getCheckResultsBySessionId(session.id);
+        results.push(...sessionResults);
+      }
+      
+      // Stream the ZIP file
+      await streamExportZip(res, {
+        client,
+        groups,
+        sessions,
+        results,
+        dateRange: { start, end },
+      });
+    } catch (error) {
+      console.error("Export error:", error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Failed to generate export" });
+      }
     }
   });
 

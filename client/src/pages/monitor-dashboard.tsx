@@ -26,8 +26,10 @@ import {
 import {
   TrendingUp, TrendingDown, Eye, Target, Calendar, Clock, Settings,
   ArrowLeft, RefreshCw, Loader2, CheckCircle2, XCircle, Minus, Building2,
-  Users, Link2, Award, ThumbsUp, ThumbsDown, Meh, ExternalLink
+  Users, Link2, Award, ThumbsUp, ThumbsDown, Meh, ExternalLink, Download
 } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import logoIcon from "@assets/images_1765741951084.png";
 import type { MonitoringClient, MonitoringGroup, CheckSession, CheckResult } from "@shared/schema";
@@ -89,6 +91,14 @@ export default function MonitorDashboard() {
   const [selectedGroup, setSelectedGroup] = useState<string>("all");
   const [timeRange, setTimeRange] = useState<string>("30");
   const [selectedResult, setSelectedResult] = useState<CheckResult | null>(null);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportStartDate, setExportStartDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().split("T")[0];
+  });
+  const [exportEndDate, setExportEndDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [isExporting, setIsExporting] = useState(false);
 
   const { data, isLoading, refetch, isRefetching } = useQuery<DashboardData>({
     queryKey: ["/api/monitoring/dashboard", clientId],
@@ -140,6 +150,12 @@ export default function MonitorDashboard() {
   
   const visibilityRate = totalPrompts > 0 ? Math.round((foundCount / totalPrompts) * 100) : 0;
   const citationRate = totalPrompts > 0 ? Math.round((citedCount / totalPrompts) * 100) : 0;
+  
+  // Per-platform visibility metrics
+  const chatgptFoundCount = latestResults.filter(r => r.chatgptFound).length;
+  const googleAIFoundCount = latestResults.filter(r => r.googleAIFound).length;
+  const chatgptVisibility = totalPrompts > 0 ? Math.round((chatgptFoundCount / totalPrompts) * 100) : 0;
+  const googleAIVisibility = totalPrompts > 0 ? Math.round((googleAIFoundCount / totalPrompts) * 100) : 0;
 
   // Prepare chart data
   const sessionChartData = sessions.slice().reverse().map((session) => ({
@@ -190,6 +206,16 @@ export default function MonitorDashboard() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setExportDialogOpen(true)}
+              className="flex items-center gap-2"
+              data-testid="button-export"
+            >
+              <Download className="w-4 h-4" />
+              Export
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -294,6 +320,34 @@ export default function MonitorDashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Platform Visibility Breakdown */}
+        <Card className="shadow-2xl shadow-blue-900/5">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-8 flex-wrap">
+              <p className="text-xs uppercase font-bold tracking-wider text-gray-500">Platform Visibility</p>
+              <div className="flex items-center gap-6 flex-1">
+                <div className="flex items-center gap-3" data-testid="stat-chatgpt-visibility">
+                  <div className="w-3 h-3 rounded-full bg-[#5599f9]" />
+                  <div>
+                    <span className="text-2xl font-bold text-gray-900">{chatgptVisibility}%</span>
+                    <span className="text-sm text-gray-500 ml-2">ChatGPT</span>
+                  </div>
+                  <span className="text-xs text-gray-400">({chatgptFoundCount}/{totalPrompts})</span>
+                </div>
+                <div className="w-px h-8 bg-gray-200" />
+                <div className="flex items-center gap-3" data-testid="stat-google-visibility">
+                  <div className="w-3 h-3 rounded-full bg-[#ffb41c]" />
+                  <div>
+                    <span className="text-2xl font-bold text-gray-900">{googleAIVisibility}%</span>
+                    <span className="text-sm text-gray-500 ml-2">Google AI</span>
+                  </div>
+                  <span className="text-xs text-gray-400">({googleAIFoundCount}/{totalPrompts})</span>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Charts Row */}
         <div className="grid md:grid-cols-3 gap-6">
@@ -761,6 +815,90 @@ export default function MonitorDashboard() {
               )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Export Dialog */}
+      <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-bold tracking-tight">Export Data</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <p className="text-sm text-gray-600">
+              Download your visibility data as a ZIP file. This export is formatted for use with AI assistants like Claude or ChatGPT to help optimize your website.
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="export-start">Start Date</Label>
+                <Input
+                  id="export-start"
+                  type="date"
+                  value={exportStartDate}
+                  onChange={(e) => setExportStartDate(e.target.value)}
+                  data-testid="input-export-start-date"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="export-end">End Date</Label>
+                <Input
+                  id="export-end"
+                  type="date"
+                  value={exportEndDate}
+                  onChange={(e) => setExportEndDate(e.target.value)}
+                  data-testid="input-export-end-date"
+                />
+              </div>
+            </div>
+            <div className="text-xs text-gray-500">
+              <p className="font-medium mb-1">Export includes:</p>
+              <ul className="list-disc list-inside space-y-0.5">
+                <li>README with AI assistant instructions</li>
+                <li>Summary of your visibility metrics</li>
+                <li>ChatGPT results (prompts, responses, citations)</li>
+                <li>Google AI results (prompts, responses, citations)</li>
+              </ul>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setExportDialogOpen(false)} data-testid="button-cancel-export">
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                setIsExporting(true);
+                try {
+                  const url = `/api/monitoring/exports/${clientId}?startDate=${exportStartDate}&endDate=${exportEndDate}`;
+                  const response = await fetch(url);
+                  if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || "Export failed");
+                  }
+                  const blob = await response.blob();
+                  const downloadUrl = window.URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = downloadUrl;
+                  a.download = `visibility-export-${client.businessName.replace(/[^a-zA-Z0-9]/g, "-")}-${exportEndDate}.zip`;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  window.URL.revokeObjectURL(downloadUrl);
+                  setExportDialogOpen(false);
+                } catch (error) {
+                  console.error("Export error:", error);
+                  alert(error instanceof Error ? error.message : "Export failed");
+                } finally {
+                  setIsExporting(false);
+                }
+              }}
+              disabled={isExporting}
+              className="flex items-center gap-2"
+              data-testid="button-download-export"
+            >
+              {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              {isExporting ? "Preparing..." : "Download ZIP"}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
