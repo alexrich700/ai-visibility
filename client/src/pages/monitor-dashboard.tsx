@@ -119,6 +119,7 @@ export default function MonitorDashboard() {
   });
   const [exportEndDate, setExportEndDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [isExporting, setIsExporting] = useState(false);
+  const [displayLimit, setDisplayLimit] = useState(20);
 
   const { data, isLoading, refetch, isRefetching } = useQuery<DashboardData>({
     queryKey: ["/api/monitoring/dashboard", clientId],
@@ -812,7 +813,7 @@ export default function MonitorDashboard() {
           </CardHeader>
           <CardContent>
             <div className="divide-y divide-gray-100">
-              {filteredResults.slice(0, 20).map((result) => {
+              {filteredResults.slice(0, displayLimit).map((result) => {
                 const groupName = resultsByGroup.find(g => g.groupId === result.groupId)?.groupName;
                 const isVisible = result.chatgptFound || result.googleAIFound;
                 const isCited = result.chatgptCited || result.googleAICited;
@@ -856,10 +857,14 @@ export default function MonitorDashboard() {
               })}
             </div>
             
-            {filteredResults.length > 20 && (
+            {filteredResults.length > displayLimit && (
               <div className="pt-4 text-center">
-                <Button variant="outline" data-testid="button-load-more">
-                  Load More ({filteredResults.length - 20} remaining)
+                <Button 
+                  variant="outline" 
+                  data-testid="button-load-more"
+                  onClick={() => setDisplayLimit(prev => prev + 20)}
+                >
+                  Load More ({filteredResults.length - displayLimit} remaining)
                 </Button>
               </div>
             )}
