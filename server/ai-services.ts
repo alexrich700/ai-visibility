@@ -311,6 +311,51 @@ const NON_BUSINESS_PHRASES = new Set([
   'additional tips',
 ]);
 
+// Major US cities that should NOT be treated as competitor names
+const MAJOR_US_CITIES = new Set([
+  'new york', 'los angeles', 'chicago', 'houston', 'phoenix', 'philadelphia',
+  'san antonio', 'san diego', 'dallas', 'san jose', 'austin', 'jacksonville',
+  'fort worth', 'columbus', 'charlotte', 'san francisco', 'indianapolis',
+  'seattle', 'denver', 'washington', 'boston', 'el paso', 'nashville',
+  'detroit', 'oklahoma city', 'portland', 'las vegas', 'memphis', 'louisville',
+  'baltimore', 'milwaukee', 'albuquerque', 'tucson', 'fresno', 'sacramento',
+  'mesa', 'kansas city', 'atlanta', 'miami', 'colorado springs', 'raleigh',
+  'omaha', 'long beach', 'virginia beach', 'oakland', 'minneapolis', 'tulsa',
+  'arlington', 'tampa', 'new orleans', 'wichita', 'cleveland', 'bakersfield',
+  'aurora', 'anaheim', 'honolulu', 'santa ana', 'riverside', 'corpus christi',
+  'lexington', 'stockton', 'henderson', 'saint paul', 'st louis', 'cincinnati',
+  'pittsburgh', 'greensboro', 'anchorage', 'plano', 'lincoln', 'orlando',
+  'irvine', 'newark', 'toledo', 'durham', 'chula vista', 'fort wayne',
+  'jersey city', 'st. petersburg', 'laredo', 'scottsdale', 'gilbert', 'lubbock',
+  'madison', 'reno', 'buffalo', 'north las vegas', 'chandler', 'glendale',
+  'irving', 'hialeah', 'garland', 'fremont', 'baton rouge', 'richmond',
+  'boise', 'des moines', 'spokane', 'san bernardino', 'modesto', 'birmingham',
+  'tacoma', 'fontana', 'rochester', 'oxnard', 'moreno valley', 'fayetteville',
+  'glendale', 'yonkers', 'worcester', 'huntington beach', 'salt lake city',
+  'grand rapids', 'amarillo', 'montgomery', 'little rock', 'akron', 'huntsville',
+  'augusta', 'grand prairie', 'overland park', 'tallahassee', 'mobile', 'knoxville',
+  'shreveport', 'tempe', 'brownsville', 'newport news', 'chattanooga', 'fort lauderdale',
+  'providence', 'ontario', 'peoria', 'rancho cucamonga', 'oceanside', 'santa clarita',
+  'garden grove', 'vancouver', 'springfield', 'pembroke pines', 'cape coral', 'sioux falls',
+  'mckinney', 'frisco', 'keller', 'allen', 'carrollton', 'lewisville', 'richardson',
+  'mesquite', 'denton', 'midland', 'abilene', 'beaumont', 'waco', 'round rock',
+  'pasadena', 'mcallen', 'killeen', 'sugar land', 'the woodlands', 'conroe',
+]);
+
+// US state names and abbreviations
+const US_STATES = new Set([
+  'alabama', 'al', 'alaska', 'ak', 'arizona', 'az', 'arkansas', 'ar', 'california', 'ca',
+  'colorado', 'co', 'connecticut', 'ct', 'delaware', 'de', 'florida', 'fl', 'georgia', 'ga',
+  'hawaii', 'hi', 'idaho', 'id', 'illinois', 'il', 'indiana', 'in', 'iowa', 'ia',
+  'kansas', 'ks', 'kentucky', 'ky', 'louisiana', 'la', 'maine', 'me', 'maryland', 'md',
+  'massachusetts', 'ma', 'michigan', 'mi', 'minnesota', 'mn', 'mississippi', 'ms', 'missouri', 'mo',
+  'montana', 'mt', 'nebraska', 'ne', 'nevada', 'nv', 'new hampshire', 'nh', 'new jersey', 'nj',
+  'new mexico', 'nm', 'new york', 'ny', 'north carolina', 'nc', 'north dakota', 'nd', 'ohio', 'oh',
+  'oklahoma', 'ok', 'oregon', 'or', 'pennsylvania', 'pa', 'rhode island', 'ri', 'south carolina', 'sc',
+  'south dakota', 'sd', 'tennessee', 'tn', 'texas', 'tx', 'utah', 'ut', 'vermont', 'vt',
+  'virginia', 'va', 'washington', 'wa', 'west virginia', 'wv', 'wisconsin', 'wi', 'wyoming', 'wy',
+]);
+
 // Check if a name is a valid business name (not a generic term)
 function isValidBusinessName(name: string): boolean {
   const lowerName = name.toLowerCase().trim();
@@ -358,6 +403,26 @@ function isValidBusinessName(name: string): boolean {
   const actionVerbs = ['get', 'check', 'read', 'view', 'find', 'look', 'compare', 'request', 'contact', 'learn', 'see', 'visit', 'call', 'ask', 'choose', 'hire', 'consider'];
   if (actionVerbs.some(verb => lowerName.startsWith(verb + ' '))) {
     return false;
+  }
+  
+  // Reject city names - but ONLY exact matches or "City, State" patterns
+  // Do NOT reject legitimate businesses like "Fort Worth Handyman" or "Dallas Electric"
+  
+  // Pattern 1: Exact city name match (e.g., "Fort Worth" as the complete name)
+  if (MAJOR_US_CITIES.has(lowerName)) {
+    return false;
+  }
+  
+  // Pattern 2: "City, ST" or "City, State" format (e.g., "Fort Worth, TX" or "Dallas, Texas")
+  // This pattern requires a comma followed by a state abbreviation or name
+  const cityCommaStatePattern = /^(.+),\s*([a-z]{2}|[a-z]+)$/i;
+  const cityStateMatch = lowerName.match(cityCommaStatePattern);
+  if (cityStateMatch) {
+    const potentialState = cityStateMatch[2]?.trim();
+    // Only reject if the part after comma is a valid US state
+    if (potentialState && US_STATES.has(potentialState)) {
+      return false;
+    }
   }
   
   // Reject single-word generic terms
