@@ -68,7 +68,15 @@ When generating service groups for monitoring clients:
 **Citation Detection Logic:**
 1. First checks if brand's exact domain is cited in AI response URLs
 2. If no domain match, checks if business name is mentioned in response text
-3. Fallback checks for domain mentioned in text without full URL
+3. Brand aliases are also checked - alternative business names (e.g., "SmartFix", "The Smart Fix", "BBM") stored in `brandAliases` field
+4. Fallback checks for domain mentioned in text without full URL
+
+**Brand Aliases Feature:**
+- Clients can configure alternative business names via the settings page
+- Stored as `text[]` array in the `monitoring_clients` table
+- The `generateNameVariations()` function creates variations from both the primary name and all aliases
+- Aliases are threaded through the entire query chain: `runPromptCheck` → `queryOpenAI`/`queryGoogleAI` → `checkForMentions`
+- Uses Set-based deduplication to avoid redundant comparisons
 
 Fallback simulation is provided when API keys are unavailable or errors occur.
 

@@ -8,6 +8,7 @@ import Admin from "@/pages/admin";
 import AdminAuditView from "@/pages/admin-audit-view";
 import MonitorSetup from "@/pages/monitor-setup";
 import MonitorDashboard from "@/pages/monitor-dashboard";
+import MonitorSettings from "@/pages/monitor-settings";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -18,6 +19,7 @@ function Router() {
       <Route path="/admin/audit/:id" component={AdminAuditView} />
       <Route path="/monitor/setup" component={MonitorSetup} />
       <Route path="/monitor/dashboard/:id" component={MonitorDashboard} />
+      <Route path="/monitor/settings/:id" component={MonitorSettings} />
       <Route component={NotFound} />
     </Switch>
   );

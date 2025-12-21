@@ -327,7 +327,8 @@ export async function registerRoutes(
           prompt.text,
           client.businessName,
           client.domain,
-          location
+          location,
+          client.brandAliases || undefined
         );
         
         // Store result with sessionId
@@ -597,7 +598,8 @@ export async function registerRoutes(
               item.prompt.text,
               client.businessName,
               client.domain,
-              location
+              location,
+              client.brandAliases || undefined
             );
             
             return { ...item, result };
@@ -911,6 +913,188 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Get clients error:", error);
       res.status(500).json({ error: "Failed to get clients" });
+    }
+  });
+
+  // ============================================
+  // CLIENT SETTINGS ENDPOINTS
+  // ============================================
+
+  // Update monitoring client (for settings page)
+  app.patch("/api/monitoring/clients/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { businessName, domain, industry, scope, city, brandAliases, checkFrequencyDays, isActive } = req.body;
+      
+      const updateData: any = {};
+      if (businessName !== undefined) updateData.businessName = businessName;
+      if (domain !== undefined) updateData.domain = domain;
+      if (industry !== undefined) updateData.industry = industry;
+      if (scope !== undefined) updateData.scope = scope;
+      if (city !== undefined) updateData.city = city;
+      if (brandAliases !== undefined) updateData.brandAliases = brandAliases;
+      if (checkFrequencyDays !== undefined) updateData.checkFrequencyDays = checkFrequencyDays;
+      if (isActive !== undefined) updateData.isActive = isActive;
+      
+      const client = await storage.updateMonitoringClient(id, updateData);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+      
+      res.json(client);
+    } catch (error) {
+      console.error("Update client error:", error);
+      res.status(500).json({ error: "Failed to update client" });
+    }
+  });
+
+  // ============================================
+  // GROUPS CRUD ENDPOINTS
+  // ============================================
+
+  // Get groups for a client
+  app.get("/api/monitoring/clients/:id/groups", async (req, res) => {
+    try {
+      const clientId = parseInt(req.params.id);
+      const groups = await storage.getGroupsByClientId(clientId);
+      res.json(groups);
+    } catch (error) {
+      console.error("Get groups error:", error);
+      res.status(500).json({ error: "Failed to get groups" });
+    }
+  });
+
+  // Create a new group
+  app.post("/api/monitoring/clients/:id/groups", async (req, res) => {
+    try {
+      const clientId = parseInt(req.params.id);
+      const { name, description, isHighLevelCategory } = req.body;
+      
+      if (!name) {
+        return res.status(400).json({ error: "Group name is required" });
+      }
+      
+      const group = await storage.createGroup({
+        clientId,
+        name,
+        description: description || null,
+        isHighLevelCategory: isHighLevelCategory || false,
+        isActive: true,
+      });
+      
+      res.json(group);
+    } catch (error) {
+      console.error("Create group error:", error);
+      res.status(500).json({ error: "Failed to create group" });
+    }
+  });
+
+  // Update a group
+  app.patch("/api/monitoring/groups/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { name, description, isHighLevelCategory, isActive } = req.body;
+      
+      const updateData: any = {};
+      if (name !== undefined) updateData.name = name;
+      if (description !== undefined) updateData.description = description;
+      if (isHighLevelCategory !== undefined) updateData.isHighLevelCategory = isHighLevelCategory;
+      if (isActive !== undefined) updateData.isActive = isActive;
+      
+      const group = await storage.updateGroup(id, updateData);
+      if (!group) {
+        return res.status(404).json({ error: "Group not found" });
+      }
+      
+      res.json(group);
+    } catch (error) {
+      console.error("Update group error:", error);
+      res.status(500).json({ error: "Failed to update group" });
+    }
+  });
+
+  // Delete a group (and its prompts)
+  app.delete("/api/monitoring/groups/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteGroup(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete group error:", error);
+      res.status(500).json({ error: "Failed to delete group" });
+    }
+  });
+
+  // ============================================
+  // PROMPTS CRUD ENDPOINTS
+  // ============================================
+
+  // Get prompts for a group
+  app.get("/api/monitoring/groups/:id/prompts", async (req, res) => {
+    try {
+      const groupId = parseInt(req.params.id);
+      const prompts = await storage.getPromptsByGroupId(groupId);
+      res.json(prompts);
+    } catch (error) {
+      console.error("Get prompts error:", error);
+      res.status(500).json({ error: "Failed to get prompts" });
+    }
+  });
+
+  // Create a new prompt
+  app.post("/api/monitoring/groups/:id/prompts", async (req, res) => {
+    try {
+      const groupId = parseInt(req.params.id);
+      const { promptText } = req.body;
+      
+      if (!promptText) {
+        return res.status(400).json({ error: "Prompt text is required" });
+      }
+      
+      const prompt = await storage.createPrompt({
+        groupId,
+        promptText,
+        isActive: true,
+      });
+      
+      res.json(prompt);
+    } catch (error) {
+      console.error("Create prompt error:", error);
+      res.status(500).json({ error: "Failed to create prompt" });
+    }
+  });
+
+  // Update a prompt
+  app.patch("/api/monitoring/prompts/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { promptText, isActive } = req.body;
+      
+      const updateData: any = {};
+      if (promptText !== undefined) updateData.promptText = promptText;
+      if (isActive !== undefined) updateData.isActive = isActive;
+      
+      const prompt = await storage.updatePrompt(id, updateData);
+      if (!prompt) {
+        return res.status(404).json({ error: "Prompt not found" });
+      }
+      
+      res.json(prompt);
+    } catch (error) {
+      console.error("Update prompt error:", error);
+      res.status(500).json({ error: "Failed to update prompt" });
+    }
+  });
+
+  // Delete a prompt
+  app.delete("/api/monitoring/prompts/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deletePrompt(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete prompt error:", error);
+      res.status(500).json({ error: "Failed to delete prompt" });
     }
   });
 

@@ -175,6 +175,7 @@ export const monitoringClients = pgTable("monitoring_clients", {
   industry: text("industry").notNull(),
   scope: text("scope").notNull(), // "local" or "national"
   city: text("city"),
+  brandAliases: text("brand_aliases").array(), // Alternative names for the business (e.g., "SmartFix", "The Smart Fix")
   checkFrequencyDays: integer("check_frequency_days").notNull().default(14),
   lastCheckAt: timestamp("last_check_at"),
   nextCheckAt: timestamp("next_check_at"),

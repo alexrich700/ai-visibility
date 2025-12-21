@@ -92,34 +92,57 @@ function normalizeDomain(domain: string): string {
 }
 
 // Generate name variations for better detection
-function generateNameVariations(businessName: string): string[] {
-  const variations: string[] = [businessName.toLowerCase()];
+// Also accepts brand aliases for comprehensive matching
+// Uses Set for deduplication and efficient lookups
+function generateNameVariations(businessName: string, brandAliases?: string[]): string[] {
+  const variationSet = new Set<string>();
+  
+  // Add primary business name (lowercase)
+  const primaryName = businessName.toLowerCase().trim();
+  if (primaryName.length > 2) {
+    variationSet.add(primaryName);
+  }
+  
+  // Add brand aliases (highest priority after exact name)
+  if (brandAliases && brandAliases.length > 0) {
+    for (const alias of brandAliases) {
+      const lowerAlias = alias.toLowerCase().trim();
+      if (lowerAlias.length > 2) {
+        variationSet.add(lowerAlias);
+        // Also add concatenated version of alias (e.g., "smartfix" from "Smart Fix")
+        const concatenatedAlias = lowerAlias.replace(/\s+/g, '');
+        if (concatenatedAlias.length > 3) {
+          variationSet.add(concatenatedAlias);
+        }
+      }
+    }
+  }
   
   // Remove common suffixes and create variations
   const suffixesToRemove = [' marketing', ' agency', ' consulting', ' services', ' llc', ' inc', ' co', ' company'];
-  let baseName = businessName.toLowerCase();
+  let baseName = primaryName;
   for (const suffix of suffixesToRemove) {
     if (baseName.endsWith(suffix)) {
       baseName = baseName.slice(0, -suffix.length).trim();
       if (baseName.length > 3) {
-        variations.push(baseName);
+        variationSet.add(baseName);
       }
       break;
     }
   }
   
-  // Create camelCase/concatenated version (e.g., "buildingbrands" from "Building Brands")
-  const concatenated = businessName.toLowerCase().replace(/\s+/g, '');
-  if (concatenated.length > 4 && !variations.includes(concatenated)) {
-    variations.push(concatenated);
+  // Create concatenated version (e.g., "buildingbrands" from "Building Brands")
+  const concatenated = primaryName.replace(/\s+/g, '');
+  if (concatenated.length > 4) {
+    variationSet.add(concatenated);
   }
   
-  return variations;
+  return Array.from(variationSet);
 }
 
 // Check if any of the search terms are found in the text
-// Priority: 1) Domain cited by AI, 2) Business name mentioned in text
-function checkForMentions(text: string, businessName: string, url?: string): { found: boolean; matchedTerm?: string; matchType?: 'domain' | 'name' } {
+// Priority: 1) Domain cited by AI, 2) Business name mentioned in text, 3) Brand aliases
+function checkForMentions(text: string, businessName: string, url?: string, brandAliases?: string[]): { found: boolean; matchedTerm?: string; matchType?: 'domain' | 'name' } {
   // STEP 1: Extract all domains/URLs cited by the AI in its response
   const citedDomains = extractCitedDomains(text);
   
@@ -141,13 +164,13 @@ function checkForMentions(text: string, businessName: string, url?: string): { f
     }
   }
   
-  // STEP 3: If domain not cited, check if business name is mentioned in the text
+  // STEP 3: If domain not cited, check if business name or aliases are mentioned in the text
   const lowerText = text.toLowerCase();
-  const nameVariations = generateNameVariations(businessName);
+  const nameVariations = generateNameVariations(businessName, brandAliases);
   
   for (const term of nameVariations) {
     if (term && term.length > 3 && lowerText.includes(term)) {
-      console.log(`[NAME MATCH] Business name "${term}" found in AI response text`);
+      console.log(`[NAME MATCH] Business name/alias "${term}" found in AI response text`);
       return { found: true, matchedTerm: term, matchType: 'name' };
     }
   }
@@ -172,7 +195,7 @@ function checkForMentions(text: string, businessName: string, url?: string): { f
 }
 
 // Gemini client using Replit AI Integrations with Google Search grounding
-async function queryGemini(prompt: string, businessName: string, url?: string): Promise<{ found: boolean; response: string; competitors: string[] }> {
+async function queryGemini(prompt: string, businessName: string, url?: string, brandAliases?: string[]): Promise<{ found: boolean; response: string; competitors: string[] }> {
   try {
     const { GoogleGenAI } = await import("@google/genai");
     
@@ -195,12 +218,12 @@ async function queryGemini(prompt: string, businessName: string, url?: string): 
     });
 
     const text = response.text || "";
-    const detection = checkForMentions(text, businessName, url);
+    const detection = checkForMentions(text, businessName, url, brandAliases);
     const competitors = extractCompetitors(text, businessName);
     
     // Debug logging for detection
-    const searchTerms = [...generateNameVariations(businessName), ...(url ? extractDomainKeywords(url) : [])];
-    console.log(`[GEMINI DETECTION] Business: "${businessName}" | URL: "${url}" | Search terms: ${JSON.stringify(searchTerms)} | Found: ${detection.found}${detection.matchedTerm ? ` (matched: "${detection.matchedTerm}")` : ''}`);
+    const searchTerms = [...generateNameVariations(businessName, brandAliases), ...(url ? extractDomainKeywords(url) : [])];
+    console.log(`[GEMINI DETECTION] Business: "${businessName}" | URL: "${url}" | Aliases: ${brandAliases?.length || 0} | Search terms: ${JSON.stringify(searchTerms)} | Found: ${detection.found}${detection.matchedTerm ? ` (matched: "${detection.matchedTerm}")` : ''}`);
     if (!detection.found) {
       console.log(`[GEMINI] Response preview (first 300 chars): ${text.slice(0, 300).replace(/\n/g, ' ')}`);
     }
@@ -213,7 +236,7 @@ async function queryGemini(prompt: string, businessName: string, url?: string): 
 }
 
 // ChatGPT client using Responses API with web_search tool for proper grounding
-async function queryChatGPT(prompt: string, businessName: string, url?: string, location?: string): Promise<{ found: boolean; response: string; competitors: string[] }> {
+async function queryChatGPT(prompt: string, businessName: string, url?: string, location?: string, brandAliases?: string[]): Promise<{ found: boolean; response: string; competitors: string[] }> {
   try {
     // Build web search tool config with location if provided
     const webSearchTool: Record<string, any> = { type: "web_search" };
@@ -244,12 +267,12 @@ async function queryChatGPT(prompt: string, businessName: string, url?: string, 
       console.log("[CHATGPT] Empty output_text, response structure:", JSON.stringify(response).slice(0, 500));
     }
     
-    const detection = checkForMentions(text, businessName, url);
+    const detection = checkForMentions(text, businessName, url, brandAliases);
     const competitors = extractCompetitors(text, businessName);
     
     // Debug logging for detection
-    const searchTerms = [...generateNameVariations(businessName), ...(url ? extractDomainKeywords(url) : [])];
-    console.log(`[CHATGPT DETECTION] Business: "${businessName}" | URL: "${url}" | Search terms: ${JSON.stringify(searchTerms)} | Found: ${detection.found}${detection.matchedTerm ? ` (matched: "${detection.matchedTerm}")` : ''}`);
+    const searchTerms = [...generateNameVariations(businessName, brandAliases), ...(url ? extractDomainKeywords(url) : [])];
+    console.log(`[CHATGPT DETECTION] Business: "${businessName}" | URL: "${url}" | Aliases: ${brandAliases?.length || 0} | Search terms: ${JSON.stringify(searchTerms)} | Found: ${detection.found}${detection.matchedTerm ? ` (matched: "${detection.matchedTerm}")` : ''}`);
     if (!detection.found) {
       console.log(`[CHATGPT] Response preview (first 300 chars): ${text.slice(0, 300).replace(/\n/g, ' ')}`);
     }
@@ -1271,10 +1294,10 @@ export interface PromptCheckResult {
 }
 
 // Helper function to query OpenAI/ChatGPT for monitoring (with location for web search grounding)
-async function queryOpenAI(prompt: string, businessName: string, domain: string, location?: string): Promise<{ found: boolean; response: string; cited: boolean; competitors: string[] }> {
+async function queryOpenAI(prompt: string, businessName: string, domain: string, location?: string, brandAliases?: string[]): Promise<{ found: boolean; response: string; cited: boolean; competitors: string[] }> {
   try {
-    console.log(`[queryOpenAI] Calling ChatGPT with location: "${location || 'none'}"`);
-    const result = await queryChatGPT(prompt, businessName, domain, location);
+    console.log(`[queryOpenAI] Calling ChatGPT with location: "${location || 'none'}", aliases: ${brandAliases?.length || 0}`);
+    const result = await queryChatGPT(prompt, businessName, domain, location, brandAliases);
     console.log(`[queryOpenAI] Result - found: ${result.found}, response length: ${result.response.length}`);
     return {
       found: result.found,
@@ -1289,10 +1312,10 @@ async function queryOpenAI(prompt: string, businessName: string, domain: string,
 }
 
 // Helper function to query Google AI/Gemini for monitoring
-async function queryGoogleAI(prompt: string, businessName: string, domain: string): Promise<{ found: boolean; response: string; cited: boolean; competitors: string[] }> {
+async function queryGoogleAI(prompt: string, businessName: string, domain: string, brandAliases?: string[]): Promise<{ found: boolean; response: string; cited: boolean; competitors: string[] }> {
   try {
     console.log(`[queryGoogleAI] Calling Gemini...`);
-    const result = await queryGemini(prompt, businessName, domain);
+    const result = await queryGemini(prompt, businessName, domain, brandAliases);
     console.log(`[queryGoogleAI] Result - found: ${result.found}, response length: ${result.response.length}`);
     return {
       found: result.found,
@@ -1308,18 +1331,20 @@ async function queryGoogleAI(prompt: string, businessName: string, domain: strin
 
 // Run visibility check for a single prompt across ChatGPT and Google AI
 // Location parameter enables web search grounding for better local results
+// brandAliases: alternative names for the business (e.g., "SmartFix", "The Smart Fix")
 export async function runPromptCheck(
   prompt: string,
   businessName: string,
   domain: string,
-  location?: string
+  location?: string,
+  brandAliases?: string[]
 ): Promise<PromptCheckResult> {
   try {
-    console.log(`[runPromptCheck] Checking visibility for "${businessName}" with location: "${location || 'none'}"`);
+    console.log(`[runPromptCheck] Checking visibility for "${businessName}" with location: "${location || 'none'}", aliases: ${brandAliases?.length || 0}`);
     // Run both checks in parallel
     const [chatgptResult, googleAIResult] = await Promise.all([
-      queryOpenAI(prompt, businessName, domain, location),
-      queryGoogleAI(prompt, businessName, domain)
+      queryOpenAI(prompt, businessName, domain, location, brandAliases),
+      queryGoogleAI(prompt, businessName, domain, brandAliases)
     ]);
     
     // Collect competitors from both results
