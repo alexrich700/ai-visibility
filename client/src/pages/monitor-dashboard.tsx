@@ -33,8 +33,7 @@ import logoIcon from "@assets/images_1765741951084.png";
 import type { MonitoringClient, MonitoringGroup, CheckSession, CheckResult } from "@shared/schema";
 
 interface Citation {
-  source: string;
-  url: string | null;
+  domain: string;
   count: number;
 }
 
@@ -452,22 +451,19 @@ export default function MonitorDashboard() {
               <CardContent className="pt-0">
                 {analytics.topCitations.length > 0 ? (
                   <div className="space-y-2">
-                    {analytics.topCitations.slice(0, 5).map((citation, index) => (
+                    {analytics.topCitations.slice(0, 5).map((citation: { domain: string; count: number }, index: number) => (
                       <div key={index} className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <span className="text-xs text-gray-400 flex-shrink-0">{index + 1}.</span>
-                          {citation.url ? (
-                            <a 
-                              href={citation.url} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="text-sm text-[#5599f9] hover:underline truncate"
-                            >
-                              {citation.source}
-                            </a>
-                          ) : (
-                            <span className="text-sm text-gray-700 truncate">{citation.source}</span>
-                          )}
+                          <a 
+                            href={`https://${citation.domain}`} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-sm text-[#5599f9] hover:underline truncate"
+                            data-testid={`link-citation-${index}`}
+                          >
+                            {citation.domain}
+                          </a>
                         </div>
                         <Badge variant="secondary" className="text-xs flex-shrink-0">
                           {citation.count}
