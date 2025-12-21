@@ -116,6 +116,22 @@ The monitoring dashboard includes comprehensive analytics for each client:
 - Data includes: overall score, platform scores, found/cited counts
 - API returns `trendData` array for historical visualization
 
+**Platform Visibility:**
+- Shows per-platform visibility percentages (ChatGPT vs Google AI)
+- Displays found/total counts per platform (e.g., "45/55")
+- Compact dual-pill design with color-coded indicators (blue=ChatGPT, orange=GoogleAI)
+
+**Data Export:**
+- GET `/api/monitoring/exports/:id` endpoint generates ZIP file
+- Supports date range filtering via `startDate` and `endDate` query params
+- Export includes:
+  - README.txt with AI assistant instructions for website optimization
+  - summary.json with visibility metrics and recommendations
+  - chatgpt_results.csv with all ChatGPT prompts, responses, found/cited status
+  - google_results.csv with all Google AI prompts, responses, found/cited status
+  - metadata.json with export parameters and timestamps
+- Export generator service: `server/services/export-generator.ts`
+
 Analytics helper functions in `server/services/scan-analytics.ts`:
 - `extractCitations()` - Parses URLs from AI responses
 - `computeShareOfVoice()` - Calculates brand vs competitor percentages
