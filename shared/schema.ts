@@ -256,6 +256,10 @@ export const checkSessions = pgTable("check_sessions", {
   firstPlaceCount: integer("first_place_count"), // How many times ranked #1
   sentimentBreakdown: jsonb("sentiment_breakdown"), // {positive, neutral, negative}
   topCitations: jsonb("top_citations"), // [{domain, count}]
+  // New: Numerical sentiment score (0-100) and competitor visibility
+  sentimentScore: integer("sentiment_score"), // 0-100 overall sentiment score
+  competitorVisibility: jsonb("competitor_visibility"), // [{name, visibilityPercent, mentionCount}]
+  sentimentStatements: jsonb("sentiment_statements"), // {positive: [{text, platform}], negative: [{text, platform}]}
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -288,6 +292,8 @@ export const checkResults = pgTable("check_results", {
   // Analytics fields
   chatgptSentiment: text("chatgpt_sentiment"), // positive, neutral, negative
   googleAISentiment: text("google_ai_sentiment"),
+  chatgptSentimentScore: integer("chatgpt_sentiment_score"), // 0-100 sentiment score
+  googleAISentimentScore: integer("google_ai_sentiment_score"), // 0-100 sentiment score
   chatgptRank: integer("chatgpt_rank"), // Position in response (1 = first mentioned)
   googleAIRank: integer("google_ai_rank"),
   chatgptCitations: jsonb("chatgpt_citations"), // Array of {url, domain} objects

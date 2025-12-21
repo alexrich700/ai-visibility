@@ -45,6 +45,23 @@ interface ShareOfVoiceItem {
   mentionCount: number;
 }
 
+interface CompetitorVisibility {
+  name: string;
+  visibilityPercent: number;
+  mentionCount: number;
+}
+
+interface SentimentStatement {
+  text: string;
+  platform: 'chatgpt' | 'google';
+  promptText?: string;
+}
+
+interface SentimentStatements {
+  positive: SentimentStatement[];
+  negative: SentimentStatement[];
+}
+
 interface Analytics {
   shareOfVoice: ShareOfVoiceItem[];
   avgChatgptRank: number | null;
@@ -52,6 +69,9 @@ interface Analytics {
   firstPlaceCount: number;
   sentimentBreakdown: { positive: number; neutral: number; negative: number };
   topCitations: Citation[];
+  sentimentScore: number | null;
+  competitorVisibility: CompetitorVisibility[];
+  sentimentStatements: SentimentStatements;
 }
 
 interface TrendDataPoint {
@@ -583,60 +603,164 @@ export default function MonitorDashboard() {
               </CardContent>
             </Card>
 
-            {/* Sentiment */}
+            {/* Sentiment Score */}
             <Card className="shadow-2xl shadow-blue-900/5">
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-2">
                   <ThumbsUp className="w-4 h-4 text-green-500" />
-                  <CardTitle className="text-sm font-bold tracking-tight">Sentiment</CardTitle>
+                  <CardTitle className="text-sm font-bold tracking-tight">Sentiment Score</CardTitle>
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
-                {(analytics.sentimentBreakdown.positive + analytics.sentimentBreakdown.neutral + analytics.sentimentBreakdown.negative) > 0 ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-1">
-                        <ThumbsUp className="w-3.5 h-3.5 text-green-500" />
-                        <span className="text-sm text-gray-700">Positive</span>
+                {analytics.sentimentScore !== null ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-4">
+                      <div className={`text-4xl font-bold ${
+                        analytics.sentimentScore >= 70 ? 'text-green-500' : 
+                        analytics.sentimentScore >= 40 ? 'text-[#ffb41c]' : 
+                        'text-red-500'
+                      }`}>
+                        {analytics.sentimentScore}
                       </div>
-                      <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-green-500 rounded-full"
-                          style={{ width: `${analytics.sentimentBreakdown.positive}%` }}
-                        />
+                      <div className="flex-1">
+                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full rounded-full transition-all ${
+                              analytics.sentimentScore >= 70 ? 'bg-green-500' : 
+                              analytics.sentimentScore >= 40 ? 'bg-[#ffb41c]' : 
+                              'bg-red-500'
+                            }`}
+                            style={{ width: `${analytics.sentimentScore}%` }}
+                          />
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {analytics.sentimentScore >= 70 ? 'Positive perception' : 
+                           analytics.sentimentScore >= 40 ? 'Mixed perception' : 
+                           'Needs improvement'}
+                        </p>
                       </div>
-                      <span className="text-sm font-medium text-gray-700">{analytics.sentimentBreakdown.positive}%</span>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 text-xs text-gray-500">
                       <div className="flex items-center gap-1">
-                        <Meh className="w-3.5 h-3.5 text-gray-400" />
-                        <span className="text-sm text-gray-700">Neutral</span>
+                        <ThumbsUp className="w-3 h-3 text-green-500" />
+                        <span>{analytics.sentimentBreakdown.positive}%</span>
                       </div>
-                      <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-gray-400 rounded-full"
-                          style={{ width: `${analytics.sentimentBreakdown.neutral}%` }}
-                        />
-                      </div>
-                      <span className="text-sm font-medium text-gray-700">{analytics.sentimentBreakdown.neutral}%</span>
-                    </div>
-                    <div className="flex items-center gap-3">
                       <div className="flex items-center gap-1">
-                        <ThumbsDown className="w-3.5 h-3.5 text-red-500" />
-                        <span className="text-sm text-gray-700">Negative</span>
+                        <Meh className="w-3 h-3 text-gray-400" />
+                        <span>{analytics.sentimentBreakdown.neutral}%</span>
                       </div>
-                      <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-red-500 rounded-full"
-                          style={{ width: `${analytics.sentimentBreakdown.negative}%` }}
-                        />
+                      <div className="flex items-center gap-1">
+                        <ThumbsDown className="w-3 h-3 text-red-500" />
+                        <span>{analytics.sentimentBreakdown.negative}%</span>
                       </div>
-                      <span className="text-sm font-medium text-gray-700">{analytics.sentimentBreakdown.negative}%</span>
                     </div>
                   </div>
                 ) : (
                   <p className="text-sm text-gray-500">No sentiment data yet</p>
                 )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Competitor Visibility + Sentiment Statements Row */}
+        {analytics && (
+          <div className="grid md:grid-cols-2 gap-4">
+            {/* Competitor Visibility */}
+            <Card className="shadow-2xl shadow-blue-900/5">
+              <CardHeader className="pb-2">
+                <div className="flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-[#5599f9]" />
+                  <CardTitle className="text-sm font-bold tracking-tight">Competitor Visibility</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                {analytics.competitorVisibility && analytics.competitorVisibility.length > 0 ? (
+                  <div className="space-y-3">
+                    {analytics.competitorVisibility.map((competitor, index) => (
+                      <div key={index} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
+                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
+                          <span className="text-xs font-bold text-gray-600">{index + 1}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{competitor.name}</p>
+                          <p className="text-xs text-gray-500">{competitor.mentionCount} mentions</p>
+                        </div>
+                        <div className="flex-shrink-0">
+                          <Badge variant="secondary" className="text-xs">
+                            {competitor.visibilityPercent}%
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">No competitor data yet</p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Sentiment Statements */}
+            <Card className="shadow-2xl shadow-blue-900/5">
+              <CardHeader className="pb-2">
+                <div className="flex items-center gap-2">
+                  <Meh className="w-4 h-4 text-[#ffb41c]" />
+                  <CardTitle className="text-sm font-bold tracking-tight">What AI Says About You</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <Tabs defaultValue="positive" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2 mb-3">
+                    <TabsTrigger value="positive" className="text-xs" data-testid="tab-positive-sentiment">
+                      <ThumbsUp className="w-3 h-3 mr-1" />
+                      Positive ({analytics.sentimentStatements?.positive?.length || 0})
+                    </TabsTrigger>
+                    <TabsTrigger value="negative" className="text-xs" data-testid="tab-negative-sentiment">
+                      <ThumbsDown className="w-3 h-3 mr-1" />
+                      Negative ({analytics.sentimentStatements?.negative?.length || 0})
+                    </TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="positive" className="mt-0">
+                    <ScrollArea className="h-48">
+                      {analytics.sentimentStatements?.positive?.length > 0 ? (
+                        <div className="space-y-2 pr-4">
+                          {analytics.sentimentStatements.positive.map((statement, idx) => (
+                            <div key={idx} className="p-2 bg-green-50 border border-green-100 rounded-lg">
+                              <p className="text-xs text-gray-700 leading-relaxed">"{statement.text}"</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <Badge variant="outline" className="text-[10px] px-1">
+                                  {statement.platform === 'chatgpt' ? 'ChatGPT' : 'Google AI'}
+                                </Badge>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500 text-center py-4">No positive statements found</p>
+                      )}
+                    </ScrollArea>
+                  </TabsContent>
+                  <TabsContent value="negative" className="mt-0">
+                    <ScrollArea className="h-48">
+                      {analytics.sentimentStatements?.negative?.length > 0 ? (
+                        <div className="space-y-2 pr-4">
+                          {analytics.sentimentStatements.negative.map((statement, idx) => (
+                            <div key={idx} className="p-2 bg-red-50 border border-red-100 rounded-lg">
+                              <p className="text-xs text-gray-700 leading-relaxed">"{statement.text}"</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <Badge variant="outline" className="text-[10px] px-1">
+                                  {statement.platform === 'chatgpt' ? 'ChatGPT' : 'Google AI'}
+                                </Badge>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500 text-center py-4">No negative statements found</p>
+                      )}
+                    </ScrollArea>
+                  </TabsContent>
+                </Tabs>
               </CardContent>
             </Card>
           </div>

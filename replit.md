@@ -102,9 +102,21 @@ The monitoring dashboard includes comprehensive analytics for each client:
 - Separate tracking for ChatGPT and Google AI
 
 **Sentiment Analysis:**
-- Classifies brand mentions as positive/neutral/negative
-- Percentage breakdown visualization
+- **Sentiment Score**: Numerical 0-100 score computed using weighted word analysis
+  - Positive words add points, negative words subtract
+  - Strong words (excellent, terrible, etc.) weighted 2x
+  - Score of 50 = neutral, 70+ = positive perception, <40 = needs improvement
+- Percentage breakdown visualization (positive/neutral/negative)
 - Based on context around brand mentions
+- **Sentiment Statements**: Tabbed UI showing actual positive/negative quotes from AI responses
+  - Extracted snippets with platform attribution (ChatGPT vs Google AI)
+  - Helps understand exactly what AI platforms say about the business
+
+**Competitor Visibility:**
+- Tracks top 5 competitors by visibility percentage
+- Filters out city names using 100+ US cities database to prevent false positives
+- Shows mention count per competitor
+- Visibility calculated as: (mentions / total prompts where business was found) × 100
 
 **Response Viewer:**
 - Full AI response modal with brand name highlighting
@@ -140,6 +152,9 @@ Analytics helper functions in `server/services/scan-analytics.ts`:
 - `buildSnippets()` - Extracts context around brand mentions
 - `aggregateCitations()` - Consolidates citations across responses
 - `aggregateSentiment()` - Computes sentiment percentages
+- `computeSentimentScore()` - Calculates 0-100 numerical sentiment score using weighted word analysis
+- `computeCompetitorVisibility()` - Calculates visibility % for top 5 competitors with city filtering
+- `extractSentimentStatements()` - Extracts positive/negative quotes from AI responses with platform attribution
 
 ### Data Layer
 - **ORM**: Drizzle ORM with PostgreSQL dialect

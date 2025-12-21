@@ -13,6 +13,10 @@ import {
   aggregateSentiment,
   calculateAverageRank,
   countFirstPlace,
+  calculateSentimentScore,
+  calculateOverallSentimentScore,
+  aggregateSentimentStatements,
+  computeCompetitorVisibility,
   type Citation
 } from "./services/scan-analytics";
 import { streamExportZip } from "./services/export-generator";
@@ -527,7 +531,14 @@ export async function registerRoutes(
       const allGoogleAIRanks: (number | null)[] = [];
       const allChatgptSentiments: (string | null)[] = [];
       const allGoogleAISentiments: (string | null)[] = [];
-      const storedResults: { competitors: string | null }[] = [];
+      const storedResults: { 
+        competitors: string | null;
+        chatgptResponse: string | null;
+        googleAIResponse: string | null;
+        promptText: string;
+        chatgptSentimentScore: number | null;
+        googleAISentimentScore: number | null;
+      }[] = [];
       
       const location = client.city || undefined;
       
@@ -611,6 +622,10 @@ export async function registerRoutes(
           const chatgptAnalytics = analyzeResponse(result.chatgpt.response, client.businessName);
           const googleAIAnalytics = analyzeResponse(result.googleAI.response, client.businessName);
           
+          // Calculate numerical sentiment scores
+          const chatgptSentimentScore = calculateSentimentScore(result.chatgpt.response, client.businessName);
+          const googleAISentimentScore = calculateSentimentScore(result.googleAI.response, client.businessName);
+          
           // Collect for session-level aggregation
           allChatgptCitations.push(chatgptAnalytics.citations);
           allGoogleAICitations.push(googleAIAnalytics.citations);
@@ -618,7 +633,14 @@ export async function registerRoutes(
           allGoogleAIRanks.push(googleAIAnalytics.rank);
           allChatgptSentiments.push(chatgptAnalytics.sentiment);
           allGoogleAISentiments.push(googleAIAnalytics.sentiment);
-          storedResults.push({ competitors: JSON.stringify(result.competitors) });
+          storedResults.push({ 
+            competitors: JSON.stringify(result.competitors),
+            chatgptResponse: result.chatgpt.response,
+            googleAIResponse: result.googleAI.response,
+            promptText: prompt.text,
+            chatgptSentimentScore,
+            googleAISentimentScore
+          });
           
           // Store result with analytics
           await storage.createCheckResult({
@@ -637,6 +659,8 @@ export async function registerRoutes(
             // Analytics fields
             chatgptSentiment: chatgptAnalytics.sentiment,
             googleAISentiment: googleAIAnalytics.sentiment,
+            chatgptSentimentScore,
+            googleAISentimentScore,
             chatgptRank: chatgptAnalytics.rank,
             googleAIRank: googleAIAnalytics.rank,
             chatgptCitations: chatgptAnalytics.citations,
@@ -701,6 +725,18 @@ export async function registerRoutes(
       const sentimentBreakdown = aggregateSentiment([...allChatgptSentiments, ...allGoogleAISentiments]);
       const topCitations = aggregateCitations([...allChatgptCitations, ...allGoogleAICitations]);
       
+      // Calculate overall sentiment score (0-100)
+      const allSentimentScores = storedResults
+        .flatMap(r => [r.chatgptSentimentScore, r.googleAISentimentScore])
+        .filter((s): s is number => s !== null);
+      const sentimentScore = calculateOverallSentimentScore(allSentimentScores);
+      
+      // Compute competitor visibility
+      const competitorVisibility = computeCompetitorVisibility(competitorCounts, totalPrompts, 5);
+      
+      // Extract sentiment statements
+      const sentimentStatements = aggregateSentimentStatements(storedResults, client.businessName);
+      
       // Update session with final scores and analytics
       await storage.updateCheckSession(session.id, {
         overallScore,
@@ -714,6 +750,9 @@ export async function registerRoutes(
         firstPlaceCount,
         sentimentBreakdown,
         topCitations,
+        sentimentScore,
+        competitorVisibility,
+        sentimentStatements,
       });
       
       // Update client
@@ -776,6 +815,9 @@ export async function registerRoutes(
         firstPlaceCount: latestSession.firstPlaceCount || 0,
         sentimentBreakdown: latestSession.sentimentBreakdown || { positive: 0, neutral: 0, negative: 0 },
         topCitations: latestSession.topCitations || [],
+        sentimentScore: latestSession.sentimentScore || null,
+        competitorVisibility: latestSession.competitorVisibility || [],
+        sentimentStatements: latestSession.sentimentStatements || { positive: [], negative: [] },
       } : null;
       
       // Build historical trend data from all sessions
