@@ -83,6 +83,48 @@ Fallback simulation is provided when API keys are unavailable or errors occur.
 - Progress updates show: current group name, prompt text preview, prompt counter (X of Y)
 - Temporary config cache auto-cleans entries older than 5 minutes
 
+### Analytics Features (Dashboard)
+The monitoring dashboard includes comprehensive analytics for each client:
+
+**Share of Voice:**
+- Competitor comparison showing brand vs competitor mention frequency
+- Visual bar chart with percentage breakdown
+- Computed from AI response analysis using `computeShareOfVoice()`
+
+**Citation Sources:**
+- Tracks which domains are cited by AI platforms
+- Top 5 citations displayed with click-through links
+- Aggregated across ChatGPT and Google AI responses
+
+**Prominence Tracking:**
+- Average mention rank across responses (1 = first mentioned)
+- Count of "first place" recommendations
+- Separate tracking for ChatGPT and Google AI
+
+**Sentiment Analysis:**
+- Classifies brand mentions as positive/neutral/negative
+- Percentage breakdown visualization
+- Based on context around brand mentions
+
+**Response Viewer:**
+- Full AI response modal with brand name highlighting
+- Tabbed view for ChatGPT vs Google AI responses
+- Competitors mentioned displayed as badges
+
+**Historical Trending:**
+- Session-level metrics stored for trend analysis
+- Data includes: overall score, platform scores, found/cited counts
+- API returns `trendData` array for historical visualization
+
+Analytics helper functions in `server/services/scan-analytics.ts`:
+- `extractCitations()` - Parses URLs from AI responses
+- `computeShareOfVoice()` - Calculates brand vs competitor percentages
+- `detectMentionRank()` - Finds position of brand in response
+- `classifySentiment()` - Analyzes mention context
+- `buildSnippets()` - Extracts context around brand mentions
+- `aggregateCitations()` - Consolidates citations across responses
+- `aggregateSentiment()` - Computes sentiment percentages
+
 ### Data Layer
 - **ORM**: Drizzle ORM with PostgreSQL dialect
 - **Schema Location**: `shared/schema.ts`
