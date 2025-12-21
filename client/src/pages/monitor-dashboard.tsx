@@ -144,18 +144,35 @@ export default function MonitorDashboard() {
     : 0;
 
   // Calculate visibility metrics
-  const totalPrompts = latestResults.length;
-  const foundCount = latestResults.filter(r => r.chatgptFound || r.googleAIFound).length;
-  const citedCount = latestResults.filter(r => r.chatgptCited || r.googleAICited).length;
-  
-  const visibilityRate = totalPrompts > 0 ? Math.round((foundCount / totalPrompts) * 100) : 0;
-  const citationRate = totalPrompts > 0 ? Math.round((citedCount / totalPrompts) * 100) : 0;
+  // Each prompt is checked across 2 platforms, so total exposures = prompts × 2
+  const promptCount = latestResults.length;
+  const totalExposures = promptCount * 2;
   
   // Per-platform visibility metrics
   const chatgptFoundCount = latestResults.filter(r => r.chatgptFound).length;
   const googleAIFoundCount = latestResults.filter(r => r.googleAIFound).length;
-  const chatgptVisibility = totalPrompts > 0 ? Math.round((chatgptFoundCount / totalPrompts) * 100) : 0;
-  const googleAIVisibility = totalPrompts > 0 ? Math.round((googleAIFoundCount / totalPrompts) * 100) : 0;
+  const chatgptCitedCount = latestResults.filter(r => r.chatgptCited).length;
+  const googleAICitedCount = latestResults.filter(r => r.googleAICited).length;
+  
+  // Overall counts are sum of both platforms
+  const foundCount = chatgptFoundCount + googleAIFoundCount;
+  const citedCount = chatgptCitedCount + googleAICitedCount;
+  
+  // Visibility rate uses total exposures (prompts × 2 platforms)
+  const visibilityRate = totalExposures > 0 ? Math.round((foundCount / totalExposures) * 100) : 0;
+  const citationRate = totalExposures > 0 ? Math.round((citedCount / totalExposures) * 100) : 0;
+  
+  // Per-platform percentages use per-prompt basis (out of promptCount)
+  const chatgptVisibility = promptCount > 0 ? Math.round((chatgptFoundCount / promptCount) * 100) : 0;
+  const googleAIVisibility = promptCount > 0 ? Math.round((googleAIFoundCount / promptCount) * 100) : 0;
+  
+  // Calculate average rank across all results
+  const chatgptRanks = latestResults.filter(r => r.chatgptRank != null).map(r => r.chatgptRank as number);
+  const googleAIRanks = latestResults.filter(r => r.googleAIRank != null).map(r => r.googleAIRank as number);
+  const allRanks = [...chatgptRanks, ...googleAIRanks];
+  const avgRank = allRanks.length > 0 
+    ? Math.round((allRanks.reduce((a, b) => a + b, 0) / allRanks.length) * 10) / 10
+    : null;
 
   // Prepare chart data
   const sessionChartData = sessions.slice().reverse().map((session) => ({
@@ -245,27 +262,22 @@ export default function MonitorDashboard() {
       <main className="max-w-7xl mx-auto px-6 py-8 space-y-8">
         {/* Scorecard Row */}
         <div className="grid md:grid-cols-4 gap-4">
-          {/* Overall Score */}
+          {/* Average Rank */}
           <Card className="shadow-2xl shadow-blue-900/5">
             <CardContent className="p-6">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-xs uppercase font-bold tracking-wider text-gray-500">Overall Score</p>
+                  <p className="text-xs uppercase font-bold tracking-wider text-gray-500">Avg Rank</p>
                   <div className="flex items-baseline gap-2 mt-2">
-                    <span className="text-4xl font-bold text-gray-900">{overallScore}</span>
-                    <span className="text-xl text-gray-400">/100</span>
+                    <span className="text-4xl font-bold text-gray-900">
+                      {avgRank !== null ? avgRank.toFixed(1) : "—"}
+                    </span>
                   </div>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {avgRank !== null ? "Lower is better" : "No rankings yet"}
+                  </p>
                 </div>
-                <div className={`flex items-center gap-1 px-2 py-1 rounded-md text-sm font-medium ${
-                  scoreDelta > 0 ? "bg-green-100 text-green-700" :
-                  scoreDelta < 0 ? "bg-red-100 text-red-700" :
-                  "bg-gray-100 text-gray-500"
-                }`}>
-                  {scoreDelta > 0 ? <TrendingUp className="w-4 h-4" /> :
-                   scoreDelta < 0 ? <TrendingDown className="w-4 h-4" /> :
-                   <Minus className="w-4 h-4" />}
-                  {scoreDelta > 0 ? "+" : ""}{scoreDelta}
-                </div>
+                <Award className="w-8 h-8 text-gray-400" />
               </div>
             </CardContent>
           </Card>
@@ -279,7 +291,7 @@ export default function MonitorDashboard() {
                   <div className="flex items-baseline gap-2 mt-2">
                     <span className="text-4xl font-bold text-[#5599f9]">{visibilityRate}%</span>
                   </div>
-                  <p className="text-sm text-gray-500 mt-1">{foundCount} of {totalPrompts} prompts</p>
+                  <p className="text-sm text-gray-500 mt-1">{foundCount} of {totalExposures} platform checks</p>
                 </div>
                 <Eye className="w-8 h-8 text-[#5599f9]" />
               </div>
@@ -333,7 +345,7 @@ export default function MonitorDashboard() {
                     <span className="text-2xl font-bold text-gray-900">{chatgptVisibility}%</span>
                     <span className="text-sm text-gray-500 ml-2">ChatGPT</span>
                   </div>
-                  <span className="text-xs text-gray-400">({chatgptFoundCount}/{totalPrompts})</span>
+                  <span className="text-xs text-gray-400">({chatgptFoundCount}/{promptCount})</span>
                 </div>
                 <div className="w-px h-8 bg-gray-200" />
                 <div className="flex items-center gap-3" data-testid="stat-google-visibility">
@@ -342,7 +354,7 @@ export default function MonitorDashboard() {
                     <span className="text-2xl font-bold text-gray-900">{googleAIVisibility}%</span>
                     <span className="text-sm text-gray-500 ml-2">Google AI</span>
                   </div>
-                  <span className="text-xs text-gray-400">({googleAIFoundCount}/{totalPrompts})</span>
+                  <span className="text-xs text-gray-400">({googleAIFoundCount}/{promptCount})</span>
                 </div>
               </div>
             </div>
