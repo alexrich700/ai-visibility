@@ -500,58 +500,92 @@ export async function registerRoutes(
         citedCount: 0,
       });
       
-      // Run visibility checks sequentially with ChatGPT/Gemini calls parallelized within each prompt
-      // Note: runPromptCheck already parallelizes ChatGPT and Gemini API calls internally
+      // Run visibility checks with bounded concurrency (4 prompts at a time)
+      // Each prompt still runs ChatGPT and Gemini in parallel internally
+      const CONCURRENT_PROMPTS = 4;
       let foundCount = 0;
       let citedCount = 0;
       let chatgptFoundCount = 0;
       let googleAIFoundCount = 0;
-      let promptIndex = 0;
+      let completedCount = 0;
       
       const location = client.city || undefined;
       
-      // Process prompts group by group for organized progress updates
+      // Flatten all prompts with their group names and original indices for batch processing
+      const allPromptsWithGroups: { 
+        prompt: { id: number; groupId: number; text: string }; 
+        groupName: string; 
+        originalIndex: number; 
+      }[] = [];
+      let idx = 0;
       for (const groupName of groupNames) {
+        const groupPrompts = promptsByGroup[groupName] || [];
+        for (const prompt of groupPrompts) {
+          idx++;
+          allPromptsWithGroups.push({ prompt, groupName, originalIndex: idx });
+        }
+      }
+      
+      // Track per-group completion counts
+      const groupCompletedCounts: Record<string, number> = {};
+      const groupTotalCounts: Record<string, number> = {};
+      const groupsCompleted = new Set<string>();
+      
+      for (const groupName of groupNames) {
+        groupCompletedCounts[groupName] = 0;
+        groupTotalCounts[groupName] = (promptsByGroup[groupName] || []).length;
+      }
+      
+      // Process prompts in concurrent batches
+      for (let i = 0; i < allPromptsWithGroups.length; i += CONCURRENT_PROMPTS) {
         // Exit early if client disconnected
         if (!isClientConnected) {
           console.log("Scan cancelled - client disconnected");
           return;
         }
         
-        const groupPrompts = promptsByGroup[groupName] || [];
+        const batch = allPromptsWithGroups.slice(i, i + CONCURRENT_PROMPTS);
         
-        for (const prompt of groupPrompts) {
-          // Exit early if client disconnected
-          if (!isClientConnected) {
-            console.log("Scan cancelled - client disconnected");
-            return;
-          }
-          
-          promptIndex++;
-          const progressPercent = 10 + Math.round((promptIndex / totalPrompts) * 85); // 10-95%
-          
-          // Send progress event for this prompt BEFORE the blocking check
+        // Send testing events for all prompts in this batch (use original index)
+        for (const item of batch) {
           sendEvent("testing", { 
-            groupName,
-            promptIndex,
+            groupName: item.groupName,
+            promptIndex: item.originalIndex,
             totalPrompts,
-            promptText: prompt.text.slice(0, 60) + (prompt.text.length > 60 ? "..." : ""),
-            progress: progressPercent,
+            promptText: item.prompt.text.slice(0, 60) + (item.prompt.text.length > 60 ? "..." : ""),
+            progress: 10 + Math.round((item.originalIndex / totalPrompts) * 85),
           });
+        }
+        
+        // Run all prompts in this batch concurrently
+        const batchResults = await Promise.all(
+          batch.map(async (item) => {
+            if (!isClientConnected) return null;
+            
+            const result = await runPromptCheck(
+              item.prompt.text,
+              client.businessName,
+              client.domain,
+              location
+            );
+            
+            return { ...item, result };
+          })
+        );
+        
+        // Exit early if client disconnected during batch
+        if (!isClientConnected) {
+          console.log("Scan cancelled - client disconnected during batch");
+          return;
+        }
+        
+        // Process and store results from this batch (maintain order for consistent indices)
+        for (const batchResult of batchResults) {
+          if (!batchResult || !isClientConnected) continue;
           
-          // Run the check (ChatGPT and Google AI are called in parallel within runPromptCheck)
-          const result = await runPromptCheck(
-            prompt.text,
-            client.businessName,
-            client.domain,
-            location
-          );
-          
-          // Skip storing if client disconnected during the check
-          if (!isClientConnected) {
-            console.log("Scan cancelled - client disconnected during prompt check");
-            return;
-          }
+          const { prompt, groupName, originalIndex, result } = batchResult;
+          completedCount++;
+          const progressPercent = 10 + Math.round((completedCount / totalPrompts) * 85);
           
           // Store result
           await storage.createCheckResult({
@@ -574,19 +608,33 @@ export async function registerRoutes(
           if (result.chatgpt.found) chatgptFoundCount++;
           if (result.googleAI.found) googleAIFoundCount++;
           
-          // Send completion event for this prompt
+          // Track per-group completion
+          groupCompletedCounts[groupName]++;
+          
+          // Send completion event for this prompt (use original index for consistency)
           sendEvent("prompt_complete", {
             groupName,
-            promptIndex,
+            promptIndex: originalIndex,
             totalPrompts,
             chatgptFound: result.chatgpt.found,
             googleAIFound: result.googleAI.found,
             progress: progressPercent,
           });
+          
+          // Check if this group is now complete
+          if (!groupsCompleted.has(groupName) && 
+              groupCompletedCounts[groupName] >= groupTotalCounts[groupName]) {
+            groupsCompleted.add(groupName);
+            sendEvent("group_complete", { groupName });
+          }
         }
-        
-        // Send group completion event
-        sendEvent("group_complete", { groupName });
+      }
+      
+      // Fire group_complete for any groups with zero prompts (edge case)
+      for (const groupName of groupNames) {
+        if (!groupsCompleted.has(groupName) && groupTotalCounts[groupName] === 0) {
+          sendEvent("group_complete", { groupName });
+        }
       }
       
       // Exit early if client disconnected

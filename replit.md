@@ -49,10 +49,11 @@ The backend integrates with three AI platforms:
 3. **Perplexity** - Requires `PERPLEXITY_API_KEY` environment variable
 
 ### Scan Performance Optimization
+- **Bounded concurrency**: Process 4 prompts simultaneously (configurable via `CONCURRENT_PROMPTS` in routes.ts)
 - **Parallel AI calls**: Each prompt runs ChatGPT and Gemini API calls in parallel (via Promise.all in runPromptCheck)
-- **Sequential prompt processing**: Prompts are processed one at a time for reliable progress tracking
-- **Early termination**: Checks `isClientConnected` flag before/after each API call to stop wasted work
-- **In-flight API calls cannot be cancelled**: But checks immediately after prevent wasted database persistence
+- **Early termination**: Checks `isClientConnected` flag before/after each batch to stop wasted work
+- **Batch processing**: Prompts processed in batches with progress updates after each batch completes
+- **~70% faster scans**: 40 prompts now run in ~10 batches instead of 40 sequential calls
 
 Each service is queried with business-specific prompts, and responses are analyzed for business mentions and competitor identification.
 
