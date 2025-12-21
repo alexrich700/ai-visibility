@@ -13,16 +13,51 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
   LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts";
 import {
   TrendingUp, TrendingDown, Eye, Target, Calendar, Clock, Settings,
-  ArrowLeft, RefreshCw, Loader2, CheckCircle2, XCircle, Minus, Building2
+  ArrowLeft, RefreshCw, Loader2, CheckCircle2, XCircle, Minus, Building2,
+  Users, Link2, Award, ThumbsUp, ThumbsDown, Meh, ExternalLink
 } from "lucide-react";
 import { format } from "date-fns";
 import logoIcon from "@assets/images_1765741951084.png";
 import type { MonitoringClient, MonitoringGroup, CheckSession, CheckResult } from "@shared/schema";
+
+interface Citation {
+  source: string;
+  url: string | null;
+  count: number;
+}
+
+interface Analytics {
+  shareOfVoice: Record<string, number>;
+  avgChatgptRank: number | null;
+  avgGoogleAIRank: number | null;
+  firstPlaceCount: number;
+  sentimentBreakdown: { positive: number; neutral: number; negative: number };
+  topCitations: Citation[];
+}
+
+interface TrendDataPoint {
+  date: string;
+  overallScore: number;
+  chatgptScore: number;
+  googleAIScore: number;
+  foundCount: number;
+  citedCount: number;
+  shareOfVoice: Record<string, number> | null;
+  avgRank: number | null;
+  sentiment: { positive: number; neutral: number; negative: number } | null;
+}
 
 interface DashboardData {
   client: MonitoringClient;
@@ -30,6 +65,8 @@ interface DashboardData {
   sessions: CheckSession[];
   latestResults: CheckResult[];
   resultsByGroup: { groupId: number; groupName: string; results: CheckResult[] }[];
+  analytics: Analytics | null;
+  trendData: TrendDataPoint[];
 }
 
 const COLORS = {
@@ -46,6 +83,7 @@ export default function MonitorDashboard() {
   const clientId = params?.id ? parseInt(params.id) : null;
   const [selectedGroup, setSelectedGroup] = useState<string>("all");
   const [timeRange, setTimeRange] = useState<string>("30");
+  const [selectedResult, setSelectedResult] = useState<CheckResult | null>(null);
 
   const { data, isLoading, refetch, isRefetching } = useQuery<DashboardData>({
     queryKey: ["/api/monitoring/dashboard", clientId],
@@ -76,7 +114,7 @@ export default function MonitorDashboard() {
     );
   }
 
-  const { client, groups, sessions, latestResults, resultsByGroup } = data;
+  const { client, groups, sessions, latestResults, resultsByGroup, analytics, trendData } = data;
 
   // Calculate scores
   const latestSession = sessions[0];
@@ -358,6 +396,185 @@ export default function MonitorDashboard() {
           </Card>
         </div>
 
+        {/* Analytics Row */}
+        {analytics && (
+          <div className="grid md:grid-cols-4 gap-4">
+            {/* Share of Voice */}
+            <Card className="shadow-2xl shadow-blue-900/5">
+              <CardHeader className="pb-2">
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-[#5599f9]" />
+                  <CardTitle className="text-sm font-bold tracking-tight">Share of Voice</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                {Object.keys(analytics.shareOfVoice).length > 0 ? (
+                  <div className="space-y-2">
+                    {Object.entries(analytics.shareOfVoice)
+                      .sort((a, b) => b[1] - a[1])
+                      .slice(0, 5)
+                      .map(([name, percentage]) => {
+                        const isClient = name.toLowerCase() === client.businessName.toLowerCase();
+                        return (
+                          <div key={name} className="space-y-1">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className={`truncate max-w-[120px] ${isClient ? "font-bold text-[#5599f9]" : "text-gray-700"}`}>
+                                {isClient ? "You" : name}
+                              </span>
+                              <span className={`${isClient ? "font-bold text-[#5599f9]" : "text-gray-500"}`}>
+                                {percentage}%
+                              </span>
+                            </div>
+                            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                              <div 
+                                className={`h-full rounded-full ${isClient ? "bg-[#5599f9]" : "bg-gray-300"}`}
+                                style={{ width: `${Math.min(percentage, 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">No competitor data yet</p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Top Citations */}
+            <Card className="shadow-2xl shadow-blue-900/5">
+              <CardHeader className="pb-2">
+                <div className="flex items-center gap-2">
+                  <Link2 className="w-4 h-4 text-[#ffb41c]" />
+                  <CardTitle className="text-sm font-bold tracking-tight">Top Citations</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                {analytics.topCitations.length > 0 ? (
+                  <div className="space-y-2">
+                    {analytics.topCitations.slice(0, 5).map((citation, index) => (
+                      <div key={index} className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span className="text-xs text-gray-400 flex-shrink-0">{index + 1}.</span>
+                          {citation.url ? (
+                            <a 
+                              href={citation.url} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-sm text-[#5599f9] hover:underline truncate"
+                            >
+                              {citation.source}
+                            </a>
+                          ) : (
+                            <span className="text-sm text-gray-700 truncate">{citation.source}</span>
+                          )}
+                        </div>
+                        <Badge variant="secondary" className="text-xs flex-shrink-0">
+                          {citation.count}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">No citations found</p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Prominence */}
+            <Card className="shadow-2xl shadow-blue-900/5">
+              <CardHeader className="pb-2">
+                <div className="flex items-center gap-2">
+                  <Award className="w-4 h-4 text-green-500" />
+                  <CardTitle className="text-sm font-bold tracking-tight">Prominence</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0 space-y-3">
+                <div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wider">Average Position</p>
+                  <div className="flex items-baseline gap-1 mt-1">
+                    <span className="text-2xl font-bold text-gray-900">
+                      {analytics.avgChatgptRank || analytics.avgGoogleAIRank 
+                        ? Math.round(
+                            ((analytics.avgChatgptRank || 0) + (analytics.avgGoogleAIRank || 0)) / 
+                            ((analytics.avgChatgptRank ? 1 : 0) + (analytics.avgGoogleAIRank ? 1 : 0))
+                          )
+                        : "-"}
+                    </span>
+                    {(analytics.avgChatgptRank || analytics.avgGoogleAIRank) && (
+                      <span className="text-sm text-gray-500">avg rank</span>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wider">First Choice</p>
+                  <div className="flex items-baseline gap-1 mt-1">
+                    <span className="text-2xl font-bold text-[#ffb41c]">{analytics.firstPlaceCount}</span>
+                    <span className="text-sm text-gray-500">times ranked #1</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Sentiment */}
+            <Card className="shadow-2xl shadow-blue-900/5">
+              <CardHeader className="pb-2">
+                <div className="flex items-center gap-2">
+                  <ThumbsUp className="w-4 h-4 text-green-500" />
+                  <CardTitle className="text-sm font-bold tracking-tight">Sentiment</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                {(analytics.sentimentBreakdown.positive + analytics.sentimentBreakdown.neutral + analytics.sentimentBreakdown.negative) > 0 ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-1">
+                        <ThumbsUp className="w-3.5 h-3.5 text-green-500" />
+                        <span className="text-sm text-gray-700">Positive</span>
+                      </div>
+                      <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-green-500 rounded-full"
+                          style={{ width: `${analytics.sentimentBreakdown.positive}%` }}
+                        />
+                      </div>
+                      <span className="text-sm font-medium text-gray-700">{analytics.sentimentBreakdown.positive}%</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-1">
+                        <Meh className="w-3.5 h-3.5 text-gray-400" />
+                        <span className="text-sm text-gray-700">Neutral</span>
+                      </div>
+                      <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-gray-400 rounded-full"
+                          style={{ width: `${analytics.sentimentBreakdown.neutral}%` }}
+                        />
+                      </div>
+                      <span className="text-sm font-medium text-gray-700">{analytics.sentimentBreakdown.neutral}%</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-1">
+                        <ThumbsDown className="w-3.5 h-3.5 text-red-500" />
+                        <span className="text-sm text-gray-700">Negative</span>
+                      </div>
+                      <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-red-500 rounded-full"
+                          style={{ width: `${analytics.sentimentBreakdown.negative}%` }}
+                        />
+                      </div>
+                      <span className="text-sm font-medium text-gray-700">{analytics.sentimentBreakdown.negative}%</span>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">No sentiment data yet</p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
         {/* Group Performance */}
         <Card className="shadow-2xl shadow-blue-900/5">
           <CardHeader>
@@ -410,7 +627,12 @@ export default function MonitorDashboard() {
                 const isCited = result.chatgptCited || result.googleAICited;
                 
                 return (
-                  <div key={result.id} className="py-4 flex items-start gap-4">
+                  <button 
+                    key={result.id} 
+                    className="w-full py-4 flex items-start gap-4 text-left hover-elevate rounded-lg transition-colors cursor-pointer"
+                    onClick={() => setSelectedResult(result)}
+                    data-testid={`button-result-${result.id}`}
+                  >
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
                       isCited ? "bg-green-100" :
                       isVisible ? "bg-blue-100" :
@@ -422,7 +644,7 @@ export default function MonitorDashboard() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-gray-900 font-medium">{result.promptText}</p>
-                      <div className="flex items-center gap-4 mt-2">
+                      <div className="flex flex-wrap items-center gap-2 mt-2">
                         <Badge variant={groupName ? "secondary" : "outline"} className="text-xs">
                           {groupName || "Unknown Group"}
                         </Badge>
@@ -435,9 +657,10 @@ export default function MonitorDashboard() {
                             Google AI: {result.googleAIFound ? (result.googleAICited ? "Cited" : "Found") : "Not found"}
                           </span>
                         </div>
+                        <ExternalLink className="w-3 h-3 text-gray-400 ml-auto flex-shrink-0" />
                       </div>
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -452,6 +675,93 @@ export default function MonitorDashboard() {
           </CardContent>
         </Card>
       </main>
+
+      {/* Response Detail Dialog */}
+      <Dialog open={!!selectedResult} onOpenChange={() => setSelectedResult(null)}>
+        <DialogContent className="max-w-3xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold tracking-tight">
+              AI Response Details
+            </DialogTitle>
+          </DialogHeader>
+          {selectedResult && (
+            <div className="space-y-4">
+              <div className="bg-gray-50 rounded-lg p-4">
+                <p className="text-xs text-gray-500 uppercase tracking-wider font-bold mb-1">Prompt</p>
+                <p className="text-gray-900">{selectedResult.promptText}</p>
+              </div>
+              
+              <Tabs defaultValue="chatgpt" className="w-full">
+                <TabsList className="w-full">
+                  <TabsTrigger value="chatgpt" className="flex-1" data-testid="tab-chatgpt-response">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${selectedResult.chatgptFound ? "bg-green-500" : "bg-red-500"}`} />
+                      ChatGPT
+                      {selectedResult.chatgptCited && <Badge variant="secondary" className="text-xs ml-1">Cited</Badge>}
+                    </div>
+                  </TabsTrigger>
+                  <TabsTrigger value="googleai" className="flex-1" data-testid="tab-googleai-response">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${selectedResult.googleAIFound ? "bg-green-500" : "bg-red-500"}`} />
+                      Google AI
+                      {selectedResult.googleAICited && <Badge variant="secondary" className="text-xs ml-1">Cited</Badge>}
+                    </div>
+                  </TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="chatgpt" className="mt-4">
+                  <ScrollArea className="h-[400px] rounded-lg border p-4">
+                    {selectedResult.chatgptResponse ? (
+                      <div 
+                        className="prose prose-sm max-w-none text-gray-700"
+                        dangerouslySetInnerHTML={{ 
+                          __html: selectedResult.chatgptResponse
+                            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                            .replace(/\n/g, '<br/>')
+                            .replace(new RegExp(`(${client.businessName})`, 'gi'), '<mark class="bg-yellow-200 px-1 rounded">$1</mark>')
+                        }}
+                      />
+                    ) : (
+                      <p className="text-gray-500 italic">No response recorded</p>
+                    )}
+                  </ScrollArea>
+                </TabsContent>
+                
+                <TabsContent value="googleai" className="mt-4">
+                  <ScrollArea className="h-[400px] rounded-lg border p-4">
+                    {selectedResult.googleAIResponse ? (
+                      <div 
+                        className="prose prose-sm max-w-none text-gray-700"
+                        dangerouslySetInnerHTML={{ 
+                          __html: selectedResult.googleAIResponse
+                            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                            .replace(/\n/g, '<br/>')
+                            .replace(new RegExp(`(${client.businessName})`, 'gi'), '<mark class="bg-yellow-200 px-1 rounded">$1</mark>')
+                        }}
+                      />
+                    ) : (
+                      <p className="text-gray-500 italic">No response recorded</p>
+                    )}
+                  </ScrollArea>
+                </TabsContent>
+              </Tabs>
+              
+              {selectedResult.competitors && (
+                <div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wider font-bold mb-2">Competitors Mentioned</p>
+                  <div className="flex flex-wrap gap-2">
+                    {JSON.parse(selectedResult.competitors).slice(0, 10).map((competitor: string, index: number) => (
+                      <Badge key={index} variant="outline" className="text-xs">
+                        {competitor}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

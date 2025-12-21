@@ -766,12 +766,40 @@ export async function registerRoutes(
         results: latestResults.filter(r => r.groupId === group.id),
       }));
       
+      // Extract latest session analytics (if available)
+      const latestSession = sessions[0] || null;
+      const analytics = latestSession ? {
+        shareOfVoice: latestSession.shareOfVoice || {},
+        avgChatgptRank: latestSession.avgChatgptRank,
+        avgGoogleAIRank: latestSession.avgGoogleAIRank,
+        firstPlaceCount: latestSession.firstPlaceCount || 0,
+        sentimentBreakdown: latestSession.sentimentBreakdown || { positive: 0, neutral: 0, negative: 0 },
+        topCitations: latestSession.topCitations || [],
+      } : null;
+      
+      // Build historical trend data from all sessions
+      const trendData = sessions.slice().reverse().map(s => ({
+        date: s.completedAt || s.startedAt,
+        overallScore: s.overallScore,
+        chatgptScore: s.chatgptScore,
+        googleAIScore: s.googleAIScore,
+        foundCount: s.foundCount,
+        citedCount: s.citedCount,
+        shareOfVoice: s.shareOfVoice,
+        avgRank: s.avgChatgptRank && s.avgGoogleAIRank 
+          ? (s.avgChatgptRank + s.avgGoogleAIRank) / 2 
+          : s.avgChatgptRank || s.avgGoogleAIRank || null,
+        sentiment: s.sentimentBreakdown,
+      }));
+      
       res.json({
         client,
         groups,
         sessions,
         latestResults,
         resultsByGroup,
+        analytics,
+        trendData,
       });
     } catch (error) {
       console.error("Get dashboard error:", error);
