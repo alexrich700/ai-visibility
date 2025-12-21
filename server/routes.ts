@@ -34,13 +34,55 @@ interface PendingScanConfig {
 }
 const pendingScanConfigs = new Map<string, PendingScanConfig>();
 
+// Interface for rescan config (existing client)
+interface PendingRescanConfig {
+  clientId: number;
+  client: {
+    id: number;
+    businessName: string;
+    domain: string;
+    industry: string | null;
+    scope: string | null;
+    city: string | null;
+    brandAliases: string[] | null;
+    checkFrequencyDays: number;
+    nextCheckAt: Date | null;
+    isActive: boolean;
+    createdAt: Date | null;
+  };
+  groups: {
+    id: number;
+    clientId: number;
+    name: string;
+    description: string | null;
+    isHighLevelCategory: boolean;
+    isActive: boolean;
+    createdAt: Date | null;
+  }[];
+  prompts: {
+    id: number;
+    groupId: number;
+    promptText: string;
+    isActive: boolean;
+    createdAt: Date | null;
+  }[];
+  createdAt: number;
+}
+const pendingRescanConfigs = new Map<string, PendingRescanConfig>();
+
 // Clean up stale configs older than 5 minutes
 setInterval(() => {
   const now = Date.now();
-  const entries = Array.from(pendingScanConfigs.entries());
-  for (const [id, config] of entries) {
+  const scanEntries = Array.from(pendingScanConfigs.entries());
+  for (const [id, config] of scanEntries) {
     if (now - config.createdAt > 5 * 60 * 1000) {
       pendingScanConfigs.delete(id);
+    }
+  }
+  const rescanEntries = Array.from(pendingRescanConfigs.entries());
+  for (const [id, config] of rescanEntries) {
+    if (now - config.createdAt > 5 * 60 * 1000) {
+      pendingRescanConfigs.delete(id);
     }
   }
 }, 60 * 1000);
@@ -775,6 +817,356 @@ export async function registerRoutes(
       res.end();
     } catch (error) {
       console.error("Scan stream error:", error);
+      sendEvent("error", { 
+        message: error instanceof Error ? error.message : "Unknown error occurred",
+      });
+      res.end();
+    }
+  });
+
+  // Rescan endpoint for existing clients - creates new session with fresh data
+  // Step 1: Prepare rescan (returns prepareId)
+  app.post("/api/monitoring/rescan-prepare/:clientId", async (req, res) => {
+    try {
+      const clientId = parseInt(req.params.clientId);
+      
+      const client = await storage.getMonitoringClientById(clientId);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+      
+      const groups = await storage.getGroupsByClientId(clientId);
+      const allPrompts = await storage.getPromptsByClientId(clientId);
+      
+      // Filter for only active groups and prompts
+      const activeGroups = groups.filter(g => g.isActive);
+      const activeGroupIds = new Set(activeGroups.map(g => g.id));
+      const prompts = allPrompts.filter(p => p.isActive && activeGroupIds.has(p.groupId));
+      
+      // Validate that there are prompts to scan
+      if (prompts.length === 0) {
+        return res.status(400).json({ 
+          error: "No prompts to scan",
+          details: "This client has no active prompts configured. Please add prompts in the settings first."
+        });
+      }
+      
+      // Generate unique ID for this rescan preparation
+      const prepareId = randomUUID();
+      
+      // Store config temporarily with existing client data (only active groups/prompts)
+      pendingRescanConfigs.set(prepareId, {
+        clientId,
+        client,
+        groups: activeGroups,
+        prompts,
+        createdAt: Date.now(),
+      });
+      
+      res.json({ prepareId, totalPrompts: prompts.length });
+    } catch (error) {
+      console.error("Rescan prepare error:", error);
+      res.status(400).json({ 
+        error: "Failed to prepare rescan",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Step 2: SSE endpoint for rescan progress
+  app.get("/api/monitoring/rescan-stream/:prepareId", async (req, res) => {
+    const { prepareId } = req.params;
+    
+    // Retrieve and consume the pending config
+    const config = pendingRescanConfigs.get(prepareId);
+    if (!config) {
+      res.status(404).json({ error: "Rescan configuration not found or expired" });
+      return;
+    }
+    pendingRescanConfigs.delete(prepareId);
+    
+    // Set SSE headers
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.flushHeaders();
+
+    // Track if client disconnected to cancel remaining work
+    let isClientConnected = true;
+    req.on("close", () => {
+      isClientConnected = false;
+      console.log("Client disconnected from rescan stream");
+    });
+
+    // Helper to send SSE events
+    const sendEvent = (type: string, data: Record<string, unknown>) => {
+      if (!isClientConnected) return;
+      res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`);
+    };
+
+    try {
+      const { clientId, client, groups, prompts } = config;
+      
+      // Send immediate heartbeat to confirm stream is active
+      sendEvent("heartbeat", { message: "Rescan stream connected" });
+      
+      sendEvent("status", { message: "Starting rescan...", progress: 5 });
+      
+      const totalPrompts = prompts.length;
+      
+      // Safety guard: should never happen with validation in rescan-prepare, but prevent NaN
+      if (totalPrompts <= 0) {
+        sendEvent("error", { message: "No prompts configured for this client." });
+        res.end();
+        return;
+      }
+      
+      // Create new check session
+      const session = await storage.createCheckSession({
+        clientId,
+        overallScore: 0,
+        chatgptScore: 0,
+        googleAIScore: 0,
+        totalPrompts,
+        foundCount: 0,
+        citedCount: 0,
+      });
+      
+      sendEvent("status", { message: "Running AI visibility checks...", progress: 10 });
+      
+      // Run visibility checks with bounded concurrency
+      const CONCURRENT_PROMPTS = 4;
+      let foundCount = 0;
+      let citedCount = 0;
+      let chatgptFoundCount = 0;
+      let googleAIFoundCount = 0;
+      let completedCount = 0;
+      
+      // Analytics collection
+      const allChatgptCitations: Citation[][] = [];
+      const allGoogleAICitations: Citation[][] = [];
+      const allChatgptRanks: (number | null)[] = [];
+      const allGoogleAIRanks: (number | null)[] = [];
+      const allChatgptSentiments: (string | null)[] = [];
+      const allGoogleAISentiments: (string | null)[] = [];
+      const storedResults: { 
+        competitors: string | null;
+        chatgptResponse: string | null;
+        googleAIResponse: string | null;
+        promptText: string;
+        chatgptSentimentScore: number | null;
+        googleAISentimentScore: number | null;
+      }[] = [];
+      
+      const location = client.city || undefined;
+      
+      // Map prompts with their group names
+      const promptsWithGroups = prompts.map((prompt, index) => {
+        const group = groups.find(g => g.id === prompt.groupId);
+        return { prompt, groupName: group?.name || "Unknown", originalIndex: index + 1 };
+      });
+      
+      // Track per-group completion
+      const groupCompletedCounts: Record<string, number> = {};
+      const groupTotalCounts: Record<string, number> = {};
+      const groupsCompleted = new Set<string>();
+      
+      for (const group of groups) {
+        groupCompletedCounts[group.name] = 0;
+        groupTotalCounts[group.name] = prompts.filter(p => p.groupId === group.id).length;
+      }
+      
+      // Process prompts in concurrent batches
+      for (let i = 0; i < promptsWithGroups.length; i += CONCURRENT_PROMPTS) {
+        if (!isClientConnected) {
+          console.log("Rescan cancelled - client disconnected");
+          return;
+        }
+        
+        const batch = promptsWithGroups.slice(i, i + CONCURRENT_PROMPTS);
+        
+        // Send testing events for this batch
+        for (const item of batch) {
+          sendEvent("testing", { 
+            groupName: item.groupName,
+            promptIndex: item.originalIndex,
+            totalPrompts,
+            promptText: item.prompt.promptText.slice(0, 60) + (item.prompt.promptText.length > 60 ? "..." : ""),
+            progress: 10 + Math.round((item.originalIndex / totalPrompts) * 85),
+          });
+        }
+        
+        // Run all prompts in this batch concurrently
+        const batchResults = await Promise.all(
+          batch.map(async (item) => {
+            if (!isClientConnected) return null;
+            
+            const result = await runPromptCheck(
+              item.prompt.promptText,
+              client.businessName,
+              client.domain,
+              location,
+              client.brandAliases || undefined
+            );
+            
+            return { ...item, result };
+          })
+        );
+        
+        if (!isClientConnected) {
+          console.log("Rescan cancelled - client disconnected during batch");
+          return;
+        }
+        
+        // Process and store results from this batch
+        for (const batchResult of batchResults) {
+          if (!batchResult || !isClientConnected) continue;
+          
+          const { prompt, groupName, originalIndex, result } = batchResult;
+          completedCount++;
+          const progressPercent = 10 + Math.round((completedCount / totalPrompts) * 85);
+          
+          // Analyze responses for analytics
+          const chatgptAnalytics = analyzeResponse(result.chatgpt.response, client.businessName);
+          const googleAIAnalytics = analyzeResponse(result.googleAI.response, client.businessName);
+          
+          // Calculate sentiment scores
+          const chatgptSentimentScore = calculateSentimentScore(result.chatgpt.response, client.businessName);
+          const googleAISentimentScore = calculateSentimentScore(result.googleAI.response, client.businessName);
+          
+          // Collect for aggregation
+          allChatgptCitations.push(chatgptAnalytics.citations);
+          allGoogleAICitations.push(googleAIAnalytics.citations);
+          allChatgptRanks.push(chatgptAnalytics.rank);
+          allGoogleAIRanks.push(googleAIAnalytics.rank);
+          allChatgptSentiments.push(chatgptAnalytics.sentiment);
+          allGoogleAISentiments.push(googleAIAnalytics.sentiment);
+          storedResults.push({ 
+            competitors: JSON.stringify(result.competitors),
+            chatgptResponse: result.chatgpt.response,
+            googleAIResponse: result.googleAI.response,
+            promptText: prompt.promptText,
+            chatgptSentimentScore,
+            googleAISentimentScore
+          });
+          
+          // Store result
+          await storage.createCheckResult({
+            sessionId: session.id,
+            clientId,
+            groupId: prompt.groupId,
+            promptId: prompt.id,
+            promptText: prompt.promptText,
+            chatgptFound: result.chatgpt.found,
+            chatgptResponse: result.chatgpt.response,
+            chatgptCited: result.chatgpt.cited,
+            googleAIFound: result.googleAI.found,
+            googleAIResponse: result.googleAI.response,
+            googleAICited: result.googleAI.cited,
+            competitors: JSON.stringify(result.competitors),
+            chatgptSentiment: chatgptAnalytics.sentiment,
+            googleAISentiment: googleAIAnalytics.sentiment,
+            chatgptSentimentScore,
+            googleAISentimentScore,
+            chatgptRank: chatgptAnalytics.rank,
+            googleAIRank: googleAIAnalytics.rank,
+            chatgptCitations: chatgptAnalytics.citations,
+            googleAICitations: googleAIAnalytics.citations,
+            chatgptSnippet: chatgptAnalytics.snippet,
+            googleAISnippet: googleAIAnalytics.snippet,
+          });
+          
+          if (result.chatgpt.found || result.googleAI.found) foundCount++;
+          if (result.chatgpt.cited || result.googleAI.cited) citedCount++;
+          if (result.chatgpt.found) chatgptFoundCount++;
+          if (result.googleAI.found) googleAIFoundCount++;
+          
+          // Track per-group completion
+          groupCompletedCounts[groupName]++;
+          
+          sendEvent("prompt_complete", {
+            groupName,
+            promptIndex: originalIndex,
+            totalPrompts,
+            chatgptFound: result.chatgpt.found,
+            googleAIFound: result.googleAI.found,
+            progress: progressPercent,
+          });
+          
+          // Check if group is complete
+          if (!groupsCompleted.has(groupName) && 
+              groupCompletedCounts[groupName] >= groupTotalCounts[groupName]) {
+            groupsCompleted.add(groupName);
+            sendEvent("group_complete", { groupName });
+          }
+        }
+      }
+      
+      if (!isClientConnected) {
+        console.log("Rescan cancelled - client disconnected");
+        return;
+      }
+      
+      // Calculate final scores
+      const overallScore = totalPrompts > 0 ? Math.round((foundCount / totalPrompts) * 100) : 0;
+      const chatgptScore = totalPrompts > 0 ? Math.round((chatgptFoundCount / totalPrompts) * 100) : 0;
+      const googleAIScore = totalPrompts > 0 ? Math.round((googleAIFoundCount / totalPrompts) * 100) : 0;
+      
+      sendEvent("status", { message: "Calculating final scores...", progress: 97 });
+      
+      // Aggregate session-level analytics
+      const competitorCounts = aggregateCompetitorMentions(storedResults);
+      const shareOfVoice = computeShareOfVoice(client.businessName, foundCount, competitorCounts, totalPrompts);
+      const avgChatgptRank = calculateAverageRank(allChatgptRanks);
+      const avgGoogleAIRank = calculateAverageRank(allGoogleAIRanks);
+      const firstPlaceCount = countFirstPlace(allChatgptRanks) + countFirstPlace(allGoogleAIRanks);
+      const sentimentBreakdown = aggregateSentiment([...allChatgptSentiments, ...allGoogleAISentiments]);
+      const topCitations = aggregateCitations([...allChatgptCitations, ...allGoogleAICitations]);
+      
+      // Calculate overall sentiment score
+      const allSentimentScores = storedResults
+        .flatMap(r => [r.chatgptSentimentScore, r.googleAISentimentScore])
+        .filter((s): s is number => s !== null);
+      const sentimentScore = calculateOverallSentimentScore(allSentimentScores);
+      
+      // Compute competitor visibility
+      const competitorVisibility = computeCompetitorVisibility(competitorCounts, totalPrompts, 5);
+      
+      // Extract sentiment statements
+      const sentimentStatements = aggregateSentimentStatements(storedResults, client.businessName);
+      
+      // Update session with final scores and analytics
+      await storage.updateCheckSession(session.id, {
+        overallScore,
+        chatgptScore,
+        googleAIScore,
+        foundCount,
+        citedCount,
+        shareOfVoice,
+        avgChatgptRank,
+        avgGoogleAIRank,
+        firstPlaceCount,
+        sentimentBreakdown,
+        topCitations,
+        sentimentScore,
+        competitorVisibility,
+        sentimentStatements,
+      });
+      
+      // Send completion event
+      sendEvent("complete", { 
+        clientId, 
+        sessionId: session.id,
+        overallScore,
+        chatgptScore,
+        googleAIScore,
+        progress: 100,
+      });
+      
+      res.end();
+    } catch (error) {
+      console.error("Rescan stream error:", error);
       sendEvent("error", { 
         message: error instanceof Error ? error.message : "Unknown error occurred",
       });

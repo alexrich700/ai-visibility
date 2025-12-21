@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -120,6 +121,159 @@ export default function MonitorDashboard() {
   const [exportEndDate, setExportEndDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [isExporting, setIsExporting] = useState(false);
   const [displayLimit, setDisplayLimit] = useState(20);
+  
+  // Rescan state
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanProgress, setScanProgress] = useState(0);
+  const [scanStatus, setScanStatus] = useState("");
+  const [scanSubStatus, setScanSubStatus] = useState("");
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  
+  // Cleanup EventSource on unmount
+  useEffect(() => {
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+    };
+  }, []);
+  
+  // Function to run a fresh scan
+  const runRescan = async () => {
+    if (!clientId) return;
+    
+    setIsScanning(true);
+    setScanProgress(0);
+    setScanStatus("Preparing scan...");
+    setScanSubStatus("");
+    
+    try {
+      // Step 1: Prepare the rescan
+      const prepareResponse = await fetch(`/api/monitoring/rescan-prepare/${clientId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      
+      if (!prepareResponse.ok) {
+        let errorMessage = "Failed to prepare scan";
+        try {
+          const errorData = await prepareResponse.json();
+          errorMessage = errorData.details || errorData.error || errorMessage;
+        } catch {
+          // Response is not JSON, use status text
+          errorMessage = prepareResponse.statusText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+      
+      const { prepareId, totalPrompts } = await prepareResponse.json();
+      
+      // Guard against empty prompt sets
+      if (totalPrompts === 0) {
+        throw new Error("No prompts configured. Please add prompts in the settings first.");
+      }
+      
+      // Step 2: Connect to SSE stream
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+      }
+      
+      const eventSource = new EventSource(`/api/monitoring/rescan-stream/${prepareId}`);
+      eventSourceRef.current = eventSource;
+      
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          handleStreamEvent(data);
+          
+          if (data.type === "complete" || data.type === "error") {
+            eventSource.close();
+            eventSourceRef.current = null;
+          }
+        } catch (e) {
+          console.error("Failed to parse SSE event:", e);
+        }
+      };
+      
+      eventSource.onerror = () => {
+        eventSource.close();
+        eventSourceRef.current = null;
+        toast({
+          title: "Connection lost",
+          description: "Lost connection to the scan. Please try again.",
+          variant: "destructive",
+        });
+        setScanProgress(0);
+        setScanStatus("Failed");
+        setIsScanning(false);
+      };
+    } catch (error) {
+      toast({
+        title: "Error running scan",
+        description: error instanceof Error ? error.message : "Unknown error",
+        variant: "destructive",
+      });
+      setScanProgress(0);
+      setScanStatus("Failed");
+      setIsScanning(false);
+    }
+  };
+  
+  // Handle SSE events from rescan
+  const handleStreamEvent = (event: {
+    type: string;
+    message?: string;
+    progress?: number;
+    groupName?: string;
+    promptIndex?: number;
+    totalPrompts?: number;
+    promptText?: string;
+    overallScore?: number;
+  }) => {
+    switch (event.type) {
+      case "heartbeat":
+        console.log("Rescan stream connected");
+        break;
+      case "status":
+        setScanStatus(event.message || "");
+        setScanSubStatus("");
+        if (event.progress !== undefined) setScanProgress(event.progress);
+        break;
+      case "testing":
+        setScanStatus(`Testing ${event.groupName}`);
+        setScanSubStatus(event.promptText || "");
+        if (event.progress !== undefined) setScanProgress(event.progress);
+        break;
+      case "prompt_complete":
+        if (event.progress !== undefined) setScanProgress(event.progress);
+        break;
+      case "group_complete":
+        break;
+      case "complete":
+        setScanProgress(100);
+        setScanStatus("Scan Complete!");
+        setScanSubStatus(`Overall Score: ${event.overallScore}%`);
+        setIsScanning(false);
+        toast({
+          title: "Scan Complete",
+          description: `New visibility data collected. Overall score: ${event.overallScore}%`,
+        });
+        // Refetch dashboard data to show new results
+        queryClient.invalidateQueries({ queryKey: ["/api/monitoring/dashboard", clientId] });
+        break;
+      case "error":
+        toast({
+          title: "Scan Error",
+          description: event.message || "Unknown error occurred",
+          variant: "destructive",
+        });
+        setIsScanning(false);
+        break;
+    }
+  };
 
   const { data, isLoading, refetch, isRefetching } = useQuery<DashboardData>({
     queryKey: ["/api/monitoring/dashboard", clientId],
@@ -257,13 +411,13 @@ export default function MonitorDashboard() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => refetch()}
-              disabled={isRefetching}
+              onClick={runRescan}
+              disabled={isScanning}
               className="flex items-center gap-2"
               data-testid="button-refresh"
             >
-              <RefreshCw className={`w-4 h-4 ${isRefetching ? "animate-spin" : ""}`} />
-              Refresh
+              <RefreshCw className={`w-4 h-4 ${isScanning ? "animate-spin" : ""}`} />
+              {isScanning ? "Scanning..." : "Run New Scan"}
             </Button>
             <Button
               variant="outline"
@@ -278,6 +432,32 @@ export default function MonitorDashboard() {
           </div>
         </div>
       </header>
+
+      {/* Scanning Progress Overlay */}
+      {isScanning && (
+        <div className="bg-gradient-to-r from-[#5599f9]/10 to-[#ffb41c]/10 border-b border-[#5599f9]/20">
+          <div className="max-w-7xl mx-auto px-6 py-4">
+            <div className="flex items-center gap-4">
+              <Loader2 className="w-5 h-5 text-[#5599f9] animate-spin" />
+              <div className="flex-1">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-medium text-gray-900">{scanStatus}</span>
+                  <span className="text-sm text-gray-500">{scanProgress}%</span>
+                </div>
+                <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-[#5599f9] to-[#ffb41c] transition-all duration-300"
+                    style={{ width: `${scanProgress}%` }}
+                  />
+                </div>
+                {scanSubStatus && (
+                  <p className="text-xs text-gray-500 mt-1 truncate">{scanSubStatus}</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-8 space-y-8">
