@@ -1,4 +1,11 @@
 import OpenAI from "openai";
+import { 
+  ExtractedCitation, 
+  extractOpenAICitations, 
+  extractGeminiCitations, 
+  extractUrlsFromText, 
+  mergeCitations 
+} from "./services/citation-extractor";
 
 // Configuration constants for prompt generation
 export const PROMPTS_PER_GROUP = 5; // Number of prompts to generate per service group
@@ -195,7 +202,7 @@ function checkForMentions(text: string, businessName: string, url?: string, bran
 }
 
 // Gemini client using Replit AI Integrations with Google Search grounding
-async function queryGemini(prompt: string, businessName: string, url?: string, brandAliases?: string[]): Promise<{ found: boolean; response: string; competitors: string[] }> {
+async function queryGemini(prompt: string, businessName: string, url?: string, brandAliases?: string[]): Promise<{ found: boolean; response: string; competitors: string[]; citations: ExtractedCitation[] }> {
   try {
     const { GoogleGenAI } = await import("@google/genai");
     
@@ -218,25 +225,33 @@ async function queryGemini(prompt: string, businessName: string, url?: string, b
     });
 
     const text = response.text || "";
+    
+    // Extract citations from the Gemini response structure and text
+    const structuredCitations = extractGeminiCitations(response);
+    const textCitations = extractUrlsFromText(text);
+    const citations = mergeCitations(structuredCitations, textCitations);
+    
     const detection = checkForMentions(text, businessName, url, brandAliases);
     const competitors = extractCompetitors(text, businessName);
     
     // Debug logging for detection
     const searchTerms = [...generateNameVariations(businessName, brandAliases), ...(url ? extractDomainKeywords(url) : [])];
     console.log(`[GEMINI DETECTION] Business: "${businessName}" | URL: "${url}" | Aliases: ${brandAliases?.length || 0} | Search terms: ${JSON.stringify(searchTerms)} | Found: ${detection.found}${detection.matchedTerm ? ` (matched: "${detection.matchedTerm}")` : ''}`);
+    console.log(`[GEMINI] Extracted ${citations.length} citations`);
     if (!detection.found) {
       console.log(`[GEMINI] Response preview (first 300 chars): ${text.slice(0, 300).replace(/\n/g, ' ')}`);
     }
 
-    return { found: detection.found, response: text, competitors };
+    return { found: detection.found, response: text, competitors, citations };
   } catch (error) {
     console.error("Gemini API error:", error);
-    return simulateResponse(prompt, businessName);
+    const fallback = simulateResponse(prompt, businessName);
+    return { ...fallback, citations: [] };
   }
 }
 
 // ChatGPT client using Responses API with web_search tool for proper grounding
-async function queryChatGPT(prompt: string, businessName: string, url?: string, location?: string, brandAliases?: string[]): Promise<{ found: boolean; response: string; competitors: string[] }> {
+async function queryChatGPT(prompt: string, businessName: string, url?: string, location?: string, brandAliases?: string[]): Promise<{ found: boolean; response: string; competitors: string[]; citations: ExtractedCitation[] }> {
   try {
     // Build web search tool config with location if provided
     const webSearchTool: Record<string, any> = { type: "web_search" };
@@ -267,20 +282,27 @@ async function queryChatGPT(prompt: string, businessName: string, url?: string, 
       console.log("[CHATGPT] Empty output_text, response structure:", JSON.stringify(response).slice(0, 500));
     }
     
+    // Extract citations from the structured response and text
+    const structuredCitations = extractOpenAICitations(response);
+    const textCitations = extractUrlsFromText(text);
+    const citations = mergeCitations(structuredCitations, textCitations);
+    
     const detection = checkForMentions(text, businessName, url, brandAliases);
     const competitors = extractCompetitors(text, businessName);
     
     // Debug logging for detection
     const searchTerms = [...generateNameVariations(businessName, brandAliases), ...(url ? extractDomainKeywords(url) : [])];
     console.log(`[CHATGPT DETECTION] Business: "${businessName}" | URL: "${url}" | Aliases: ${brandAliases?.length || 0} | Search terms: ${JSON.stringify(searchTerms)} | Found: ${detection.found}${detection.matchedTerm ? ` (matched: "${detection.matchedTerm}")` : ''}`);
+    console.log(`[CHATGPT] Extracted ${citations.length} citations`);
     if (!detection.found) {
       console.log(`[CHATGPT] Response preview (first 300 chars): ${text.slice(0, 300).replace(/\n/g, ' ')}`);
     }
 
-    return { found: detection.found, response: text, competitors };
+    return { found: detection.found, response: text, competitors, citations };
   } catch (error) {
     console.error("ChatGPT API error:", error);
-    return simulateResponse(prompt, businessName);
+    const fallback = simulateResponse(prompt, businessName);
+    return { ...fallback, citations: [] };
   }
 }
 
@@ -1279,53 +1301,60 @@ export async function generatePromptsForGroups(
   return results;
 }
 
+// Re-export ExtractedCitation type for use by routes
+export type { ExtractedCitation } from "./services/citation-extractor";
+
 export interface PromptCheckResult {
   chatgpt: {
     found: boolean;
     response: string;
     cited: boolean;
+    citations: ExtractedCitation[];
   };
   googleAI: {
     found: boolean;
     response: string;
     cited: boolean;
+    citations: ExtractedCitation[];
   };
   competitors: string[];
 }
 
 // Helper function to query OpenAI/ChatGPT for monitoring (with location for web search grounding)
-async function queryOpenAI(prompt: string, businessName: string, domain: string, location?: string, brandAliases?: string[]): Promise<{ found: boolean; response: string; cited: boolean; competitors: string[] }> {
+async function queryOpenAI(prompt: string, businessName: string, domain: string, location?: string, brandAliases?: string[]): Promise<{ found: boolean; response: string; cited: boolean; competitors: string[]; citations: ExtractedCitation[] }> {
   try {
     console.log(`[queryOpenAI] Calling ChatGPT with location: "${location || 'none'}", aliases: ${brandAliases?.length || 0}`);
     const result = await queryChatGPT(prompt, businessName, domain, location, brandAliases);
-    console.log(`[queryOpenAI] Result - found: ${result.found}, response length: ${result.response.length}`);
+    console.log(`[queryOpenAI] Result - found: ${result.found}, response length: ${result.response.length}, citations: ${result.citations.length}`);
     return {
       found: result.found,
       response: result.response,
       cited: result.response.toLowerCase().includes(domain.toLowerCase()),
       competitors: result.competitors,
+      citations: result.citations,
     };
   } catch (error) {
     console.error("queryOpenAI error (full):", error);
-    return { found: false, response: "Error querying ChatGPT", cited: false, competitors: [] };
+    return { found: false, response: "Error querying ChatGPT", cited: false, competitors: [], citations: [] };
   }
 }
 
 // Helper function to query Google AI/Gemini for monitoring
-async function queryGoogleAI(prompt: string, businessName: string, domain: string, brandAliases?: string[]): Promise<{ found: boolean; response: string; cited: boolean; competitors: string[] }> {
+async function queryGoogleAI(prompt: string, businessName: string, domain: string, brandAliases?: string[]): Promise<{ found: boolean; response: string; cited: boolean; competitors: string[]; citations: ExtractedCitation[] }> {
   try {
     console.log(`[queryGoogleAI] Calling Gemini...`);
     const result = await queryGemini(prompt, businessName, domain, brandAliases);
-    console.log(`[queryGoogleAI] Result - found: ${result.found}, response length: ${result.response.length}`);
+    console.log(`[queryGoogleAI] Result - found: ${result.found}, response length: ${result.response.length}, citations: ${result.citations.length}`);
     return {
       found: result.found,
       response: result.response,
       cited: result.response.toLowerCase().includes(domain.toLowerCase()),
       competitors: result.competitors,
+      citations: result.citations,
     };
   } catch (error) {
     console.error("queryGoogleAI error (full):", error);
-    return { found: false, response: "Error querying Google AI", cited: false, competitors: [] };
+    return { found: false, response: "Error querying Google AI", cited: false, competitors: [], citations: [] };
   }
 }
 
@@ -1358,19 +1387,21 @@ export async function runPromptCheck(
         found: chatgptResult.found,
         response: chatgptResult.response,
         cited: chatgptResult.cited,
+        citations: chatgptResult.citations,
       },
       googleAI: {
         found: googleAIResult.found,
         response: googleAIResult.response,
         cited: googleAIResult.cited,
+        citations: googleAIResult.citations,
       },
       competitors: uniqueCompetitors.slice(0, 10),
     };
   } catch (error) {
     console.error("Error running prompt check:", error);
     return {
-      chatgpt: { found: false, response: "Error occurred during check", cited: false },
-      googleAI: { found: false, response: "Error occurred during check", cited: false },
+      chatgpt: { found: false, response: "Error occurred during check", cited: false, citations: [] },
+      googleAI: { found: false, response: "Error occurred during check", cited: false, citations: [] },
       competitors: [],
     };
   }
