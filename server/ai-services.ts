@@ -1469,7 +1469,7 @@ Return ONLY valid JSON in this exact format:
         { role: "user", content: prompt }
       ],
       temperature: 0.3,
-      max_tokens: 2000,
+      max_completion_tokens: 2000,
     });
     
     const content = response.choices[0]?.message?.content?.trim() || "";
@@ -1504,10 +1504,8 @@ Return ONLY valid JSON in this exact format:
         }));
     }
     
-    console.log(`[synthesizeSentimentNarratives] Extracted ${result.strengths.length} strengths, ${result.improvements.length} improvements`);
-    
-  } catch (error) {
-    console.error("[synthesizeSentimentNarratives] Error:", error);
+  } catch (error: any) {
+    console.error("[synthesizeSentimentNarratives] Error:", error?.message || error);
     // Return empty result on error - the UI will handle gracefully
   }
   

@@ -1360,7 +1360,11 @@ export async function registerRoutes(
           negative: (latestSession.sentimentStatements as any).negative?.map((s: any) => s.text) || []
         };
         if (rawStatements.positive.length > 0 || rawStatements.negative.length > 0) {
-          sentimentNarratives = await synthesizeSentimentNarratives(rawStatements, client.businessName);
+          try {
+            sentimentNarratives = await synthesizeSentimentNarratives(rawStatements, client.businessName);
+          } catch (narrativeError) {
+            console.error('[Dashboard] Error synthesizing narratives:', narrativeError);
+          }
         }
       }
       
