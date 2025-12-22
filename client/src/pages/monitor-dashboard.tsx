@@ -1297,8 +1297,8 @@ export default function MonitorDashboard() {
                   </TabsTrigger>
                 </TabsList>
                 
-                <TabsContent value="chatgpt" className="mt-4">
-                  <ScrollArea className="h-[400px] rounded-lg border p-4">
+                <TabsContent value="chatgpt" className="mt-4 space-y-3">
+                  <ScrollArea className="h-[350px] rounded-lg border p-4">
                     {selectedResult.chatgptResponse ? (
                       <div 
                         className="prose prose-sm max-w-none text-gray-700"
@@ -1313,10 +1313,37 @@ export default function MonitorDashboard() {
                       <p className="text-gray-500 italic">No response recorded</p>
                     )}
                   </ScrollArea>
+                  {(() => {
+                    const citations = selectedResult.chatgptCitations as Array<{url: string; title?: string; domain: string}> | null;
+                    if (!citations || !Array.isArray(citations) || citations.length === 0) return null;
+                    return (
+                      <div className="bg-blue-50 rounded-lg p-3">
+                        <p className="text-xs text-blue-700 uppercase tracking-wider font-bold mb-2 flex items-center gap-1">
+                          <ExternalLink className="w-3 h-3" />
+                          Sources Cited ({citations.length})
+                        </p>
+                        <div className="space-y-1.5">
+                          {citations.slice(0, 8).map((citation, idx) => (
+                            <a
+                              key={idx}
+                              href={citation.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline truncate"
+                              data-testid={`link-chatgpt-citation-${idx}`}
+                            >
+                              <span className="text-xs text-blue-400 flex-shrink-0">{idx + 1}.</span>
+                              <span className="truncate">{citation.title || citation.domain}</span>
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </TabsContent>
                 
-                <TabsContent value="googleai" className="mt-4">
-                  <ScrollArea className="h-[400px] rounded-lg border p-4">
+                <TabsContent value="googleai" className="mt-4 space-y-3">
+                  <ScrollArea className="h-[350px] rounded-lg border p-4">
                     {selectedResult.googleAIResponse ? (
                       <div 
                         className="prose prose-sm max-w-none text-gray-700"
@@ -1331,6 +1358,33 @@ export default function MonitorDashboard() {
                       <p className="text-gray-500 italic">No response recorded</p>
                     )}
                   </ScrollArea>
+                  {(() => {
+                    const citations = selectedResult.googleAICitations as Array<{url: string; title?: string; domain: string}> | null;
+                    if (!citations || !Array.isArray(citations) || citations.length === 0) return null;
+                    return (
+                      <div className="bg-orange-50 rounded-lg p-3">
+                        <p className="text-xs text-orange-700 uppercase tracking-wider font-bold mb-2 flex items-center gap-1">
+                          <ExternalLink className="w-3 h-3" />
+                          Sources Cited ({citations.length})
+                        </p>
+                        <div className="space-y-1.5">
+                          {citations.slice(0, 8).map((citation, idx) => (
+                            <a
+                              key={idx}
+                              href={citation.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 text-sm text-orange-600 hover:text-orange-800 hover:underline truncate"
+                              data-testid={`link-googleai-citation-${idx}`}
+                            >
+                              <span className="text-xs text-orange-400 flex-shrink-0">{idx + 1}.</span>
+                              <span className="truncate">{citation.title || citation.domain}</span>
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </TabsContent>
               </Tabs>
               
