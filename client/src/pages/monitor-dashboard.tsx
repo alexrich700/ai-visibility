@@ -1314,7 +1314,13 @@ export default function MonitorDashboard() {
                     )}
                   </ScrollArea>
                   {(() => {
-                    const citations = selectedResult.chatgptCitations as Array<{url: string; title?: string; domain: string}> | null;
+                    let citations: Array<{url: string; title?: string; domain: string}> | null = null;
+                    const rawCitations = selectedResult.chatgptCitations;
+                    if (typeof rawCitations === 'string') {
+                      try { citations = JSON.parse(rawCitations); } catch { citations = null; }
+                    } else if (Array.isArray(rawCitations)) {
+                      citations = rawCitations as Array<{url: string; title?: string; domain: string}>;
+                    }
                     if (!citations || !Array.isArray(citations) || citations.length === 0) return null;
                     return (
                       <div className="bg-blue-50 rounded-lg p-3">
@@ -1359,7 +1365,13 @@ export default function MonitorDashboard() {
                     )}
                   </ScrollArea>
                   {(() => {
-                    const citations = selectedResult.googleAICitations as Array<{url: string; title?: string; domain: string}> | null;
+                    let citations: Array<{url: string; title?: string; domain: string}> | null = null;
+                    const rawCitations = selectedResult.googleAICitations;
+                    if (typeof rawCitations === 'string') {
+                      try { citations = JSON.parse(rawCitations); } catch { citations = null; }
+                    } else if (Array.isArray(rawCitations)) {
+                      citations = rawCitations as Array<{url: string; title?: string; domain: string}>;
+                    }
                     if (!citations || !Array.isArray(citations) || citations.length === 0) return null;
                     return (
                       <div className="bg-orange-50 rounded-lg p-3">

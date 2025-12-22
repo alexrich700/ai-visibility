@@ -195,6 +195,30 @@ function generateSummary(data: ExportData): ExportSummary {
   };
 }
 
+function formatCitations(citations: unknown): string {
+  let citationArray: Array<{ url?: string; title?: string; domain?: string }> | null = null;
+  
+  if (typeof citations === 'string') {
+    try { citationArray = JSON.parse(citations); } catch { return ""; }
+  } else if (Array.isArray(citations)) {
+    citationArray = citations;
+  }
+  
+  if (!citationArray || !Array.isArray(citationArray)) return "";
+  
+  // Handle both object entries and legacy string entries
+  return citationArray
+    .map((c) => {
+      if (typeof c === 'string') {
+        // Legacy format: plain URL or domain string
+        return c;
+      }
+      return c.url || c.domain || "";
+    })
+    .filter(Boolean)
+    .join(" | ");
+}
+
 function generateChatGPTCSV(data: ExportData): string {
   const headers = [
     "session_date",
@@ -203,6 +227,7 @@ function generateChatGPTCSV(data: ExportData): string {
     "found",
     "cited",
     "sentiment",
+    "source_urls",
     "response",
     "competitors_mentioned",
   ];
@@ -217,6 +242,7 @@ function generateChatGPTCSV(data: ExportData): string {
     found: r.chatgptFound ? "Yes" : "No",
     cited: r.chatgptCited ? "Yes" : "No",
     sentiment: r.chatgptSentiment ?? "",
+    source_urls: formatCitations(r.chatgptCitations),
     response: r.chatgptResponse ?? "",
     competitors_mentioned: r.competitors ?? "",
   }));
@@ -232,6 +258,7 @@ function generateGoogleAICSV(data: ExportData): string {
     "found",
     "cited",
     "sentiment",
+    "source_urls",
     "response",
     "competitors_mentioned",
   ];
@@ -246,6 +273,7 @@ function generateGoogleAICSV(data: ExportData): string {
     found: r.googleAIFound ? "Yes" : "No",
     cited: r.googleAICited ? "Yes" : "No",
     sentiment: r.googleAISentiment ?? "",
+    source_urls: formatCitations(r.googleAICitations),
     response: r.googleAIResponse ?? "",
     competitors_mentioned: r.competitors ?? "",
   }));
@@ -290,6 +318,7 @@ function generateMetadata(): object {
         found: "Whether the business was mentioned in the response (Yes/No)",
         cited: "Whether the business website URL was cited (Yes/No)",
         sentiment: "The sentiment of the mention (positive/neutral/negative)",
+        source_urls: "Full URLs of sources cited by the AI platform in its response (pipe-separated)",
         response: "The full AI response text",
         competitors_mentioned: "List of competitor names found in the response",
       },
