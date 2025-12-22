@@ -27,8 +27,14 @@ import {
 import {
   TrendingUp, TrendingDown, Eye, Target, Calendar, Clock, Settings,
   ArrowLeft, RefreshCw, Loader2, CheckCircle2, XCircle, Minus, Building2,
-  Users, Link2, Award, ThumbsUp, ThumbsDown, Meh, ExternalLink, Download
+  Users, Link2, Award, ThumbsUp, ThumbsDown, Meh, ExternalLink, Download, HelpCircle
 } from "lucide-react";
+import {
+  Tooltip as InfoTooltip,
+  TooltipContent as InfoTooltipContent,
+  TooltipTrigger as InfoTooltipTrigger,
+  TooltipProvider as InfoTooltipProvider,
+} from "@/components/ui/tooltip";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
@@ -126,6 +132,43 @@ const COLORS = {
   danger: "#ef4444",
   gray: "#9ca3af",
 };
+
+// Tooltip descriptions for each metric
+const METRIC_TOOLTIPS = {
+  avgRank: "The average position where your business appears when mentioned by AI. Lower numbers are better - being ranked #1 means you're the first recommendation.",
+  visibilityRate: "Percentage of AI queries where your business was mentioned. Calculated as (mentions found ÷ total prompts checked) × 100.",
+  citationRate: "Percentage of AI responses that directly cited your website URL as a source. This is stronger than just being mentioned.",
+  nextCheck: "When the next automated visibility scan is scheduled. Scans run at the frequency you've configured in settings.",
+  platformVisibility: "Breakdown of how visible your business is on each AI platform. Shows the percentage of prompts where you were found on ChatGPT vs Google AI.",
+  visibilityTrend: "Historical view of your visibility scores over time. Track how your AI presence improves or changes with each scan.",
+  trendOverall: "Overall visibility percentage combining both ChatGPT and Google AI results. Dashed lines show per-platform performance.",
+  trendGroups: "Visibility scores broken down by service category. See which services have better AI visibility than others.",
+  trendCompetitors: "Track how often your competitors are mentioned over time. Helps identify competitive threats and opportunities.",
+  shareOfVoice: "Your brand's percentage of total mentions compared to competitors. Calculated by dividing your mentions by total market mentions.",
+  topCitations: "Websites most frequently cited by AI when answering queries about your services. These are the authoritative sources AI trusts.",
+  prominence: "How prominently your business is featured when mentioned. Average position tracks where you appear in lists, and first choice counts #1 rankings.",
+  sentimentScore: "Numerical score (0-100) measuring how positively AI describes your business. Calculated by analyzing the language used in responses about you.",
+  competitorVisibility: "Top competitors ranked by how often they appear in AI responses. Visibility percentage shows their mention rate across all prompts.",
+  sentimentDrivers: "AI-synthesized insights about what drives perception of your brand. Strengths show positive factors, improvements show areas to address.",
+};
+
+// Helper component for metric tooltips
+function MetricInfo({ tooltip, id }: { tooltip: string; id: string }) {
+  return (
+    <InfoTooltipProvider>
+      <InfoTooltip>
+        <InfoTooltipTrigger asChild>
+          <button className="ml-1 text-gray-400 hover:text-gray-600 transition-colors" data-testid={`tooltip-trigger-${id}`}>
+            <HelpCircle className="w-3.5 h-3.5" />
+          </button>
+        </InfoTooltipTrigger>
+        <InfoTooltipContent className="max-w-xs text-sm" side="top">
+          {tooltip}
+        </InfoTooltipContent>
+      </InfoTooltip>
+    </InfoTooltipProvider>
+  );
+}
 
 export default function MonitorDashboard() {
   const [, params] = useRoute("/monitor/dashboard/:id");
@@ -566,7 +609,10 @@ export default function MonitorDashboard() {
             <CardContent className="p-6">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-xs uppercase font-bold tracking-wider text-gray-500">Avg Rank</p>
+                  <p className="text-xs uppercase font-bold tracking-wider text-gray-500 flex items-center">
+                    Avg Rank
+                    <MetricInfo tooltip={METRIC_TOOLTIPS.avgRank} id="avg-rank" />
+                  </p>
                   <div className="flex items-baseline gap-2 mt-2">
                     <span className="text-4xl font-bold text-gray-900">
                       {avgRank !== null ? avgRank.toFixed(1) : "—"}
@@ -586,7 +632,10 @@ export default function MonitorDashboard() {
             <CardContent className="p-6">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-xs uppercase font-bold tracking-wider text-gray-500">Visibility Rate</p>
+                  <p className="text-xs uppercase font-bold tracking-wider text-gray-500 flex items-center">
+                    Visibility Rate
+                    <MetricInfo tooltip={METRIC_TOOLTIPS.visibilityRate} id="visibility-rate" />
+                  </p>
                   <div className="flex items-baseline gap-2 mt-2">
                     <span className="text-4xl font-bold text-[#5599f9]">{visibilityRate}%</span>
                   </div>
@@ -602,7 +651,10 @@ export default function MonitorDashboard() {
             <CardContent className="p-6">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-xs uppercase font-bold tracking-wider text-gray-500">Citation Rate</p>
+                  <p className="text-xs uppercase font-bold tracking-wider text-gray-500 flex items-center">
+                    Citation Rate
+                    <MetricInfo tooltip={METRIC_TOOLTIPS.citationRate} id="citation-rate" />
+                  </p>
                   <div className="flex items-baseline gap-2 mt-2">
                     <span className="text-4xl font-bold text-[#ffb41c]">{citationRate}%</span>
                   </div>
@@ -618,7 +670,10 @@ export default function MonitorDashboard() {
             <CardContent className="p-6">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-xs uppercase font-bold tracking-wider text-gray-500">Next Check</p>
+                  <p className="text-xs uppercase font-bold tracking-wider text-gray-500 flex items-center">
+                    Next Check
+                    <MetricInfo tooltip={METRIC_TOOLTIPS.nextCheck} id="next-check" />
+                  </p>
                   <div className="text-lg font-bold text-gray-900 mt-2">
                     {client.nextCheckAt 
                       ? format(new Date(client.nextCheckAt), "MMM d, yyyy")
@@ -637,7 +692,10 @@ export default function MonitorDashboard() {
           {/* Score Trend Chart with View Selector */}
           <Card className="md:col-span-2 shadow-2xl shadow-blue-900/5">
             <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap">
-              <CardTitle className="text-lg font-bold tracking-tight">Visibility Trend</CardTitle>
+              <CardTitle className="text-lg font-bold tracking-tight flex items-center">
+                Visibility Trend
+                <MetricInfo tooltip={METRIC_TOOLTIPS.visibilityTrend} id="visibility-trend" />
+              </CardTitle>
               <div className="flex items-center gap-3">
                 <Tabs value={trendView} onValueChange={(v) => setTrendView(v as "overall" | "groups" | "competitors")} className="w-auto">
                   <TabsList className="h-8">
@@ -787,7 +845,10 @@ export default function MonitorDashboard() {
           {/* Platform Visibility */}
           <Card className="shadow-2xl shadow-blue-900/5">
             <CardHeader>
-              <CardTitle className="text-lg font-bold tracking-tight">Platform Visibility</CardTitle>
+              <CardTitle className="text-lg font-bold tracking-tight flex items-center">
+                Platform Visibility
+                <MetricInfo tooltip={METRIC_TOOLTIPS.platformVisibility} id="platform-visibility" />
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               {/* ChatGPT */}
@@ -852,7 +913,10 @@ export default function MonitorDashboard() {
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-2">
                   <Users className="w-4 h-4 text-[#5599f9]" />
-                  <CardTitle className="text-sm font-bold tracking-tight">Share of Voice</CardTitle>
+                  <CardTitle className="text-sm font-bold tracking-tight flex items-center">
+                    Share of Voice
+                    <MetricInfo tooltip={METRIC_TOOLTIPS.shareOfVoice} id="share-of-voice" />
+                  </CardTitle>
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
@@ -893,7 +957,10 @@ export default function MonitorDashboard() {
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-2">
                   <Link2 className="w-4 h-4 text-[#ffb41c]" />
-                  <CardTitle className="text-sm font-bold tracking-tight">Top Citations</CardTitle>
+                  <CardTitle className="text-sm font-bold tracking-tight flex items-center">
+                    Top Citations
+                    <MetricInfo tooltip={METRIC_TOOLTIPS.topCitations} id="top-citations" />
+                  </CardTitle>
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
@@ -930,7 +997,10 @@ export default function MonitorDashboard() {
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-2">
                   <Award className="w-4 h-4 text-green-500" />
-                  <CardTitle className="text-sm font-bold tracking-tight">Prominence</CardTitle>
+                  <CardTitle className="text-sm font-bold tracking-tight flex items-center">
+                    Prominence
+                    <MetricInfo tooltip={METRIC_TOOLTIPS.prominence} id="prominence" />
+                  </CardTitle>
                 </div>
               </CardHeader>
               <CardContent className="pt-0 space-y-3">
@@ -965,7 +1035,10 @@ export default function MonitorDashboard() {
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-2">
                   <ThumbsUp className="w-4 h-4 text-green-500" />
-                  <CardTitle className="text-sm font-bold tracking-tight">Sentiment Score</CardTitle>
+                  <CardTitle className="text-sm font-bold tracking-tight flex items-center">
+                    Sentiment Score
+                    <MetricInfo tooltip={METRIC_TOOLTIPS.sentimentScore} id="sentiment-score" />
+                  </CardTitle>
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
@@ -1028,7 +1101,10 @@ export default function MonitorDashboard() {
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-2">
                   <Building2 className="w-4 h-4 text-[#5599f9]" />
-                  <CardTitle className="text-sm font-bold tracking-tight">Competitor Visibility</CardTitle>
+                  <CardTitle className="text-sm font-bold tracking-tight flex items-center">
+                    Competitor Visibility
+                    <MetricInfo tooltip={METRIC_TOOLTIPS.competitorVisibility} id="competitor-visibility" />
+                  </CardTitle>
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
@@ -1066,7 +1142,10 @@ export default function MonitorDashboard() {
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2">
                 <Meh className="w-5 h-5 text-[#ffb41c]" />
-                <CardTitle className="text-lg font-bold tracking-tight">Key Sentiment Drivers</CardTitle>
+                <CardTitle className="text-lg font-bold tracking-tight flex items-center">
+                  Key Sentiment Drivers
+                  <MetricInfo tooltip={METRIC_TOOLTIPS.sentimentDrivers} id="sentiment-drivers" />
+                </CardTitle>
               </div>
               <p className="text-sm text-gray-500 mt-1">Uncover what shapes your brand perception</p>
             </CardHeader>
