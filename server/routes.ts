@@ -691,9 +691,17 @@ export async function registerRoutes(
           const chatgptSentimentScore = calculateSentimentScore(result.chatgpt.response, client.businessName);
           const googleAISentimentScore = calculateSentimentScore(result.googleAI.response, client.businessName);
           
+          // Use API-extracted citations (with title info) if available, fallback to text-extracted
+          const chatgptCitationsToStore = result.chatgpt.citations.length > 0 
+            ? result.chatgpt.citations 
+            : chatgptAnalytics.citations;
+          const googleAICitationsToStore = result.googleAI.citations.length > 0 
+            ? result.googleAI.citations 
+            : googleAIAnalytics.citations;
+          
           // Collect for session-level aggregation
-          allChatgptCitations.push(chatgptAnalytics.citations);
-          allGoogleAICitations.push(googleAIAnalytics.citations);
+          allChatgptCitations.push(chatgptCitationsToStore);
+          allGoogleAICitations.push(googleAICitationsToStore);
           allChatgptRanks.push(chatgptAnalytics.rank);
           allGoogleAIRanks.push(googleAIAnalytics.rank);
           allChatgptSentiments.push(chatgptAnalytics.sentiment);
@@ -728,8 +736,8 @@ export async function registerRoutes(
             googleAISentimentScore,
             chatgptRank: chatgptAnalytics.rank,
             googleAIRank: googleAIAnalytics.rank,
-            chatgptCitations: chatgptAnalytics.citations,
-            googleAICitations: googleAIAnalytics.citations,
+            chatgptCitations: chatgptCitationsToStore,
+            googleAICitations: googleAICitationsToStore,
             chatgptSnippet: chatgptAnalytics.snippet,
             googleAISnippet: googleAIAnalytics.snippet,
           });
@@ -1123,9 +1131,17 @@ export async function registerRoutes(
           const chatgptSentimentScore = calculateSentimentScore(result.chatgpt.response, client.businessName);
           const googleAISentimentScore = calculateSentimentScore(result.googleAI.response, client.businessName);
           
+          // Use API-extracted citations (with title info) if available, fallback to text-extracted
+          const chatgptCitationsToStore = result.chatgpt.citations.length > 0 
+            ? result.chatgpt.citations 
+            : chatgptAnalytics.citations;
+          const googleAICitationsToStore = result.googleAI.citations.length > 0 
+            ? result.googleAI.citations 
+            : googleAIAnalytics.citations;
+          
           // Collect for aggregation
-          allChatgptCitations.push(chatgptAnalytics.citations);
-          allGoogleAICitations.push(googleAIAnalytics.citations);
+          allChatgptCitations.push(chatgptCitationsToStore);
+          allGoogleAICitations.push(googleAICitationsToStore);
           allChatgptRanks.push(chatgptAnalytics.rank);
           allGoogleAIRanks.push(googleAIAnalytics.rank);
           allChatgptSentiments.push(chatgptAnalytics.sentiment);
@@ -1159,8 +1175,8 @@ export async function registerRoutes(
             googleAISentimentScore,
             chatgptRank: chatgptAnalytics.rank,
             googleAIRank: googleAIAnalytics.rank,
-            chatgptCitations: chatgptAnalytics.citations,
-            googleAICitations: googleAIAnalytics.citations,
+            chatgptCitations: chatgptCitationsToStore,
+            googleAICitations: googleAICitationsToStore,
             chatgptSnippet: chatgptAnalytics.snippet,
             googleAISnippet: googleAIAnalytics.snippet,
           });
