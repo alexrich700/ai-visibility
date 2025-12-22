@@ -199,12 +199,20 @@ export type MonitoringClient = typeof monitoringClients.$inferSelect;
 // GROUPS - Service/product line categories
 // ============================================
 
+// Prompt categories for distinguishing service prompts from brand sentiment prompts
+export const PROMPT_CATEGORIES = {
+  SERVICE: 'service',       // Standard service-based prompts (e.g., "best plumber in Austin")
+  BRAND_SENTIMENT: 'brand_sentiment',  // Direct brand questions (e.g., "What do you think of XYZ Business?")
+} as const;
+export type PromptCategory = typeof PROMPT_CATEGORIES[keyof typeof PROMPT_CATEGORIES];
+
 export const monitoringGroups = pgTable("monitoring_groups", {
   id: serial("id").primaryKey(),
   clientId: integer("client_id").references(() => monitoringClients.id).notNull(),
   name: text("name").notNull(),
   description: text("description"),
   isHighLevelCategory: boolean("is_high_level_category").notNull().default(false), // True for umbrella term (e.g., "Plumber", "HVAC Contractor")
+  promptCategory: text("prompt_category").notNull().default('service'), // 'service' or 'brand_sentiment'
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

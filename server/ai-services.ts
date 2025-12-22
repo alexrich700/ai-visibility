@@ -10,6 +10,43 @@ import {
 // Configuration constants for prompt generation
 export const PROMPTS_PER_GROUP = 5; // Number of prompts to generate per service group
 
+// ============================================
+// BRAND SENTIMENT PROMPT TEMPLATES
+// These prompts ask AI directly about a specific business to get sentiment feedback
+// ============================================
+
+/**
+ * Generate brand sentiment prompts for a business.
+ * These prompts ask AI platforms directly about the business to gather
+ * specific feedback, issues, and sentiment - NOT visibility.
+ * 
+ * @param businessName - The name of the business
+ * @param industry - The industry/category (e.g., "plumbing", "marketing agency")
+ * @param city - Optional city for local businesses
+ * @returns Array of 4 brand sentiment prompts
+ */
+export function generateBrandSentimentPrompts(
+  businessName: string,
+  industry: string,
+  city?: string
+): string[] {
+  const locationContext = city ? ` in ${city}` : '';
+  
+  return [
+    // 1. Overall perception / reputation
+    `What do you know about ${businessName}${locationContext}? Is it a reputable ${industry} business?`,
+    
+    // 2. Customer experience and reviews
+    `What are customers saying about ${businessName}? What are common complaints or praise points for this ${industry} company?`,
+    
+    // 3. Trust and credibility 
+    `Would you recommend ${businessName}${locationContext} for ${industry} services? What are the pros and cons?`,
+    
+    // 4. Specific pain points / issues
+    `What should someone know before hiring ${businessName}? Are there any red flags or issues with this ${industry} business?`,
+  ];
+}
+
 // OpenAI client using user's direct API key
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,

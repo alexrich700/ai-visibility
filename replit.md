@@ -78,6 +78,20 @@ When generating service groups for monitoring clients:
 - Aliases are threaded through the entire query chain: `runPromptCheck` → `queryOpenAI`/`queryGoogleAI` → `checkForMentions`
 - Uses Set-based deduplication to avoid redundant comparisons
 
+**Brand Sentiment Prompts Feature:**
+- Two prompt categories: SERVICE (for visibility tracking) and BRAND_SENTIMENT (for direct feedback)
+- Brand sentiment group automatically created during client onboarding with 4 specific prompts:
+  - Perception prompt: "What do people say about {business name}?"
+  - Customer experience prompt: "What are common customer experiences with {business name}?"
+  - Trust factors prompt: "What factors affect trust in {business name}?"
+  - Pain points prompt: "What issues or problems have customers reported about {business name}?"
+- Brand sentiment prompts are **excluded from visibility scoring** (only service prompts count toward visibility metrics)
+- Tracked via `isBrandSentiment` flag on each stored result
+- Uses `servicePromptCount` for all visibility calculations (total prompts minus brand sentiment prompts)
+- `collectBrandSentimentFindings()` helper extracts issues and praise from brand prompt responses
+- Brand sentiment findings are merged into sentiment statements (prepended to positive/negative arrays, limited to 5)
+- This provides more specific, actionable feedback about the business directly from AI platforms
+
 Fallback simulation is provided when API keys are unavailable or errors occur.
 
 **Real-time Progress Streaming:**

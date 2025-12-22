@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { runAudit, generateServiceGroups, generatePromptsForGroups, runPromptCheck, synthesizeSentimentNarratives, type SynthesizedNarratives } from "./ai-services";
+import { runAudit, generateServiceGroups, generatePromptsForGroups, runPromptCheck, synthesizeSentimentNarratives, generateBrandSentimentPrompts, type SynthesizedNarratives } from "./ai-services";
 import { auditRequestSchema, leadSchema, monitoringClientRequestSchema } from "@shared/schema";
 import { z } from "zod";
 import { randomUUID } from "crypto";
@@ -17,7 +17,9 @@ import {
   calculateOverallSentimentScore,
   aggregateSentimentStatements,
   computeCompetitorVisibility,
-  type Citation
+  collectBrandSentimentFindings,
+  type Citation,
+  type BrandSentimentFinding
 } from "./services/scan-analytics";
 import { streamExportZip } from "./services/export-generator";
 
@@ -513,17 +515,32 @@ export async function registerRoutes(
       // Create groups and map their IDs
       const groupIdMap: Record<string, number> = {};
       const groupNames: string[] = [];
+      const brandSentimentGroupName = "Brand Sentiment";
+      
       for (const group of groups) {
         const createdGroup = await storage.createGroup({
           clientId: client.id,
           name: group.name,
           description: group.description || null,
           isHighLevelCategory: group.isHighLevelCategory || false,
+          promptCategory: 'service', // Regular service prompts
           isActive: true,
         });
         groupIdMap[group.name] = createdGroup.id;
         groupNames.push(group.name);
       }
+      
+      // Create Brand Sentiment group with brand-specific prompts
+      const brandSentimentGroup = await storage.createGroup({
+        clientId: client.id,
+        name: brandSentimentGroupName,
+        description: "Direct brand questions to gather sentiment and feedback",
+        isHighLevelCategory: false,
+        promptCategory: 'brand_sentiment', // Brand sentiment category - excluded from visibility metrics
+        isActive: true,
+      });
+      groupIdMap[brandSentimentGroupName] = brandSentimentGroup.id;
+      groupNames.push(brandSentimentGroupName);
       
       sendEvent("status", { message: "Preparing prompts...", progress: 10 });
       
@@ -544,8 +561,31 @@ export async function registerRoutes(
         }
       }
       
+      // Generate and create brand sentiment prompts
+      const brandSentimentPrompts = generateBrandSentimentPrompts(
+        client.businessName,
+        client.industry,
+        client.city || undefined
+      );
+      promptsByGroup[brandSentimentGroupName] = [];
+      for (const promptText of brandSentimentPrompts) {
+        const createdPrompt = await storage.createPrompt({
+          groupId: brandSentimentGroup.id,
+          promptText,
+          isActive: true,
+        });
+        promptsByGroup[brandSentimentGroupName].push({
+          id: createdPrompt.id,
+          groupId: brandSentimentGroup.id,
+          text: promptText,
+        });
+      }
+      
       const allPrompts = Object.values(promptsByGroup).flat();
       const totalPrompts = allPrompts.length;
+      
+      // Calculate service-only prompt count for visibility scoring (exclude brand sentiment)
+      const servicePromptCount = totalPrompts - (promptsByGroup[brandSentimentGroupName]?.length || 0);
       
       // Create check session
       const session = await storage.createCheckSession({
@@ -553,7 +593,7 @@ export async function registerRoutes(
         overallScore: 0,
         chatgptScore: 0,
         googleAIScore: 0,
-        totalPrompts,
+        totalPrompts: servicePromptCount, // Store only service prompts in visibility totals
         foundCount: 0,
         citedCount: 0,
       });
@@ -561,10 +601,10 @@ export async function registerRoutes(
       // Run visibility checks with bounded concurrency (4 prompts at a time)
       // Each prompt still runs ChatGPT and Gemini in parallel internally
       const CONCURRENT_PROMPTS = 4;
-      let foundCount = 0;
-      let citedCount = 0;
-      let chatgptFoundCount = 0;
-      let googleAIFoundCount = 0;
+      let foundCount = 0;  // Service prompts only
+      let citedCount = 0;  // Service prompts only
+      let chatgptFoundCount = 0;  // Service prompts only
+      let googleAIFoundCount = 0;  // Service prompts only
       let completedCount = 0;
       
       // Analytics collection for session-level aggregation
@@ -581,6 +621,7 @@ export async function registerRoutes(
         promptText: string;
         chatgptSentimentScore: number | null;
         googleAISentimentScore: number | null;
+        isBrandSentiment: boolean;  // Track if this is a brand sentiment prompt
       }[] = [];
       
       // Per-group metrics tracking
@@ -699,6 +740,9 @@ export async function registerRoutes(
             ? result.googleAI.citations 
             : googleAIAnalytics.citations;
           
+          // Track if this is a brand sentiment prompt (excluded from visibility scoring)
+          const isBrandSentiment = groupName === brandSentimentGroupName;
+          
           // Collect for session-level aggregation
           allChatgptCitations.push(chatgptCitationsToStore);
           allGoogleAICitations.push(googleAICitationsToStore);
@@ -712,7 +756,8 @@ export async function registerRoutes(
             googleAIResponse: result.googleAI.response,
             promptText: prompt.text,
             chatgptSentimentScore,
-            googleAISentimentScore
+            googleAISentimentScore,
+            isBrandSentiment
           });
           
           // Store result with analytics
@@ -742,12 +787,15 @@ export async function registerRoutes(
             googleAISnippet: googleAIAnalytics.snippet,
           });
           
-          if (result.chatgpt.found || result.googleAI.found) foundCount++;
-          if (result.chatgpt.cited || result.googleAI.cited) citedCount++;
-          if (result.chatgpt.found) chatgptFoundCount++;
-          if (result.googleAI.found) googleAIFoundCount++;
+          // Only count service prompts for visibility scoring (exclude brand sentiment prompts)
+          if (!isBrandSentiment) {
+            if (result.chatgpt.found || result.googleAI.found) foundCount++;
+            if (result.chatgpt.cited || result.googleAI.cited) citedCount++;
+            if (result.chatgpt.found) chatgptFoundCount++;
+            if (result.googleAI.found) googleAIFoundCount++;
+          }
           
-          // Track per-group metrics
+          // Track per-group metrics (include all groups for display purposes)
           if (groupMetrics[groupName]) {
             if (result.chatgpt.found || result.googleAI.found) groupMetrics[groupName].foundCount++;
             if (result.chatgpt.cited || result.googleAI.cited) groupMetrics[groupName].citedCount++;
@@ -793,10 +841,10 @@ export async function registerRoutes(
         return;
       }
       
-      // Calculate final scores
-      const overallScore = totalPrompts > 0 ? Math.round((foundCount / totalPrompts) * 100) : 0;
-      const chatgptScore = totalPrompts > 0 ? Math.round((chatgptFoundCount / totalPrompts) * 100) : 0;
-      const googleAIScore = totalPrompts > 0 ? Math.round((googleAIFoundCount / totalPrompts) * 100) : 0;
+      // Calculate final scores (using service prompt count, excluding brand sentiment)
+      const overallScore = servicePromptCount > 0 ? Math.round((foundCount / servicePromptCount) * 100) : 0;
+      const chatgptScore = servicePromptCount > 0 ? Math.round((chatgptFoundCount / servicePromptCount) * 100) : 0;
+      const googleAIScore = servicePromptCount > 0 ? Math.round((googleAIFoundCount / servicePromptCount) * 100) : 0;
       
       sendEvent("status", { message: "Calculating final scores...", progress: 97 });
       
@@ -815,11 +863,37 @@ export async function registerRoutes(
         .filter((s): s is number => s !== null);
       const sentimentScore = calculateOverallSentimentScore(allSentimentScores);
       
-      // Compute competitor visibility
-      const competitorVisibility = computeCompetitorVisibility(competitorCounts, totalPrompts, 5);
+      // Compute competitor visibility (using service prompts only)
+      const competitorVisibility = computeCompetitorVisibility(competitorCounts, servicePromptCount, 5);
       
-      // Extract sentiment statements
+      // Extract sentiment statements from service prompts
       const sentimentStatements = aggregateSentimentStatements(storedResults, client.businessName);
+      
+      // Extract brand sentiment findings from brand-specific prompts
+      const brandSentimentFindings = collectBrandSentimentFindings(storedResults, client.businessName);
+      
+      // Merge brand sentiment findings into negative statements for Areas for Improvement
+      // Brand sentiment issues provide more specific, actionable feedback
+      if (brandSentimentFindings.issues.length > 0) {
+        const brandIssueStatements = brandSentimentFindings.issues.map(finding => ({
+          text: finding.text,
+          platform: finding.platform,
+          promptText: finding.promptText
+        }));
+        // Prepend brand sentiment issues (they're more specific than service prompt sentiment)
+        sentimentStatements.negative = [...brandIssueStatements, ...sentimentStatements.negative].slice(0, 5);
+      }
+      
+      // Merge brand sentiment praise into positive statements
+      if (brandSentimentFindings.praise.length > 0) {
+        const brandPraiseStatements = brandSentimentFindings.praise.map(finding => ({
+          text: finding.text,
+          platform: finding.platform,
+          promptText: finding.promptText
+        }));
+        // Prepend brand sentiment praise
+        sentimentStatements.positive = [...brandPraiseStatements, ...sentimentStatements.positive].slice(0, 5);
+      }
       
       // Update session with final scores and analytics
       await storage.updateCheckSession(session.id, {
@@ -989,6 +1063,14 @@ export async function registerRoutes(
       
       const totalPrompts = prompts.length;
       
+      // Track which groups are brand sentiment groups (define early to use in servicePromptCount)
+      const brandSentimentGroupIds = new Set(
+        groups.filter(g => (g as any).promptCategory === 'brand_sentiment').map(g => g.id)
+      );
+      
+      // Calculate service-only prompt count for visibility scoring (exclude brand sentiment)
+      const servicePromptCount = prompts.filter(p => !brandSentimentGroupIds.has(p.groupId)).length;
+      
       // Safety guard: should never happen with validation in rescan-prepare, but prevent NaN
       if (totalPrompts <= 0) {
         sendEvent("error", { message: "No prompts configured for this client." });
@@ -1002,7 +1084,7 @@ export async function registerRoutes(
         overallScore: 0,
         chatgptScore: 0,
         googleAIScore: 0,
-        totalPrompts,
+        totalPrompts: servicePromptCount, // Store only service prompts in visibility totals
         foundCount: 0,
         citedCount: 0,
       });
@@ -1031,6 +1113,7 @@ export async function registerRoutes(
         promptText: string;
         chatgptSentimentScore: number | null;
         googleAISentimentScore: number | null;
+        isBrandSentiment: boolean;
       }[] = [];
       
       // Per-group metrics tracking for trending
@@ -1146,13 +1229,17 @@ export async function registerRoutes(
           allGoogleAIRanks.push(googleAIAnalytics.rank);
           allChatgptSentiments.push(chatgptAnalytics.sentiment);
           allGoogleAISentiments.push(googleAIAnalytics.sentiment);
+          // Check if this is a brand sentiment prompt
+          const isBrandSentiment = brandSentimentGroupIds.has(prompt.groupId);
+          
           storedResults.push({ 
             competitors: JSON.stringify(result.competitors),
             chatgptResponse: result.chatgpt.response,
             googleAIResponse: result.googleAI.response,
             promptText: prompt.promptText,
             chatgptSentimentScore,
-            googleAISentimentScore
+            googleAISentimentScore,
+            isBrandSentiment
           });
           
           // Store result
@@ -1181,10 +1268,13 @@ export async function registerRoutes(
             googleAISnippet: googleAIAnalytics.snippet,
           });
           
-          if (result.chatgpt.found || result.googleAI.found) foundCount++;
-          if (result.chatgpt.cited || result.googleAI.cited) citedCount++;
-          if (result.chatgpt.found) chatgptFoundCount++;
-          if (result.googleAI.found) googleAIFoundCount++;
+          // Only count service prompts for visibility scoring (exclude brand sentiment prompts)
+          if (!isBrandSentiment) {
+            if (result.chatgpt.found || result.googleAI.found) foundCount++;
+            if (result.chatgpt.cited || result.googleAI.cited) citedCount++;
+            if (result.chatgpt.found) chatgptFoundCount++;
+            if (result.googleAI.found) googleAIFoundCount++;
+          }
           
           // Track per-group metrics
           if (groupMetrics[groupName]) {
@@ -1223,16 +1313,16 @@ export async function registerRoutes(
         return;
       }
       
-      // Calculate final scores
-      const overallScore = totalPrompts > 0 ? Math.round((foundCount / totalPrompts) * 100) : 0;
-      const chatgptScore = totalPrompts > 0 ? Math.round((chatgptFoundCount / totalPrompts) * 100) : 0;
-      const googleAIScore = totalPrompts > 0 ? Math.round((googleAIFoundCount / totalPrompts) * 100) : 0;
+      // Calculate final scores (using service prompt count, excluding brand sentiment)
+      const overallScore = servicePromptCount > 0 ? Math.round((foundCount / servicePromptCount) * 100) : 0;
+      const chatgptScore = servicePromptCount > 0 ? Math.round((chatgptFoundCount / servicePromptCount) * 100) : 0;
+      const googleAIScore = servicePromptCount > 0 ? Math.round((googleAIFoundCount / servicePromptCount) * 100) : 0;
       
       sendEvent("status", { message: "Calculating final scores...", progress: 97 });
       
       // Aggregate session-level analytics
       const competitorCounts = aggregateCompetitorMentions(storedResults);
-      const shareOfVoice = computeShareOfVoice(client.businessName, foundCount, competitorCounts, totalPrompts);
+      const shareOfVoice = computeShareOfVoice(client.businessName, foundCount, competitorCounts, servicePromptCount);
       const avgChatgptRank = calculateAverageRank(allChatgptRanks);
       const avgGoogleAIRank = calculateAverageRank(allGoogleAIRanks);
       const firstPlaceCount = countFirstPlace(allChatgptRanks) + countFirstPlace(allGoogleAIRanks);
@@ -1245,11 +1335,34 @@ export async function registerRoutes(
         .filter((s): s is number => s !== null);
       const sentimentScore = calculateOverallSentimentScore(allSentimentScores);
       
-      // Compute competitor visibility
-      const competitorVisibility = computeCompetitorVisibility(competitorCounts, totalPrompts, 5);
+      // Compute competitor visibility (using service prompts only)
+      const competitorVisibility = computeCompetitorVisibility(competitorCounts, servicePromptCount, 5);
       
-      // Extract sentiment statements
+      // Extract sentiment statements from service prompts
       const sentimentStatements = aggregateSentimentStatements(storedResults, client.businessName);
+      
+      // Extract brand sentiment findings from brand-specific prompts (rescan flow)
+      const brandSentimentFindings = collectBrandSentimentFindings(storedResults, client.businessName);
+      
+      // Merge brand sentiment findings into negative statements for Areas for Improvement
+      if (brandSentimentFindings.issues.length > 0) {
+        const brandIssueStatements = brandSentimentFindings.issues.map(finding => ({
+          text: finding.text,
+          platform: finding.platform,
+          promptText: finding.promptText
+        }));
+        sentimentStatements.negative = [...brandIssueStatements, ...sentimentStatements.negative].slice(0, 5);
+      }
+      
+      // Merge brand sentiment praise into positive statements
+      if (brandSentimentFindings.praise.length > 0) {
+        const brandPraiseStatements = brandSentimentFindings.praise.map(finding => ({
+          text: finding.text,
+          platform: finding.platform,
+          promptText: finding.promptText
+        }));
+        sentimentStatements.positive = [...brandPraiseStatements, ...sentimentStatements.positive].slice(0, 5);
+      }
       
       // Update session with final scores and analytics
       await storage.updateCheckSession(session.id, {

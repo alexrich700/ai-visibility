@@ -675,6 +675,153 @@ export function aggregateSentimentStatements(
   };
 }
 
+// ============================================
+// BRAND SENTIMENT FINDINGS EXTRACTION
+// ============================================
+
+export interface BrandSentimentFinding {
+  text: string;           // The specific issue or feedback
+  promptText: string;     // The prompt that generated this finding
+  platform: 'chatgpt' | 'google';
+  type: 'issue' | 'praise';  // Whether this is a problem or positive feedback
+}
+
+/**
+ * Extracts specific brand sentiment findings from brand-specific prompt responses.
+ * These are direct questions about the business that yield specific feedback.
+ * 
+ * @param results - Results from brand sentiment prompts only (isBrandSentiment === true)
+ * @param brandName - The business name
+ * @returns Array of specific findings (issues and praise)
+ */
+export function collectBrandSentimentFindings(
+  results: Array<{
+    chatgptResponse: string | null;
+    googleAIResponse: string | null;
+    promptText: string;
+    isBrandSentiment: boolean;
+  }>,
+  brandName: string
+): { issues: BrandSentimentFinding[]; praise: BrandSentimentFinding[] } {
+  const findings = { issues: [] as BrandSentimentFinding[], praise: [] as BrandSentimentFinding[] };
+  
+  // Only process brand sentiment prompts
+  const brandSentimentResults = results.filter(r => r.isBrandSentiment);
+  
+  for (const result of brandSentimentResults) {
+    // Extract findings from ChatGPT response
+    if (result.chatgptResponse) {
+      const chatgptFindings = extractBrandFindings(
+        result.chatgptResponse,
+        result.promptText,
+        'chatgpt',
+        brandName
+      );
+      findings.issues.push(...chatgptFindings.issues);
+      findings.praise.push(...chatgptFindings.praise);
+    }
+    
+    // Extract findings from Google AI response
+    if (result.googleAIResponse) {
+      const googleFindings = extractBrandFindings(
+        result.googleAIResponse,
+        result.promptText,
+        'google',
+        brandName
+      );
+      findings.issues.push(...googleFindings.issues);
+      findings.praise.push(...googleFindings.praise);
+    }
+  }
+  
+  // Limit to top 5 of each, prioritize variety
+  return {
+    issues: findings.issues.slice(0, 5),
+    praise: findings.praise.slice(0, 5)
+  };
+}
+
+/**
+ * Extracts specific issues and praise from a single AI response
+ */
+function extractBrandFindings(
+  responseText: string,
+  promptText: string,
+  platform: 'chatgpt' | 'google',
+  brandName: string
+): { issues: BrandSentimentFinding[]; praise: BrandSentimentFinding[] } {
+  const issues: BrandSentimentFinding[] = [];
+  const praise: BrandSentimentFinding[] = [];
+  
+  const lowerText = responseText.toLowerCase();
+  
+  // Issue indicators - things that suggest problems or areas for improvement
+  const issuePatterns = [
+    /(?:however|but|although|unfortunately|downside|drawback|concern|issue|problem|complaint|negative|lack|missing|doesn'?t|don'?t|can'?t|limited|expensive|slow|poor)[^.!?]*[.!?]/gi,
+    /(?:some (?:customers|users|reviews|people) (?:have )?(?:reported|mentioned|complained|noted))[^.!?]*[.!?]/gi,
+    /(?:could (?:be )?(?:better|improved|more))[^.!?]*[.!?]/gi,
+    /(?:not (?:always|the best|ideal|recommended|great))[^.!?]*[.!?]/gi,
+    /(?:red flag|caution|warning|be aware)[^.!?]*[.!?]/gi,
+  ];
+  
+  // Praise indicators - things that suggest positive attributes
+  const praisePatterns = [
+    /(?:excellent|outstanding|great|fantastic|exceptional|highly (?:rated|recommended)|positive|praised|professional|reliable|trusted|quick|fast|responsive|affordable|quality)[^.!?]*[.!?]/gi,
+    /(?:customers (?:love|appreciate|praise)|known for|stands out|specializes|expert)[^.!?]*[.!?]/gi,
+    /(?:recommend(?:ed)?|worth|good choice|solid choice)[^.!?]*[.!?]/gi,
+  ];
+  
+  // Extract issues
+  for (const pattern of issuePatterns) {
+    const matches = responseText.match(pattern) || [];
+    for (const match of matches) {
+      // Ensure the finding relates to the brand
+      const matchLower = match.toLowerCase();
+      if (matchLower.includes(brandName.toLowerCase()) || 
+          matchLower.includes('they') || 
+          matchLower.includes('their') ||
+          matchLower.includes('the company') ||
+          matchLower.includes('the business')) {
+        const cleanMatch = match.trim();
+        if (cleanMatch.length > 20 && cleanMatch.length < 300) {
+          issues.push({
+            text: cleanMatch,
+            promptText,
+            platform,
+            type: 'issue'
+          });
+        }
+      }
+    }
+  }
+  
+  // Extract praise
+  for (const pattern of praisePatterns) {
+    const matches = responseText.match(pattern) || [];
+    for (const match of matches) {
+      // Ensure the finding relates to the brand
+      const matchLower = match.toLowerCase();
+      if (matchLower.includes(brandName.toLowerCase()) || 
+          matchLower.includes('they') || 
+          matchLower.includes('their') ||
+          matchLower.includes('the company') ||
+          matchLower.includes('the business')) {
+        const cleanMatch = match.trim();
+        if (cleanMatch.length > 20 && cleanMatch.length < 300) {
+          praise.push({
+            text: cleanMatch,
+            promptText,
+            platform,
+            type: 'praise'
+          });
+        }
+      }
+    }
+  }
+  
+  return { issues, praise };
+}
+
 export interface CompetitorVisibility {
   name: string;
   visibilityPercent: number;
