@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
+  LineChart, Line, AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts";
 import {
@@ -460,11 +460,6 @@ export default function MonitorDashboard() {
     "#ec4899", "#14b8a6", "#f97316", "#6366f1", "#84cc16"
   ];
 
-  const platformPieData = [
-    { name: "ChatGPT", value: chatgptScore, color: COLORS.primary },
-    { name: "Google AI", value: googleAIScore, color: COLORS.accent },
-  ];
-
   const groupBarData = resultsByGroup.map((g) => {
     const groupFoundCount = g.results.filter(r => r.chatgptFound || r.googleAIFound).length;
     const groupTotal = g.results.length;
@@ -817,37 +812,61 @@ export default function MonitorDashboard() {
             </CardContent>
           </Card>
 
-          {/* Platform Breakdown */}
+          {/* Platform Visibility */}
           <Card className="shadow-2xl shadow-blue-900/5">
             <CardHeader>
-              <CardTitle className="text-lg font-bold tracking-tight">Platform Scores</CardTitle>
+              <CardTitle className="text-lg font-bold tracking-tight">Platform Visibility</CardTitle>
             </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={200}>
-                <PieChart>
-                  <Pie
-                    data={platformPieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={50}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {platformPieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="flex justify-center gap-6 mt-4">
-                {platformPieData.map((entry) => (
-                  <div key={entry.name} className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }} />
-                    <span className="text-sm text-gray-600">{entry.name}: {entry.value}</span>
+            <CardContent className="space-y-6">
+              {/* ChatGPT */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-[#5599f9]" />
+                    <span className="font-medium text-gray-900">ChatGPT</span>
                   </div>
-                ))}
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl font-bold text-[#5599f9]">{chatgptVisibility}%</span>
+                    <span className="text-sm text-gray-500">({chatgptFoundCount}/{promptCount})</span>
+                  </div>
+                </div>
+                <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-[#5599f9] rounded-full transition-all"
+                    style={{ width: `${chatgptVisibility}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Google AI */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-[#ffb41c]" />
+                    <span className="font-medium text-gray-900">Google AI</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl font-bold text-[#ffb41c]">{googleAIVisibility}%</span>
+                    <span className="text-sm text-gray-500">({googleAIFoundCount}/{promptCount})</span>
+                  </div>
+                </div>
+                <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-[#ffb41c] rounded-full transition-all"
+                    style={{ width: `${googleAIVisibility}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Summary */}
+              <div className="pt-4 border-t border-gray-100">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">Combined Visibility</span>
+                  <span className="font-bold text-gray-900">{visibilityRate}%</span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Found in {foundCount} of {totalExposures} total AI responses
+                </p>
               </div>
             </CardContent>
           </Card>
