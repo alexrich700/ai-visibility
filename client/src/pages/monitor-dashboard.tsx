@@ -632,34 +632,6 @@ export default function MonitorDashboard() {
           </Card>
         </div>
 
-        {/* Platform Visibility Breakdown */}
-        <Card className="shadow-2xl shadow-blue-900/5">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-8 flex-wrap">
-              <p className="text-xs uppercase font-bold tracking-wider text-gray-500">Platform Visibility</p>
-              <div className="flex items-center gap-6 flex-1">
-                <div className="flex items-center gap-3" data-testid="stat-chatgpt-visibility">
-                  <div className="w-3 h-3 rounded-full bg-[#5599f9]" />
-                  <div>
-                    <span className="text-2xl font-bold text-gray-900">{chatgptVisibility}%</span>
-                    <span className="text-sm text-gray-500 ml-2">ChatGPT</span>
-                  </div>
-                  <span className="text-xs text-gray-400">({chatgptFoundCount}/{promptCount})</span>
-                </div>
-                <div className="w-px h-8 bg-gray-200" />
-                <div className="flex items-center gap-3" data-testid="stat-google-visibility">
-                  <div className="w-3 h-3 rounded-full bg-[#ffb41c]" />
-                  <div>
-                    <span className="text-2xl font-bold text-gray-900">{googleAIVisibility}%</span>
-                    <span className="text-sm text-gray-500 ml-2">Google AI</span>
-                  </div>
-                  <span className="text-xs text-gray-400">({googleAIFoundCount}/{promptCount})</span>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Charts Row */}
         <div className="grid md:grid-cols-3 gap-6">
           {/* Score Trend Chart with View Selector */}
