@@ -583,6 +583,17 @@ export async function registerRoutes(
         googleAISentimentScore: number | null;
       }[] = [];
       
+      // Per-group metrics tracking
+      const groupMetrics: Record<string, {
+        groupId: number;
+        totalPrompts: number;
+        foundCount: number;
+        citedCount: number;
+        chatgptFoundCount: number;
+        googleAIFoundCount: number;
+        competitors: string[];
+      }> = {};
+      
       const location = client.city || undefined;
       
       // Flatten all prompts with their group names and original indices for batch processing
@@ -608,6 +619,16 @@ export async function registerRoutes(
       for (const groupName of groupNames) {
         groupCompletedCounts[groupName] = 0;
         groupTotalCounts[groupName] = (promptsByGroup[groupName] || []).length;
+        // Initialize group metrics tracking
+        groupMetrics[groupName] = {
+          groupId: groupIdMap[groupName],
+          totalPrompts: groupTotalCounts[groupName],
+          foundCount: 0,
+          citedCount: 0,
+          chatgptFoundCount: 0,
+          googleAIFoundCount: 0,
+          competitors: [],
+        };
       }
       
       // Process prompts in concurrent batches
@@ -718,6 +739,17 @@ export async function registerRoutes(
           if (result.chatgpt.found) chatgptFoundCount++;
           if (result.googleAI.found) googleAIFoundCount++;
           
+          // Track per-group metrics
+          if (groupMetrics[groupName]) {
+            if (result.chatgpt.found || result.googleAI.found) groupMetrics[groupName].foundCount++;
+            if (result.chatgpt.cited || result.googleAI.cited) groupMetrics[groupName].citedCount++;
+            if (result.chatgpt.found) groupMetrics[groupName].chatgptFoundCount++;
+            if (result.googleAI.found) groupMetrics[groupName].googleAIFoundCount++;
+            if (result.competitors && result.competitors.length > 0) {
+              groupMetrics[groupName].competitors.push(...result.competitors);
+            }
+          }
+          
           // Track per-group completion
           groupCompletedCounts[groupName]++;
           
@@ -798,6 +830,40 @@ export async function registerRoutes(
         competitorVisibility,
         sentimentStatements,
       });
+      
+      // Store per-group metrics for trending
+      for (const groupName of groupNames) {
+        const gm = groupMetrics[groupName];
+        if (gm && gm.totalPrompts > 0) {
+          const visibilityScore = Math.round((gm.foundCount / gm.totalPrompts) * 100);
+          await storage.createCheckGroupMetric({
+            sessionId: session.id,
+            clientId: client.id,
+            groupId: gm.groupId,
+            groupName,
+            totalPrompts: gm.totalPrompts,
+            foundCount: gm.foundCount,
+            citedCount: gm.citedCount,
+            visibilityScore,
+            chatgptFoundCount: gm.chatgptFoundCount,
+            googleAIFoundCount: gm.googleAIFoundCount,
+          });
+        }
+      }
+      
+      // Store per-competitor metrics for trending
+      for (const [compName, count] of Object.entries(competitorCounts)) {
+        const visibilityPercent = totalPrompts > 0 ? (count / totalPrompts) * 100 : 0;
+        await storage.createCheckCompetitorMetric({
+          sessionId: session.id,
+          clientId: client.id,
+          competitorName: compName,
+          mentionCount: count,
+          visibilityPercent,
+          chatgptMentions: 0, // Not tracked separately in current flow
+          googleAIMentions: 0,
+        });
+      }
       
       // Update client
       await storage.updateMonitoringClient(client.id, {
@@ -959,6 +1025,17 @@ export async function registerRoutes(
         googleAISentimentScore: number | null;
       }[] = [];
       
+      // Per-group metrics tracking for trending
+      const groupMetrics: Record<string, {
+        groupId: number;
+        totalPrompts: number;
+        foundCount: number;
+        citedCount: number;
+        chatgptFoundCount: number;
+        googleAIFoundCount: number;
+        competitors: string[];
+      }> = {};
+      
       const location = client.city || undefined;
       
       // Map prompts with their group names
@@ -974,7 +1051,18 @@ export async function registerRoutes(
       
       for (const group of groups) {
         groupCompletedCounts[group.name] = 0;
-        groupTotalCounts[group.name] = prompts.filter(p => p.groupId === group.id).length;
+        const groupPromptCount = prompts.filter(p => p.groupId === group.id).length;
+        groupTotalCounts[group.name] = groupPromptCount;
+        // Initialize group metrics
+        groupMetrics[group.name] = {
+          groupId: group.id,
+          totalPrompts: groupPromptCount,
+          foundCount: 0,
+          citedCount: 0,
+          chatgptFoundCount: 0,
+          googleAIFoundCount: 0,
+          competitors: [],
+        };
       }
       
       // Process prompts in concurrent batches
@@ -1082,6 +1170,17 @@ export async function registerRoutes(
           if (result.chatgpt.found) chatgptFoundCount++;
           if (result.googleAI.found) googleAIFoundCount++;
           
+          // Track per-group metrics
+          if (groupMetrics[groupName]) {
+            if (result.chatgpt.found || result.googleAI.found) groupMetrics[groupName].foundCount++;
+            if (result.chatgpt.cited || result.googleAI.cited) groupMetrics[groupName].citedCount++;
+            if (result.chatgpt.found) groupMetrics[groupName].chatgptFoundCount++;
+            if (result.googleAI.found) groupMetrics[groupName].googleAIFoundCount++;
+            if (result.competitors && result.competitors.length > 0) {
+              groupMetrics[groupName].competitors.push(...result.competitors);
+            }
+          }
+          
           // Track per-group completion
           groupCompletedCounts[groupName]++;
           
@@ -1153,6 +1252,40 @@ export async function registerRoutes(
         competitorVisibility,
         sentimentStatements,
       });
+      
+      // Store per-group metrics for trending
+      for (const group of groups) {
+        const gm = groupMetrics[group.name];
+        if (gm && gm.totalPrompts > 0) {
+          const visibilityScore = Math.round((gm.foundCount / gm.totalPrompts) * 100);
+          await storage.createCheckGroupMetric({
+            sessionId: session.id,
+            clientId,
+            groupId: gm.groupId,
+            groupName: group.name,
+            totalPrompts: gm.totalPrompts,
+            foundCount: gm.foundCount,
+            citedCount: gm.citedCount,
+            visibilityScore,
+            chatgptFoundCount: gm.chatgptFoundCount,
+            googleAIFoundCount: gm.googleAIFoundCount,
+          });
+        }
+      }
+      
+      // Store per-competitor metrics for trending
+      for (const [compName, count] of Object.entries(competitorCounts)) {
+        const visibilityPercent = totalPrompts > 0 ? (count / totalPrompts) * 100 : 0;
+        await storage.createCheckCompetitorMetric({
+          sessionId: session.id,
+          clientId,
+          competitorName: compName,
+          mentionCount: count,
+          visibilityPercent,
+          chatgptMentions: 0,
+          googleAIMentions: 0,
+        });
+      }
       
       // Send completion event
       sendEvent("complete", { 
@@ -1241,6 +1374,126 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Get dashboard error:", error);
       res.status(500).json({ error: "Failed to get dashboard data" });
+    }
+  });
+
+  // Get group visibility trends over time
+  app.get("/api/monitoring/trends/groups/:clientId", async (req, res) => {
+    try {
+      const clientId = parseInt(req.params.clientId);
+      
+      const client = await storage.getMonitoringClientById(clientId);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+      
+      const groupMetrics = await storage.getGroupMetricsByClientId(clientId);
+      const sessions = await storage.getCheckSessionsByClientId(clientId);
+      
+      // Create a map of session dates
+      const sessionDates: Record<number, Date | null> = {};
+      for (const session of sessions) {
+        sessionDates[session.id] = session.createdAt;
+      }
+      
+      // Group metrics by group name, with trend data per session
+      const groupTrends: Record<string, { 
+        groupId: number; 
+        groupName: string; 
+        data: { date: Date | null; visibilityScore: number; foundCount: number; totalPrompts: number }[] 
+      }> = {};
+      
+      for (const metric of groupMetrics) {
+        if (!groupTrends[metric.groupName]) {
+          groupTrends[metric.groupName] = {
+            groupId: metric.groupId,
+            groupName: metric.groupName,
+            data: [],
+          };
+        }
+        groupTrends[metric.groupName].data.push({
+          date: sessionDates[metric.sessionId] || null,
+          visibilityScore: metric.visibilityScore,
+          foundCount: metric.foundCount,
+          totalPrompts: metric.totalPrompts,
+        });
+      }
+      
+      // Sort each group's data by date (oldest to newest)
+      for (const groupName of Object.keys(groupTrends)) {
+        groupTrends[groupName].data.sort((a, b) => {
+          if (!a.date || !b.date) return 0;
+          return new Date(a.date).getTime() - new Date(b.date).getTime();
+        });
+      }
+      
+      res.json({ groupTrends: Object.values(groupTrends) });
+    } catch (error) {
+      console.error("Get group trends error:", error);
+      res.status(500).json({ error: "Failed to get group trends" });
+    }
+  });
+
+  // Get competitor visibility trends over time
+  app.get("/api/monitoring/trends/competitors/:clientId", async (req, res) => {
+    try {
+      const clientId = parseInt(req.params.clientId);
+      
+      const client = await storage.getMonitoringClientById(clientId);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+      
+      const competitorMetrics = await storage.getCompetitorMetricsByClientId(clientId);
+      const sessions = await storage.getCheckSessionsByClientId(clientId);
+      
+      // Create a map of session dates
+      const sessionDates: Record<number, Date | null> = {};
+      for (const session of sessions) {
+        sessionDates[session.id] = session.createdAt;
+      }
+      
+      // Group metrics by competitor name, with trend data per session
+      const competitorTrends: Record<string, { 
+        competitorName: string; 
+        data: { date: Date | null; visibilityPercent: number; mentionCount: number }[] 
+      }> = {};
+      
+      for (const metric of competitorMetrics) {
+        if (!competitorTrends[metric.competitorName]) {
+          competitorTrends[metric.competitorName] = {
+            competitorName: metric.competitorName,
+            data: [],
+          };
+        }
+        competitorTrends[metric.competitorName].data.push({
+          date: sessionDates[metric.sessionId] || null,
+          visibilityPercent: metric.visibilityPercent,
+          mentionCount: metric.mentionCount,
+        });
+      }
+      
+      // Sort each competitor's data by date (oldest to newest)
+      for (const compName of Object.keys(competitorTrends)) {
+        competitorTrends[compName].data.sort((a, b) => {
+          if (!a.date || !b.date) return 0;
+          return new Date(a.date).getTime() - new Date(b.date).getTime();
+        });
+      }
+      
+      // Get top 10 competitors by total mentions across all sessions
+      const competitorTotals = Object.entries(competitorTrends).map(([name, trend]) => ({
+        name,
+        totalMentions: trend.data.reduce((sum, d) => sum + d.mentionCount, 0),
+        trend,
+      }));
+      competitorTotals.sort((a, b) => b.totalMentions - a.totalMentions);
+      const topCompetitors = competitorTotals.slice(0, 10).map(c => c.trend);
+      
+      res.json({ competitorTrends: topCompetitors });
+    } catch (error) {
+      console.error("Get competitor trends error:", error);
+      res.status(500).json({ error: "Failed to get competitor trends" });
     }
   });
 

@@ -97,6 +97,17 @@ interface DashboardData {
   trendData: TrendDataPoint[];
 }
 
+interface GroupTrendData {
+  groupId: number;
+  groupName: string;
+  data: { date: string | null; visibilityScore: number; foundCount: number; totalPrompts: number }[];
+}
+
+interface CompetitorTrendData {
+  competitorName: string;
+  data: { date: string | null; visibilityPercent: number; mentionCount: number }[];
+}
+
 const COLORS = {
   primary: "#5599f9",
   accent: "#ffb41c",
@@ -111,6 +122,7 @@ export default function MonitorDashboard() {
   const clientId = params?.id ? parseInt(params.id) : null;
   const [selectedGroup, setSelectedGroup] = useState<string>("all");
   const [timeRange, setTimeRange] = useState<string>("30");
+  const [trendView, setTrendView] = useState<"overall" | "groups" | "competitors">("overall");
   const [selectedResult, setSelectedResult] = useState<CheckResult | null>(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportStartDate, setExportStartDate] = useState(() => {
@@ -280,6 +292,18 @@ export default function MonitorDashboard() {
     enabled: !!clientId,
   });
 
+  // Fetch group trends when "groups" view is selected
+  const { data: groupTrendsData } = useQuery<{ groupTrends: GroupTrendData[] }>({
+    queryKey: ["/api/monitoring/trends/groups", clientId],
+    enabled: !!clientId && trendView === "groups",
+  });
+
+  // Fetch competitor trends when "competitors" view is selected
+  const { data: competitorTrendsData } = useQuery<{ competitorTrends: CompetitorTrendData[] }>({
+    queryKey: ["/api/monitoring/trends/competitors", clientId],
+    enabled: !!clientId && trendView === "competitors",
+  });
+
   if (!clientId) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -356,6 +380,74 @@ export default function MonitorDashboard() {
     chatgpt: session.chatgptScore,
     googleAI: session.googleAIScore,
   }));
+
+  // Prepare group trend chart data (merge all groups into a single dataset)
+  const groupTrendChartData = (() => {
+    if (!groupTrendsData?.groupTrends?.length) return [];
+    // Collect all unique date timestamps across all groups (use ISO string for deduplication)
+    const allDatesMap = new Map<string, Date>();
+    groupTrendsData.groupTrends.forEach(g => {
+      g.data.forEach(d => {
+        if (d.date) {
+          const dateObj = new Date(d.date);
+          const isoKey = dateObj.toISOString();
+          if (!allDatesMap.has(isoKey)) {
+            allDatesMap.set(isoKey, dateObj);
+          }
+        }
+      });
+    });
+    // Sort by actual date chronologically
+    const sortedDates = Array.from(allDatesMap.entries())
+      .sort((a, b) => a[1].getTime() - b[1].getTime());
+    
+    return sortedDates.map(([isoKey, dateObj]) => {
+      const displayDate = format(dateObj, "MMM d");
+      const point: Record<string, string | number> = { date: displayDate };
+      groupTrendsData.groupTrends.forEach(g => {
+        const match = g.data.find(d => d.date && new Date(d.date).toISOString() === isoKey);
+        point[g.groupName] = match?.visibilityScore ?? 0;
+      });
+      return point;
+    });
+  })();
+
+  // Prepare competitor trend chart data
+  const competitorTrendChartData = (() => {
+    if (!competitorTrendsData?.competitorTrends?.length) return [];
+    // Collect all unique date timestamps across all competitors (use ISO string for deduplication)
+    const allDatesMap = new Map<string, Date>();
+    competitorTrendsData.competitorTrends.forEach(c => {
+      c.data.forEach(d => {
+        if (d.date) {
+          const dateObj = new Date(d.date);
+          const isoKey = dateObj.toISOString();
+          if (!allDatesMap.has(isoKey)) {
+            allDatesMap.set(isoKey, dateObj);
+          }
+        }
+      });
+    });
+    // Sort by actual date chronologically
+    const sortedDates = Array.from(allDatesMap.entries())
+      .sort((a, b) => a[1].getTime() - b[1].getTime());
+    
+    return sortedDates.map(([isoKey, dateObj]) => {
+      const displayDate = format(dateObj, "MMM d");
+      const point: Record<string, string | number> = { date: displayDate };
+      competitorTrendsData.competitorTrends.forEach(c => {
+        const match = c.data.find(d => d.date && new Date(d.date).toISOString() === isoKey);
+        point[c.competitorName] = match ? Math.round(match.visibilityPercent * 10) / 10 : 0;
+      });
+      return point;
+    });
+  })();
+
+  // Colors for group/competitor lines
+  const trendLineColors = [
+    "#5599f9", "#ffb41c", "#22c55e", "#ef4444", "#8b5cf6", 
+    "#ec4899", "#14b8a6", "#f97316", "#6366f1", "#84cc16"
+  ];
 
   const platformPieData = [
     { name: "ChatGPT", value: chatgptScore, color: COLORS.primary },
@@ -564,71 +656,153 @@ export default function MonitorDashboard() {
 
         {/* Charts Row */}
         <div className="grid md:grid-cols-3 gap-6">
-          {/* Score Trend Chart */}
+          {/* Score Trend Chart with View Selector */}
           <Card className="md:col-span-2 shadow-2xl shadow-blue-900/5">
-            <CardHeader className="flex flex-row items-center justify-between gap-4">
-              <CardTitle className="text-lg font-bold tracking-tight">Score Trend</CardTitle>
-              <Select value={timeRange} onValueChange={setTimeRange}>
-                <SelectTrigger className="w-32" data-testid="select-time-range">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="7">Last 7 days</SelectItem>
-                  <SelectItem value="30">Last 30 days</SelectItem>
-                  <SelectItem value="90">Last 90 days</SelectItem>
-                </SelectContent>
-              </Select>
+            <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap">
+              <CardTitle className="text-lg font-bold tracking-tight">Visibility Trend</CardTitle>
+              <div className="flex items-center gap-3">
+                <Tabs value={trendView} onValueChange={(v) => setTrendView(v as "overall" | "groups" | "competitors")} className="w-auto">
+                  <TabsList className="h-8">
+                    <TabsTrigger value="overall" className="text-xs px-3" data-testid="tab-trend-overall">Overall</TabsTrigger>
+                    <TabsTrigger value="groups" className="text-xs px-3" data-testid="tab-trend-groups">By Group</TabsTrigger>
+                    <TabsTrigger value="competitors" className="text-xs px-3" data-testid="tab-trend-competitors">Competitors</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+                <Select value={timeRange} onValueChange={setTimeRange}>
+                  <SelectTrigger className="w-32" data-testid="select-time-range">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="7">Last 7 days</SelectItem>
+                    <SelectItem value="30">Last 30 days</SelectItem>
+                    <SelectItem value="90">Last 90 days</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <AreaChart data={sessionChartData}>
-                  <defs>
-                    <linearGradient id="colorOverall" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={COLORS.primary} stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor={COLORS.primary} stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="date" stroke="#9ca3af" fontSize={12} />
-                  <YAxis domain={[0, 100]} stroke="#9ca3af" fontSize={12} />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: "white", 
-                      border: "1px solid #e5e7eb",
-                      borderRadius: "8px",
-                      boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)"
-                    }} 
-                  />
-                  <Legend />
-                  <Area 
-                    type="monotone" 
-                    dataKey="overall" 
-                    stroke={COLORS.primary} 
-                    strokeWidth={2}
-                    fillOpacity={1} 
-                    fill="url(#colorOverall)" 
-                    name="Overall"
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="chatgpt" 
-                    stroke={COLORS.primary} 
-                    strokeWidth={2}
-                    strokeDasharray="5 5"
-                    dot={false}
-                    name="ChatGPT"
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="googleAI" 
-                    stroke={COLORS.accent} 
-                    strokeWidth={2}
-                    strokeDasharray="5 5"
-                    dot={false}
-                    name="Google AI"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+              {trendView === "overall" && (
+                <ResponsiveContainer width="100%" height={300}>
+                  <AreaChart data={sessionChartData}>
+                    <defs>
+                      <linearGradient id="colorOverall" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={COLORS.primary} stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor={COLORS.primary} stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis dataKey="date" stroke="#9ca3af" fontSize={12} />
+                    <YAxis domain={[0, 100]} stroke="#9ca3af" fontSize={12} />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: "white", 
+                        border: "1px solid #e5e7eb",
+                        borderRadius: "8px",
+                        boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)"
+                      }} 
+                    />
+                    <Legend />
+                    <Area 
+                      type="monotone" 
+                      dataKey="overall" 
+                      stroke={COLORS.primary} 
+                      strokeWidth={2}
+                      fillOpacity={1} 
+                      fill="url(#colorOverall)" 
+                      name="Overall"
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="chatgpt" 
+                      stroke={COLORS.primary} 
+                      strokeWidth={2}
+                      strokeDasharray="5 5"
+                      dot={false}
+                      name="ChatGPT"
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="googleAI" 
+                      stroke={COLORS.accent} 
+                      strokeWidth={2}
+                      strokeDasharray="5 5"
+                      dot={false}
+                      name="Google AI"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
+              {trendView === "groups" && (
+                <ResponsiveContainer width="100%" height={300}>
+                  {groupTrendChartData.length > 0 ? (
+                    <LineChart data={groupTrendChartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                      <XAxis dataKey="date" stroke="#9ca3af" fontSize={12} />
+                      <YAxis domain={[0, 100]} stroke="#9ca3af" fontSize={12} />
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: "white", 
+                          border: "1px solid #e5e7eb",
+                          borderRadius: "8px",
+                          boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)"
+                        }} 
+                      />
+                      <Legend />
+                      {groupTrendsData?.groupTrends?.map((g, i) => (
+                        <Line 
+                          key={g.groupId}
+                          type="monotone" 
+                          dataKey={g.groupName} 
+                          stroke={trendLineColors[i % trendLineColors.length]} 
+                          strokeWidth={2}
+                          dot={false}
+                          name={g.groupName.length > 20 ? g.groupName.slice(0, 20) + "..." : g.groupName}
+                        />
+                      ))}
+                    </LineChart>
+                  ) : (
+                    <div className="h-full flex items-center justify-center text-gray-400">
+                      <p>No group trend data available yet. Run a scan to start tracking.</p>
+                    </div>
+                  )}
+                </ResponsiveContainer>
+              )}
+              {trendView === "competitors" && (
+                <ResponsiveContainer width="100%" height={300}>
+                  {competitorTrendChartData.length > 0 ? (
+                    <LineChart data={competitorTrendChartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                      <XAxis dataKey="date" stroke="#9ca3af" fontSize={12} />
+                      <YAxis domain={[0, 100]} stroke="#9ca3af" fontSize={12} unit="%" />
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: "white", 
+                          border: "1px solid #e5e7eb",
+                          borderRadius: "8px",
+                          boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)"
+                        }}
+                        formatter={(value: number) => [`${value}%`, undefined]}
+                      />
+                      <Legend />
+                      {competitorTrendsData?.competitorTrends?.map((c, i) => (
+                        <Line 
+                          key={c.competitorName}
+                          type="monotone" 
+                          dataKey={c.competitorName} 
+                          stroke={trendLineColors[i % trendLineColors.length]} 
+                          strokeWidth={2}
+                          dot={false}
+                          name={c.competitorName.length > 20 ? c.competitorName.slice(0, 20) + "..." : c.competitorName}
+                        />
+                      ))}
+                    </LineChart>
+                  ) : (
+                    <div className="h-full flex items-center justify-center text-gray-400">
+                      <p>No competitor trend data available yet. Run a scan to start tracking.</p>
+                    </div>
+                  )}
+                </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
 

@@ -2,8 +2,11 @@ import { db } from "./db";
 import { 
   audits, leads, InsertAudit, InsertLead, Audit, DbLead,
   monitoringClients, monitoringGroups, monitoringPrompts, checkResults, checkSessions,
+  checkGroupMetrics, checkCompetitorMetrics,
   InsertMonitoringClient, InsertMonitoringGroup, InsertMonitoringPrompt, InsertCheckResult, InsertCheckSession,
-  MonitoringClient, MonitoringGroup, MonitoringPrompt, CheckResult, CheckSession
+  InsertCheckGroupMetric, InsertCheckCompetitorMetric,
+  MonitoringClient, MonitoringGroup, MonitoringPrompt, CheckResult, CheckSession,
+  CheckGroupMetric, CheckCompetitorMetric
 } from "@shared/schema";
 import { eq, desc, and } from "drizzle-orm";
 
@@ -46,6 +49,16 @@ export interface IStorage {
   createCheckSession(session: InsertCheckSession): Promise<CheckSession>;
   getCheckSessionsByClientId(clientId: number): Promise<CheckSession[]>;
   updateCheckSession(id: number, data: Partial<InsertCheckSession>): Promise<CheckSession | undefined>;
+  
+  // Group metrics operations (for trending by group)
+  createCheckGroupMetric(metric: InsertCheckGroupMetric): Promise<CheckGroupMetric>;
+  getGroupMetricsByClientId(clientId: number): Promise<CheckGroupMetric[]>;
+  getGroupMetricsBySessionId(sessionId: number): Promise<CheckGroupMetric[]>;
+  
+  // Competitor metrics operations (for competitor trending)
+  createCheckCompetitorMetric(metric: InsertCheckCompetitorMetric): Promise<CheckCompetitorMetric>;
+  getCompetitorMetricsByClientId(clientId: number): Promise<CheckCompetitorMetric[]>;
+  getCompetitorMetricsBySessionId(sessionId: number): Promise<CheckCompetitorMetric[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -240,6 +253,42 @@ export class DatabaseStorage implements IStorage {
       .where(eq(checkSessions.id, id))
       .returning();
     return session;
+  }
+
+  // Group metrics operations
+  async createCheckGroupMetric(metricData: InsertCheckGroupMetric): Promise<CheckGroupMetric> {
+    const [metric] = await db.insert(checkGroupMetrics).values(metricData).returning();
+    return metric;
+  }
+
+  async getGroupMetricsByClientId(clientId: number): Promise<CheckGroupMetric[]> {
+    return await db.select().from(checkGroupMetrics)
+      .where(eq(checkGroupMetrics.clientId, clientId))
+      .orderBy(desc(checkGroupMetrics.createdAt));
+  }
+
+  async getGroupMetricsBySessionId(sessionId: number): Promise<CheckGroupMetric[]> {
+    return await db.select().from(checkGroupMetrics)
+      .where(eq(checkGroupMetrics.sessionId, sessionId))
+      .orderBy(checkGroupMetrics.groupName);
+  }
+
+  // Competitor metrics operations
+  async createCheckCompetitorMetric(metricData: InsertCheckCompetitorMetric): Promise<CheckCompetitorMetric> {
+    const [metric] = await db.insert(checkCompetitorMetrics).values(metricData).returning();
+    return metric;
+  }
+
+  async getCompetitorMetricsByClientId(clientId: number): Promise<CheckCompetitorMetric[]> {
+    return await db.select().from(checkCompetitorMetrics)
+      .where(eq(checkCompetitorMetrics.clientId, clientId))
+      .orderBy(desc(checkCompetitorMetrics.createdAt));
+  }
+
+  async getCompetitorMetricsBySessionId(sessionId: number): Promise<CheckCompetitorMetric[]> {
+    return await db.select().from(checkCompetitorMetrics)
+      .where(eq(checkCompetitorMetrics.sessionId, sessionId))
+      .orderBy(desc(checkCompetitorMetrics.mentionCount));
   }
 }
 

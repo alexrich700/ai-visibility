@@ -313,6 +313,57 @@ export type InsertCheckResult = z.infer<typeof insertCheckResultSchema>;
 export type CheckResult = typeof checkResults.$inferSelect;
 
 // ============================================
+// GROUP METRICS - Per-group visibility per session (for trending)
+// ============================================
+
+export const checkGroupMetrics = pgTable("check_group_metrics", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").references(() => checkSessions.id).notNull(),
+  clientId: integer("client_id").references(() => monitoringClients.id).notNull(),
+  groupId: integer("group_id").references(() => monitoringGroups.id).notNull(),
+  groupName: text("group_name").notNull(),
+  totalPrompts: integer("total_prompts").notNull(),
+  foundCount: integer("found_count").notNull(),
+  citedCount: integer("cited_count").notNull(),
+  visibilityScore: integer("visibility_score").notNull(), // 0-100
+  chatgptFoundCount: integer("chatgpt_found_count").notNull(),
+  googleAIFoundCount: integer("google_ai_found_count").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertCheckGroupMetricSchema = createInsertSchema(checkGroupMetrics).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertCheckGroupMetric = z.infer<typeof insertCheckGroupMetricSchema>;
+export type CheckGroupMetric = typeof checkGroupMetrics.$inferSelect;
+
+// ============================================
+// COMPETITOR METRICS - Competitor visibility per session (for trending)
+// ============================================
+
+export const checkCompetitorMetrics = pgTable("check_competitor_metrics", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").references(() => checkSessions.id).notNull(),
+  clientId: integer("client_id").references(() => monitoringClients.id).notNull(),
+  competitorName: text("competitor_name").notNull(),
+  mentionCount: integer("mention_count").notNull(),
+  visibilityPercent: real("visibility_percent").notNull(), // 0-100
+  chatgptMentions: integer("chatgpt_mentions").notNull(),
+  googleAIMentions: integer("google_ai_mentions").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertCheckCompetitorMetricSchema = createInsertSchema(checkCompetitorMetrics).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertCheckCompetitorMetric = z.infer<typeof insertCheckCompetitorMetricSchema>;
+export type CheckCompetitorMetric = typeof checkCompetitorMetrics.$inferSelect;
+
+// ============================================
 // Frontend Request Schemas
 // ============================================
 

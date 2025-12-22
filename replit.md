@@ -136,6 +136,19 @@ The monitoring dashboard includes comprehensive analytics for each client:
 - Data includes: overall score, platform scores, found/cited counts
 - API returns `trendData` array for historical visualization
 
+**Visibility Trend Views (Tabbed Interface):**
+- Three switchable chart views via tabs in the dashboard:
+  1. **Overall**: AreaChart showing overall visibility score with ChatGPT/Google AI line overlays
+  2. **By Group**: LineChart with multi-colored lines tracking each service group's visibility over time
+  3. **Competitors**: LineChart showing top 10 competitors' visibility percentages over time
+- Data stored in separate tables for efficient time-series queries:
+  - `check_group_metrics`: Per-group visibility score, found count, total prompts per session
+  - `check_competitor_metrics`: Per-competitor visibility percent and mention count per session
+- API endpoints:
+  - `GET /api/monitoring/trends/groups/:clientId` - Returns group trend data
+  - `GET /api/monitoring/trends/competitors/:clientId` - Returns top 10 competitor trends
+- Chart data uses ISO date keys for proper chronological sorting across years
+
 **Platform Visibility:**
 - Shows per-platform visibility percentages (ChatGPT vs Google AI)
 - Displays found/total counts per platform (e.g., "45/55")
