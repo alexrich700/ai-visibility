@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { runAudit, generateServiceGroups, generatePromptsForGroups, runPromptCheck } from "./ai-services";
+import { runAudit, generateServiceGroups, generatePromptsForGroups, runPromptCheck, synthesizeSentimentNarratives, type SynthesizedNarratives } from "./ai-services";
 import { auditRequestSchema, leadSchema, monitoringClientRequestSchema } from "@shared/schema";
 import { z } from "zod";
 import { randomUUID } from "crypto";
@@ -1335,6 +1335,19 @@ export async function registerRoutes(
       
       // Extract latest session analytics (if available)
       const latestSession = sessions[0] || null;
+      
+      // Synthesize clean sentiment narratives from raw statements
+      let sentimentNarratives: SynthesizedNarratives = { strengths: [], improvements: [] };
+      if (latestSession?.sentimentStatements) {
+        const rawStatements = {
+          positive: (latestSession.sentimentStatements as any).positive?.map((s: any) => s.text) || [],
+          negative: (latestSession.sentimentStatements as any).negative?.map((s: any) => s.text) || []
+        };
+        if (rawStatements.positive.length > 0 || rawStatements.negative.length > 0) {
+          sentimentNarratives = await synthesizeSentimentNarratives(rawStatements, client.businessName);
+        }
+      }
+      
       const analytics = latestSession ? {
         shareOfVoice: latestSession.shareOfVoice || {},
         avgChatgptRank: latestSession.avgChatgptRank,
@@ -1345,6 +1358,7 @@ export async function registerRoutes(
         sentimentScore: latestSession.sentimentScore || null,
         competitorVisibility: latestSession.competitorVisibility || [],
         sentimentStatements: latestSession.sentimentStatements || { positive: [], negative: [] },
+        sentimentNarratives, // New synthesized narratives
       } : null;
       
       // Build historical trend data from all sessions

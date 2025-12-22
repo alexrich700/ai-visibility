@@ -1375,3 +1375,110 @@ export async function runPromptCheck(
     };
   }
 }
+
+// Synthesize clean sentiment narratives from raw AI response snippets
+// Returns structured narratives like SEMRush: "Brand Strength Factors" and "Areas for Improvement"
+export interface SynthesizedNarrative {
+  text: string;
+  strength: number; // 1-5 scale
+}
+
+export interface SynthesizedNarratives {
+  strengths: SynthesizedNarrative[];
+  improvements: SynthesizedNarrative[];
+}
+
+export async function synthesizeSentimentNarratives(
+  rawStatements: { positive: string[]; negative: string[] },
+  businessName: string
+): Promise<SynthesizedNarratives> {
+  const result: SynthesizedNarratives = { strengths: [], improvements: [] };
+  
+  // Skip if no statements to analyze
+  if (rawStatements.positive.length === 0 && rawStatements.negative.length === 0) {
+    return result;
+  }
+  
+  try {
+    const prompt = `Analyze these AI-generated statements about "${businessName}" and extract key sentiment narratives.
+
+POSITIVE STATEMENTS (raw snippets from AI responses):
+${rawStatements.positive.slice(0, 10).map((s, i) => `${i + 1}. ${s}`).join('\n\n')}
+
+NEGATIVE STATEMENTS (raw snippets from AI responses):
+${rawStatements.negative.slice(0, 10).map((s, i) => `${i + 1}. ${s}`).join('\n\n')}
+
+Instructions:
+1. Extract and synthesize the KEY themes from these statements
+2. Convert raw AI text into clean, concise narrative statements (1-2 sentences each)
+3. Remove markdown formatting, URLs, phone numbers, and technical artifacts
+4. Focus on actionable insights - what makes the brand strong or weak
+5. Rate each narrative's strength/importance on a 1-5 scale (5 = very significant)
+6. Return up to 7 strengths and 7 areas for improvement
+
+Return ONLY valid JSON in this exact format:
+{
+  "strengths": [
+    {"text": "Clean narrative about a brand strength", "strength": 4},
+    {"text": "Another clean narrative", "strength": 3}
+  ],
+  "improvements": [
+    {"text": "Clean narrative about an area for improvement", "strength": 3},
+    {"text": "Another improvement area", "strength": 2}
+  ]
+}`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-5.2",
+      messages: [
+        {
+          role: "system",
+          content: "You are a brand perception analyst. Extract clean, actionable sentiment narratives from raw AI response snippets. Always respond with valid JSON only."
+        },
+        { role: "user", content: prompt }
+      ],
+      temperature: 0.3,
+      max_tokens: 2000,
+    });
+    
+    const content = response.choices[0]?.message?.content?.trim() || "";
+    
+    // Extract JSON from response (handle potential markdown code blocks)
+    let jsonStr = content;
+    if (content.includes("```json")) {
+      jsonStr = content.replace(/```json\s*/g, "").replace(/```\s*/g, "");
+    } else if (content.includes("```")) {
+      jsonStr = content.replace(/```\s*/g, "");
+    }
+    
+    const parsed = JSON.parse(jsonStr);
+    
+    if (Array.isArray(parsed.strengths)) {
+      result.strengths = parsed.strengths
+        .filter((s: any) => s.text && typeof s.strength === 'number')
+        .slice(0, 7)
+        .map((s: any) => ({
+          text: String(s.text).trim(),
+          strength: Math.max(1, Math.min(5, Math.round(s.strength)))
+        }));
+    }
+    
+    if (Array.isArray(parsed.improvements)) {
+      result.improvements = parsed.improvements
+        .filter((s: any) => s.text && typeof s.strength === 'number')
+        .slice(0, 7)
+        .map((s: any) => ({
+          text: String(s.text).trim(),
+          strength: Math.max(1, Math.min(5, Math.round(s.strength)))
+        }));
+    }
+    
+    console.log(`[synthesizeSentimentNarratives] Extracted ${result.strengths.length} strengths, ${result.improvements.length} improvements`);
+    
+  } catch (error) {
+    console.error("[synthesizeSentimentNarratives] Error:", error);
+    // Return empty result on error - the UI will handle gracefully
+  }
+  
+  return result;
+}

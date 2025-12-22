@@ -63,6 +63,16 @@ interface SentimentStatements {
   negative: SentimentStatement[];
 }
 
+interface SentimentNarrative {
+  text: string;
+  strength: number; // 1-5 scale
+}
+
+interface SentimentNarratives {
+  strengths: SentimentNarrative[];
+  improvements: SentimentNarrative[];
+}
+
 interface Analytics {
   shareOfVoice: ShareOfVoiceItem[];
   avgChatgptRank: number | null;
@@ -73,6 +83,7 @@ interface Analytics {
   sentimentScore: number | null;
   competitorVisibility: CompetitorVisibility[];
   sentimentStatements: SentimentStatements;
+  sentimentNarratives?: SentimentNarratives;
 }
 
 interface TrendDataPoint {
@@ -1055,71 +1066,98 @@ export default function MonitorDashboard() {
               </CardContent>
             </Card>
 
-            {/* Sentiment Statements */}
-            <Card className="shadow-2xl shadow-blue-900/5">
-              <CardHeader className="pb-2">
-                <div className="flex items-center gap-2">
-                  <Meh className="w-4 h-4 text-[#ffb41c]" />
-                  <CardTitle className="text-sm font-bold tracking-tight">What AI Says About You</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <Tabs defaultValue="positive" className="w-full">
-                  <TabsList className="grid w-full grid-cols-2 mb-3">
-                    <TabsTrigger value="positive" className="text-xs" data-testid="tab-positive-sentiment">
-                      <ThumbsUp className="w-3 h-3 mr-1" />
-                      Positive ({analytics.sentimentStatements?.positive?.length || 0})
-                    </TabsTrigger>
-                    <TabsTrigger value="negative" className="text-xs" data-testid="tab-negative-sentiment">
-                      <ThumbsDown className="w-3 h-3 mr-1" />
-                      Negative ({analytics.sentimentStatements?.negative?.length || 0})
-                    </TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="positive" className="mt-0">
-                    <ScrollArea className="h-48">
-                      {analytics.sentimentStatements?.positive?.length > 0 ? (
-                        <div className="space-y-2 pr-4">
-                          {analytics.sentimentStatements.positive.map((statement, idx) => (
-                            <div key={idx} className="p-2 bg-green-50 border border-green-100 rounded-lg">
-                              <p className="text-xs text-gray-700 leading-relaxed">"{statement.text}"</p>
-                              <div className="flex items-center gap-2 mt-1">
-                                <Badge variant="outline" className="text-[10px] px-1">
-                                  {statement.platform === 'chatgpt' ? 'ChatGPT' : 'Google AI'}
-                                </Badge>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-gray-500 text-center py-4">No positive statements found</p>
-                      )}
-                    </ScrollArea>
-                  </TabsContent>
-                  <TabsContent value="negative" className="mt-0">
-                    <ScrollArea className="h-48">
-                      {analytics.sentimentStatements?.negative?.length > 0 ? (
-                        <div className="space-y-2 pr-4">
-                          {analytics.sentimentStatements.negative.map((statement, idx) => (
-                            <div key={idx} className="p-2 bg-red-50 border border-red-100 rounded-lg">
-                              <p className="text-xs text-gray-700 leading-relaxed">"{statement.text}"</p>
-                              <div className="flex items-center gap-2 mt-1">
-                                <Badge variant="outline" className="text-[10px] px-1">
-                                  {statement.platform === 'chatgpt' ? 'ChatGPT' : 'Google AI'}
-                                </Badge>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-gray-500 text-center py-4">No negative statements found</p>
-                      )}
-                    </ScrollArea>
-                  </TabsContent>
-                </Tabs>
-              </CardContent>
-            </Card>
           </div>
         )}
+
+        {/* Key Sentiment Drivers - Two Column Layout (SEMRush Style) */}
+        {analytics && (analytics.sentimentNarratives?.strengths?.length || analytics.sentimentNarratives?.improvements?.length) ? (
+          <Card className="shadow-2xl shadow-blue-900/5">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <Meh className="w-5 h-5 text-[#ffb41c]" />
+                <CardTitle className="text-lg font-bold tracking-tight">Key Sentiment Drivers</CardTitle>
+              </div>
+              <p className="text-sm text-gray-500 mt-1">Uncover what shapes your brand perception</p>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="grid md:grid-cols-2 gap-6">
+                {/* Brand Strength Factors */}
+                <div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <Target className="w-4 h-4 text-green-600" />
+                    <h3 className="font-semibold text-sm text-gray-900">Brand Strength Factors</h3>
+                  </div>
+                  <div className="space-y-3">
+                    {analytics.sentimentNarratives?.strengths?.length ? (
+                      analytics.sentimentNarratives.strengths.map((narrative, idx) => (
+                        <div 
+                          key={idx} 
+                          className="p-3 bg-green-50 border border-green-100 rounded-lg"
+                          data-testid={`narrative-strength-${idx}`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <p className="text-sm text-gray-700 leading-relaxed flex-1">{narrative.text}</p>
+                            <div className="flex gap-0.5 flex-shrink-0 mt-0.5">
+                              {[1, 2, 3, 4, 5].map((level) => (
+                                <div
+                                  key={level}
+                                  className={`w-4 h-2 rounded-sm ${
+                                    level <= narrative.strength 
+                                      ? 'bg-green-500' 
+                                      : 'bg-gray-200'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-gray-500">No brand strengths identified yet</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Areas for Improvement */}
+                <div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <Award className="w-4 h-4 text-amber-600" />
+                    <h3 className="font-semibold text-sm text-gray-900">Areas for Improvement</h3>
+                  </div>
+                  <div className="space-y-3">
+                    {analytics.sentimentNarratives?.improvements?.length ? (
+                      analytics.sentimentNarratives.improvements.map((narrative, idx) => (
+                        <div 
+                          key={idx} 
+                          className="p-3 bg-amber-50 border border-amber-100 rounded-lg"
+                          data-testid={`narrative-improvement-${idx}`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <p className="text-sm text-gray-700 leading-relaxed flex-1">{narrative.text}</p>
+                            <div className="flex gap-0.5 flex-shrink-0 mt-0.5">
+                              {[1, 2, 3, 4, 5].map((level) => (
+                                <div
+                                  key={level}
+                                  className={`w-4 h-2 rounded-sm ${
+                                    level <= narrative.strength 
+                                      ? 'bg-amber-500' 
+                                      : 'bg-gray-200'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-gray-500">No improvement areas identified</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
 
         {/* Group Performance */}
         <Card className="shadow-2xl shadow-blue-900/5">

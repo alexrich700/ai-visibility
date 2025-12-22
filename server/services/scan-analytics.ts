@@ -522,7 +522,7 @@ export function calculateSentimentScore(
   let positiveScore = 0;
   let negativeScore = 0;
   
-  for (const word of foundPositive) {
+  for (const word of Array.from(foundPositive)) {
     if (STRONG_POSITIVE_WORDS.includes(word)) {
       positiveScore += 2;
     } else {
@@ -530,7 +530,7 @@ export function calculateSentimentScore(
     }
   }
   
-  for (const word of foundNegative) {
+  for (const word of Array.from(foundNegative)) {
     if (STRONG_NEGATIVE_WORDS.includes(word)) {
       negativeScore += 2;
     } else {
@@ -574,6 +574,17 @@ export interface SentimentStatement {
 export interface SentimentStatements {
   positive: SentimentStatement[];
   negative: SentimentStatement[];
+}
+
+// New improved sentiment narrative interface (like SEMRush)
+export interface SentimentNarrative {
+  text: string;
+  strength: number; // 1-5 scale for visual bar
+}
+
+export interface SentimentNarratives {
+  strengths: SentimentNarrative[];
+  improvements: SentimentNarrative[];
 }
 
 /**
