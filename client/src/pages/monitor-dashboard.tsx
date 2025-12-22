@@ -1159,14 +1159,29 @@ export default function MonitorDashboard() {
                   </div>
                   <div className="space-y-3">
                     {analytics.sentimentNarratives?.strengths?.length ? (
-                      analytics.sentimentNarratives.strengths.map((narrative, idx) => (
+                      analytics.sentimentNarratives.strengths.map((narrative: { text: string; strength: number; prompt?: string; platform?: 'chatgpt' | 'google' }, idx: number) => (
                         <div 
                           key={idx} 
                           className="p-3 bg-green-50 border border-green-100 rounded-lg"
                           data-testid={`narrative-strength-${idx}`}
                         >
                           <div className="flex items-start justify-between gap-3">
-                            <p className="text-sm text-gray-700 leading-relaxed flex-1">{narrative.text}</p>
+                            <div className="flex-1">
+                              {narrative.platform && (
+                                <Badge 
+                                  variant="secondary" 
+                                  className={`mb-2 text-xs ${
+                                    narrative.platform === 'chatgpt' 
+                                      ? 'bg-blue-100 text-blue-700 border-blue-200' 
+                                      : 'bg-orange-100 text-orange-700 border-orange-200'
+                                  }`}
+                                  data-testid={`badge-platform-strength-${idx}`}
+                                >
+                                  {narrative.platform === 'chatgpt' ? 'ChatGPT' : 'Google AI'}
+                                </Badge>
+                              )}
+                              <p className="text-sm text-gray-700 leading-relaxed">{narrative.text}</p>
+                            </div>
                             <div className="flex gap-0.5 flex-shrink-0 mt-0.5">
                               {[1, 2, 3, 4, 5].map((level) => (
                                 <div
@@ -1196,14 +1211,29 @@ export default function MonitorDashboard() {
                   </div>
                   <div className="space-y-3">
                     {analytics.sentimentNarratives?.improvements?.length ? (
-                      analytics.sentimentNarratives.improvements.map((narrative, idx) => (
+                      analytics.sentimentNarratives.improvements.map((narrative: { text: string; strength: number; prompt?: string; platform?: 'chatgpt' | 'google' }, idx: number) => (
                         <div 
                           key={idx} 
                           className="p-3 bg-amber-50 border border-amber-100 rounded-lg"
                           data-testid={`narrative-improvement-${idx}`}
                         >
                           <div className="flex items-start justify-between gap-3">
-                            <p className="text-sm text-gray-700 leading-relaxed flex-1">{narrative.text}</p>
+                            <div className="flex-1">
+                              {narrative.platform && (
+                                <Badge 
+                                  variant="secondary" 
+                                  className={`mb-2 text-xs ${
+                                    narrative.platform === 'chatgpt' 
+                                      ? 'bg-blue-100 text-blue-700 border-blue-200' 
+                                      : 'bg-orange-100 text-orange-700 border-orange-200'
+                                  }`}
+                                  data-testid={`badge-platform-improvement-${idx}`}
+                                >
+                                  {narrative.platform === 'chatgpt' ? 'ChatGPT' : 'Google AI'}
+                                </Badge>
+                              )}
+                              <p className="text-sm text-gray-700 leading-relaxed">{narrative.text}</p>
+                            </div>
                             <div className="flex gap-0.5 flex-shrink-0 mt-0.5">
                               {[1, 2, 3, 4, 5].map((level) => (
                                 <div

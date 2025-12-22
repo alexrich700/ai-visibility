@@ -1412,6 +1412,8 @@ export async function runPromptCheck(
 export interface SynthesizedNarrative {
   text: string;
   strength: number; // 1-5 scale
+  prompt?: string; // The specific prompt that triggered this insight
+  platform?: 'chatgpt' | 'google';
 }
 
 export interface SynthesizedNarratives {
@@ -1419,8 +1421,15 @@ export interface SynthesizedNarratives {
   improvements: SynthesizedNarrative[];
 }
 
+// Input type for sentiment statements with prompt context
+export interface SentimentStatementInput {
+  text: string;
+  promptText?: string;
+  platform?: 'chatgpt' | 'google';
+}
+
 export async function synthesizeSentimentNarratives(
-  rawStatements: { positive: string[]; negative: string[] },
+  rawStatements: { positive: SentimentStatementInput[]; negative: SentimentStatementInput[] },
   businessName: string
 ): Promise<SynthesizedNarratives> {
   const result: SynthesizedNarratives = { strengths: [], improvements: [] };
@@ -1431,31 +1440,47 @@ export async function synthesizeSentimentNarratives(
   }
   
   try {
-    const prompt = `Analyze these AI-generated statements about "${businessName}" and extract key sentiment narratives.
+    // Format statements with their prompts for context
+    const formatStatements = (statements: SentimentStatementInput[]) => 
+      statements.slice(0, 10).map((s, i) => {
+        const promptRef = s.promptText ? `[Prompt: "${s.promptText.substring(0, 100)}${s.promptText.length > 100 ? '...' : ''}"]` : '';
+        const platformRef = s.platform ? `[${s.platform === 'chatgpt' ? 'ChatGPT' : 'Google AI'}]` : '';
+        return `${i + 1}. ${platformRef} ${promptRef}\n   Response snippet: "${s.text}"`;
+      }).join('\n\n');
 
-POSITIVE STATEMENTS (raw snippets from AI responses):
-${rawStatements.positive.slice(0, 10).map((s, i) => `${i + 1}. ${s}`).join('\n\n')}
+    const prompt = `Analyze these AI-generated statements about "${businessName}" and create SPECIFIC, ACTIONABLE insights.
 
-NEGATIVE STATEMENTS (raw snippets from AI responses):
-${rawStatements.negative.slice(0, 10).map((s, i) => `${i + 1}. ${s}`).join('\n\n')}
+POSITIVE STATEMENTS (AI responses that mentioned the brand positively):
+${formatStatements(rawStatements.positive)}
 
-Instructions:
-1. Extract and synthesize the KEY themes from these statements
-2. Convert raw AI text into clean, concise narrative statements (1-2 sentences each)
-3. Remove markdown formatting, URLs, phone numbers, and technical artifacts
-4. Focus on actionable insights - what makes the brand strong or weak
-5. Rate each narrative's strength/importance on a 1-5 scale (5 = very significant)
-6. Return up to 7 strengths and 7 areas for improvement
+NEGATIVE/NEUTRAL STATEMENTS (AI responses with concerns or missed opportunities):
+${formatStatements(rawStatements.negative)}
 
-Return ONLY valid JSON in this exact format:
+CRITICAL INSTRUCTIONS:
+1. Create SPECIFIC insights that reference the actual prompt and what the AI said
+2. Each insight MUST include:
+   - What specific prompt triggered this finding
+   - What the AI specifically said or didn't say
+   - A clear, actionable takeaway
+3. Format: Start with the prompt context, then the insight
+4. Examples of GOOD insights:
+   - "When asked 'best plumber in Austin for emergencies', ChatGPT highlighted your 24/7 availability as a key differentiator"
+   - "For 'water heater installation near me', Google AI mentioned competitors' same-day service but didn't mention your scheduling options"
+5. Examples of BAD insights (too vague):
+   - "The brand has good reviews" (no prompt reference)
+   - "Customers appreciate quality service" (generic)
+6. Rate importance 1-5 (5 = most actionable)
+7. Return EXACTLY 3 strengths and 3 improvements (or fewer if not enough data)
+
+Return ONLY valid JSON:
 {
   "strengths": [
-    {"text": "Clean narrative about a brand strength", "strength": 4},
-    {"text": "Another clean narrative", "strength": 3}
+    {"text": "When asked '[prompt]', [platform] said [specific thing]...", "strength": 4, "prompt": "the exact prompt text", "platform": "chatgpt"},
+    {"text": "...", "strength": 3, "prompt": "...", "platform": "google"}
   ],
   "improvements": [
-    {"text": "Clean narrative about an area for improvement", "strength": 3},
-    {"text": "Another improvement area", "strength": 2}
+    {"text": "For '[prompt]', [platform] recommended [competitor] because [reason]. Consider...", "strength": 4, "prompt": "the exact prompt text", "platform": "chatgpt"},
+    {"text": "...", "strength": 3, "prompt": "...", "platform": "google"}
   ]
 }`;
 
@@ -1464,7 +1489,7 @@ Return ONLY valid JSON in this exact format:
       messages: [
         {
           role: "system",
-          content: "You are a brand perception analyst. Extract clean, actionable sentiment narratives from raw AI response snippets. Always respond with valid JSON only."
+          content: "You are a brand visibility analyst. Create SPECIFIC, ACTIONABLE insights from AI response data. Each insight MUST reference the exact prompt that triggered it. Never write generic statements. Always respond with valid JSON only."
         },
         { role: "user", content: prompt }
       ],
@@ -1487,20 +1512,24 @@ Return ONLY valid JSON in this exact format:
     if (Array.isArray(parsed.strengths)) {
       result.strengths = parsed.strengths
         .filter((s: any) => s.text && typeof s.strength === 'number')
-        .slice(0, 7)
+        .slice(0, 3) // Max 3 strengths
         .map((s: any) => ({
           text: String(s.text).trim(),
-          strength: Math.max(1, Math.min(5, Math.round(s.strength)))
+          strength: Math.max(1, Math.min(5, Math.round(s.strength))),
+          prompt: s.prompt ? String(s.prompt).trim() : undefined,
+          platform: s.platform === 'google' ? 'google' : s.platform === 'chatgpt' ? 'chatgpt' : undefined
         }));
     }
     
     if (Array.isArray(parsed.improvements)) {
       result.improvements = parsed.improvements
         .filter((s: any) => s.text && typeof s.strength === 'number')
-        .slice(0, 7)
+        .slice(0, 3) // Max 3 improvements
         .map((s: any) => ({
           text: String(s.text).trim(),
-          strength: Math.max(1, Math.min(5, Math.round(s.strength)))
+          strength: Math.max(1, Math.min(5, Math.round(s.strength))),
+          prompt: s.prompt ? String(s.prompt).trim() : undefined,
+          platform: s.platform === 'google' ? 'google' : s.platform === 'chatgpt' ? 'chatgpt' : undefined
         }));
     }
     

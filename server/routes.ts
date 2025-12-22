@@ -1352,12 +1352,20 @@ export async function registerRoutes(
       // Extract latest session analytics (if available)
       const latestSession = sessions[0] || null;
       
-      // Synthesize clean sentiment narratives from raw statements
+      // Synthesize clean sentiment narratives from raw statements (now with prompt context)
       let sentimentNarratives: SynthesizedNarratives = { strengths: [], improvements: [] };
       if (latestSession?.sentimentStatements) {
         const rawStatements = {
-          positive: (latestSession.sentimentStatements as any).positive?.map((s: any) => s.text) || [],
-          negative: (latestSession.sentimentStatements as any).negative?.map((s: any) => s.text) || []
+          positive: (latestSession.sentimentStatements as any).positive?.map((s: any) => ({
+            text: s.text,
+            promptText: s.promptText,
+            platform: s.platform
+          })) || [],
+          negative: (latestSession.sentimentStatements as any).negative?.map((s: any) => ({
+            text: s.text,
+            promptText: s.promptText,
+            platform: s.platform
+          })) || []
         };
         if (rawStatements.positive.length > 0 || rawStatements.negative.length > 0) {
           try {
@@ -1652,7 +1660,7 @@ export async function registerRoutes(
         : null;
       const firstPlaceCount = allRanks.filter(r => r === 1).length;
       
-      // Extract and synthesize sentiment narratives
+      // Extract and synthesize sentiment narratives (with prompt context)
       const sentimentStatements = aggregateSentimentStatements(results, client.businessName);
       let sentimentNarratives = null;
       
@@ -1660,8 +1668,16 @@ export async function registerRoutes(
         try {
           sentimentNarratives = await synthesizeSentimentNarratives(
             {
-              positive: sentimentStatements.positive.map(s => s.text),
-              negative: sentimentStatements.negative.map(s => s.text),
+              positive: sentimentStatements.positive.map(s => ({
+                text: s.text,
+                promptText: s.promptText,
+                platform: s.platform
+              })),
+              negative: sentimentStatements.negative.map(s => ({
+                text: s.text,
+                promptText: s.promptText,
+                platform: s.platform
+              })),
             },
             client.businessName
           );
