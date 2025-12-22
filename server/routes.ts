@@ -1548,13 +1548,124 @@ export async function registerRoutes(
         results.push(...sessionResults);
       }
       
-      // Stream the ZIP file
+      // Compute analytics from results
+      const totalPrompts = results.length;
+      const foundCount = results.filter(r => r.chatgptFound || r.googleAIFound).length;
+      
+      // Collect sentiment data for scoring
+      const allSentimentScores: (number | null)[] = [];
+      const allChatgptRanks: number[] = [];
+      const allGoogleAIRanks: number[] = [];
+      const allChatgptCitations: Citation[] = [];
+      const allGoogleAICitations: Citation[] = [];
+      
+      for (const result of results) {
+        // Collect sentiments for scoring
+        if (result.chatgptResponse && (result.chatgptFound || result.chatgptCited)) {
+          const score = calculateSentimentScore(result.chatgptResponse, client.businessName);
+          if (score !== null) allSentimentScores.push(score);
+        }
+        if (result.googleAIResponse && (result.googleAIFound || result.googleAICited)) {
+          const score = calculateSentimentScore(result.googleAIResponse, client.businessName);
+          if (score !== null) allSentimentScores.push(score);
+        }
+        
+        // Collect ranks
+        if (result.chatgptRank && result.chatgptRank > 0) allChatgptRanks.push(result.chatgptRank);
+        if (result.googleAIRank && result.googleAIRank > 0) allGoogleAIRanks.push(result.googleAIRank);
+        
+        // Collect citations
+        if (result.chatgptCitations) {
+          const citations = Array.isArray(result.chatgptCitations) ? result.chatgptCitations : [];
+          citations.forEach((c: any) => {
+            if (typeof c === 'object' && c.domain) {
+              allChatgptCitations.push({ url: c.url || c.domain, domain: c.domain });
+            } else if (typeof c === 'string') {
+              allChatgptCitations.push({ url: c, domain: c });
+            }
+          });
+        }
+        if (result.googleAICitations) {
+          const citations = Array.isArray(result.googleAICitations) ? result.googleAICitations : [];
+          citations.forEach((c: any) => {
+            if (typeof c === 'object' && c.domain) {
+              allGoogleAICitations.push({ url: c.url || c.domain, domain: c.domain });
+            } else if (typeof c === 'string') {
+              allGoogleAICitations.push({ url: c, domain: c });
+            }
+          });
+        }
+      }
+      
+      // Calculate aggregate metrics
+      const competitorCounts = aggregateCompetitorMentions(results);
+      const shareOfVoiceRaw = computeShareOfVoice(client.businessName, foundCount, competitorCounts, totalPrompts);
+      const topCitationsRaw = aggregateCitations([allChatgptCitations, allGoogleAICitations]);
+      const sentimentScore = calculateOverallSentimentScore(allSentimentScores);
+      const competitorVisibilityRaw = computeCompetitorVisibility(competitorCounts, totalPrompts, 5);
+      
+      // Transform share of voice to export format
+      const brandEntry = shareOfVoiceRaw.find(m => m.name === client.businessName);
+      const competitorTotal = shareOfVoiceRaw.filter(m => m.name !== client.businessName).reduce((sum, m) => sum + m.percentage, 0);
+      const shareOfVoice = {
+        brand: brandEntry?.percentage ?? 0,
+        competitors: competitorTotal,
+      };
+      
+      // Transform competitor visibility to export format
+      const competitorVisibility = competitorVisibilityRaw.map(c => ({
+        name: c.name,
+        mentionCount: c.mentionCount,
+        visibilityPercent: c.visibilityPercent,
+      }));
+      
+      // Transform citations to export format (url instead of domain)
+      const topCitations = topCitationsRaw.slice(0, 5).map(c => ({
+        url: c.domain,
+        count: c.count,
+      }));
+      
+      // Calculate average rank and first place count
+      const allRanks = [...allChatgptRanks, ...allGoogleAIRanks];
+      const avgMentionRank = allRanks.length > 0 
+        ? Math.round((allRanks.reduce((a, b) => a + b, 0) / allRanks.length) * 10) / 10 
+        : null;
+      const firstPlaceCount = allRanks.filter(r => r === 1).length;
+      
+      // Extract and synthesize sentiment narratives
+      const sentimentStatements = aggregateSentimentStatements(results, client.businessName);
+      let sentimentNarratives = null;
+      
+      if (sentimentStatements.positive.length > 0 || sentimentStatements.negative.length > 0) {
+        try {
+          sentimentNarratives = await synthesizeSentimentNarratives(
+            {
+              positive: sentimentStatements.positive.map(s => s.text),
+              negative: sentimentStatements.negative.map(s => s.text),
+            },
+            client.businessName
+          );
+        } catch (e) {
+          console.error("Failed to synthesize sentiment narratives for export:", e);
+        }
+      }
+      
+      // Stream the ZIP file with analytics
       await streamExportZip(res, {
         client,
         groups,
         sessions,
         results,
         dateRange: { start, end },
+        analytics: {
+          sentimentScore,
+          sentimentNarratives,
+          shareOfVoice,
+          competitorVisibility,
+          topCitations,
+          avgMentionRank,
+          firstPlaceCount,
+        },
       });
     } catch (error) {
       console.error("Export error:", error);

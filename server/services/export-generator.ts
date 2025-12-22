@@ -2,12 +2,47 @@ import archiver from "archiver";
 import type { MonitoringClient, MonitoringGroup, CheckSession, CheckResult } from "@shared/schema";
 import type { Response } from "express";
 
+interface SentimentNarrative {
+  text: string;
+  strength: number;
+}
+
+interface CompetitorVisibility {
+  name: string;
+  mentionCount: number;
+  visibilityPercent: number;
+}
+
+interface ShareOfVoice {
+  brand: number;
+  competitors: number;
+}
+
+interface Citation {
+  url: string;
+  count: number;
+}
+
+interface ExportAnalytics {
+  sentimentScore: number | null;
+  sentimentNarratives: {
+    strengths: SentimentNarrative[];
+    improvements: SentimentNarrative[];
+  } | null;
+  shareOfVoice: ShareOfVoice | null;
+  competitorVisibility: CompetitorVisibility[];
+  topCitations: Citation[];
+  avgMentionRank: number | null;
+  firstPlaceCount: number;
+}
+
 interface ExportData {
   client: MonitoringClient;
   groups: MonitoringGroup[];
   sessions: CheckSession[];
   results: CheckResult[];
   dateRange: { start: Date; end: Date };
+  analytics?: ExportAnalytics;
 }
 
 interface ExportSummary {
@@ -25,6 +60,18 @@ interface ExportSummary {
   citationRate: number;
   chatgptVisibility: number;
   googleAIVisibility: number;
+  analytics: {
+    sentimentScore: number | null;
+    sentimentNarratives: {
+      strengths: SentimentNarrative[];
+      improvements: SentimentNarrative[];
+    };
+    shareOfVoice: ShareOfVoice | null;
+    competitorVisibility: CompetitorVisibility[];
+    topCitations: Citation[];
+    avgMentionRank: number | null;
+    firstPlaceCount: number;
+  };
 }
 
 interface CSVRow {
@@ -60,10 +107,28 @@ Date Range: ${data.dateRange.start.toISOString().split("T")[0]} to ${data.dateRa
 
 CONTENTS
 --------
-- summary.json: Overall metrics and scores
+- summary.json: Overall metrics, scores, and AI-generated sentiment analysis
 - chatgpt_results.csv: All ChatGPT prompts, responses, and grounding data
 - google_results.csv: All Google AI prompts, responses, and grounding data
 - metadata.json: Schema definitions and field descriptions
+
+ANALYTICS INCLUDED
+------------------
+The summary.json file now includes comprehensive analytics:
+
+1. SENTIMENT ANALYSIS
+   - Sentiment Score (0-100): Overall brand perception score
+   - Brand Strength Factors: AI-synthesized positive narratives with strength ratings
+   - Areas for Improvement: AI-synthesized improvement opportunities with priority ratings
+
+2. COMPETITIVE INTELLIGENCE
+   - Share of Voice: Your brand visibility vs competitors
+   - Competitor Visibility: Top competitors and their mention frequency
+   - Top Citations: Most cited domains by AI platforms
+
+3. PROMINENCE METRICS
+   - Average Mention Rank: Where you typically appear in AI responses
+   - First Place Count: How often you're recommended first
 
 HOW TO USE WITH AI ASSISTANTS
 -----------------------------
@@ -72,13 +137,15 @@ You can upload these files to Claude, ChatGPT, or other AI assistants to:
 2. Get recommendations for improving your website content
 3. Understand which prompts you're missing from
 4. Compare your visibility against competitors
+5. Prioritize improvements based on sentiment analysis
 
 SUGGESTED PROMPTS FOR AI ASSISTANTS
 -----------------------------------
 - "Analyze this visibility data and identify the top 5 prompts where I should improve my website content"
-- "Based on these AI responses, what topics should I create content about?"
+- "Based on the sentiment narratives, what are my brand's key strengths and weaknesses?"
 - "Which competitors are appearing more often than me, and what might they be doing differently?"
 - "Review the citations and recommend how I can get my website cited more often"
+- "Create an action plan based on the Areas for Improvement section"
 
 FILE FORMATS
 ------------
@@ -116,6 +183,15 @@ function generateSummary(data: ExportData): ExportSummary {
     citationRate: totalPrompts > 0 ? Math.round((citedCount / totalPrompts) * 100) : 0,
     chatgptVisibility: totalPrompts > 0 ? Math.round((chatgptFoundCount / totalPrompts) * 100) : 0,
     googleAIVisibility: totalPrompts > 0 ? Math.round((googleAIFoundCount / totalPrompts) * 100) : 0,
+    analytics: {
+      sentimentScore: data.analytics?.sentimentScore ?? null,
+      sentimentNarratives: data.analytics?.sentimentNarratives ?? { strengths: [], improvements: [] },
+      shareOfVoice: data.analytics?.shareOfVoice ?? null,
+      competitorVisibility: data.analytics?.competitorVisibility ?? [],
+      topCitations: data.analytics?.topCitations ?? [],
+      avgMentionRank: data.analytics?.avgMentionRank ?? null,
+      firstPlaceCount: data.analytics?.firstPlaceCount ?? 0,
+    },
   };
 }
 
@@ -179,7 +255,7 @@ function generateGoogleAICSV(data: ExportData): string {
 
 function generateMetadata(): object {
   return {
-    version: "1.0",
+    version: "2.0",
     generatedBy: "Rossman Media AI Visibility Audit Tool",
     fields: {
       summary: {
@@ -191,6 +267,21 @@ function generateMetadata(): object {
         googleAIScore: "Visibility score on Google AI (0-100)",
         visibilityRate: "Percentage of prompts where business was mentioned",
         citationRate: "Percentage of prompts where website was directly cited",
+      },
+      analytics: {
+        sentimentScore: "Overall sentiment score (0-100). 50 = neutral, 70+ = positive, <40 = needs improvement",
+        sentimentNarratives: {
+          strengths: "Array of AI-synthesized positive brand narratives with strength ratings (1-5)",
+          improvements: "Array of AI-synthesized improvement areas with priority ratings (1-5)",
+        },
+        shareOfVoice: {
+          brand: "Percentage of mentions that are your brand",
+          competitors: "Percentage of mentions that are competitors",
+        },
+        competitorVisibility: "Array of top 5 competitors with name, mention count, and visibility percentage",
+        topCitations: "Array of top 5 cited domains with URL and citation count",
+        avgMentionRank: "Average position of your brand in AI responses (1 = first mentioned)",
+        firstPlaceCount: "Number of times your brand was recommended first",
       },
       csvColumns: {
         session_date: "The date when this check was performed",
@@ -208,6 +299,9 @@ function generateMetadata(): object {
       "Compare chatgpt_results.csv and google_results.csv to see platform differences",
       "Focus on prompts where competitors appear but you don't",
       "Cited responses indicate strong domain authority for that topic",
+      "Use the sentimentNarratives.strengths to understand what AI platforms like about your brand",
+      "Use the sentimentNarratives.improvements to prioritize website and content updates",
+      "Higher strength ratings (4-5) indicate more significant or frequently mentioned points",
     ],
   };
 }
