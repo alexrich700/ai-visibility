@@ -1835,6 +1835,63 @@ export async function registerRoutes(
     }
   });
 
+  // Get all monitoring clients with stats (for clients list page)
+  app.get("/api/monitoring/clients-with-stats", async (req, res) => {
+    try {
+      const clients = await storage.getMonitoringClients();
+      
+      // Enhance each client with latest session and stats
+      const clientsWithStats = await Promise.all(clients.map(async (client) => {
+        // Get latest session for this client
+        const sessions = await storage.getCheckSessionsByClientId(client.id);
+        const latestSession = sessions.length > 0 ? sessions[0] : null;
+        
+        // Get groups and prompts count
+        const groups = await storage.getGroupsByClientId(client.id);
+        const prompts = await storage.getPromptsByClientId(client.id);
+        
+        return {
+          ...client,
+          latestSession: latestSession ? {
+            id: latestSession.id,
+            overallScore: latestSession.overallScore,
+            chatgptScore: latestSession.chatgptScore,
+            googleAIScore: latestSession.googleAIScore,
+            createdAt: latestSession.createdAt,
+          } : undefined,
+          groupCount: groups.length,
+          promptCount: prompts.length,
+        };
+      }));
+      
+      res.json(clientsWithStats);
+    } catch (error) {
+      console.error("Get clients with stats error:", error);
+      res.status(500).json({ error: "Failed to get clients" });
+    }
+  });
+
+  // Delete a monitoring client
+  app.delete("/api/monitoring/clients/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Check if client exists
+      const client = await storage.getMonitoringClientById(id);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+      
+      // Delete client and all associated data
+      await storage.deleteMonitoringClient(id);
+      
+      res.json({ success: true, message: "Client deleted successfully" });
+    } catch (error) {
+      console.error("Delete client error:", error);
+      res.status(500).json({ error: "Failed to delete client" });
+    }
+  });
+
   // ============================================
   // CLIENT SETTINGS ENDPOINTS
   // ============================================

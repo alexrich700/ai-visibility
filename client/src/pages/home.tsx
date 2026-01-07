@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "wouter";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import {
@@ -30,6 +31,7 @@ import {
   ChevronUp,
   Star,
   TrendingUp,
+  Users,
 } from "lucide-react";
 import type { AuditRequest, AuditResults, PromptResult, SentimentResult } from "@shared/schema";
 import logoFull from "@assets/RMG-Logo-Black-1920w_(1)_1765741951083.webp";
@@ -328,6 +330,15 @@ export default function Home() {
       <div className="min-h-screen bg-white flex flex-col font-sans text-[#010400] selection:bg-[#5599f9] selection:text-white">
         <header className="px-6 py-8 flex justify-between items-center max-w-7xl mx-auto w-full">
           <Branding />
+          <Link href="/monitor/clients">
+            <button 
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 hover:text-[#5599f9] transition-colors"
+              data-testid="link-monitoring-clients"
+            >
+              <Users className="w-4 h-4" />
+              Monitoring Dashboard
+            </button>
+          </Link>
         </header>
 
         <main className="flex-1 flex flex-col items-center justify-center px-4 -mt-10">

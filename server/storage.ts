@@ -25,6 +25,7 @@ export interface IStorage {
   getMonitoringClients(): Promise<MonitoringClient[]>;
   getMonitoringClientById(id: number): Promise<MonitoringClient | undefined>;
   updateMonitoringClient(id: number, data: Partial<InsertMonitoringClient>): Promise<MonitoringClient | undefined>;
+  deleteMonitoringClient(id: number): Promise<void>;
   
   // Group operations
   createGroup(group: InsertMonitoringGroup): Promise<MonitoringGroup>;
@@ -144,6 +145,27 @@ export class DatabaseStorage implements IStorage {
       .where(eq(monitoringClients.id, id))
       .returning();
     return client;
+  }
+
+  async deleteMonitoringClient(id: number): Promise<void> {
+    // Delete in order respecting foreign key constraints:
+    // 1. Delete check results (depends on sessions and prompts)
+    await db.delete(checkResults).where(eq(checkResults.clientId, id));
+    // 2. Delete group metrics (depends on sessions)
+    await db.delete(checkGroupMetrics).where(eq(checkGroupMetrics.clientId, id));
+    // 3. Delete competitor metrics (depends on sessions)
+    await db.delete(checkCompetitorMetrics).where(eq(checkCompetitorMetrics.clientId, id));
+    // 4. Delete check sessions
+    await db.delete(checkSessions).where(eq(checkSessions.clientId, id));
+    // 5. Delete prompts (get groups first, then delete prompts by group)
+    const groups = await this.getGroupsByClientId(id);
+    for (const group of groups) {
+      await db.delete(monitoringPrompts).where(eq(monitoringPrompts.groupId, group.id));
+    }
+    // 6. Delete groups
+    await db.delete(monitoringGroups).where(eq(monitoringGroups.clientId, id));
+    // 7. Delete the client
+    await db.delete(monitoringClients).where(eq(monitoringClients.id, id));
   }
 
   // Group operations
