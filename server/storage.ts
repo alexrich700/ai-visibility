@@ -8,7 +8,7 @@ import {
   MonitoringClient, MonitoringGroup, MonitoringPrompt, CheckResult, CheckSession,
   CheckGroupMetric, CheckCompetitorMetric
 } from "@shared/schema";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, lte, isNull, or } from "drizzle-orm";
 
 export interface IStorage {
   createAudit(audit: InsertAudit): Promise<Audit>;
@@ -60,6 +60,9 @@ export interface IStorage {
   createCheckCompetitorMetric(metric: InsertCheckCompetitorMetric): Promise<CheckCompetitorMetric>;
   getCompetitorMetricsByClientId(clientId: number): Promise<CheckCompetitorMetric[]>;
   getCompetitorMetricsBySessionId(sessionId: number): Promise<CheckCompetitorMetric[]>;
+  
+  // Scheduled check operations
+  getClientsDueForCheck(): Promise<MonitoringClient[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -311,6 +314,22 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(checkCompetitorMetrics)
       .where(eq(checkCompetitorMetrics.sessionId, sessionId))
       .orderBy(desc(checkCompetitorMetrics.mentionCount));
+  }
+
+  // Scheduled check operations - get active clients whose nextCheckAt is in the past or null
+  async getClientsDueForCheck(): Promise<MonitoringClient[]> {
+    const now = new Date();
+    return await db.select().from(monitoringClients)
+      .where(
+        and(
+          eq(monitoringClients.isActive, true),
+          or(
+            lte(monitoringClients.nextCheckAt, now),
+            isNull(monitoringClients.nextCheckAt)
+          )
+        )
+      )
+      .orderBy(monitoringClients.nextCheckAt);
   }
 }
 

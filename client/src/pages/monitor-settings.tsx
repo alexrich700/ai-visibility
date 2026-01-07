@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -69,6 +70,7 @@ export default function MonitorSettings() {
   const [scope, setScope] = useState<"local" | "national">("local");
   const [city, setCity] = useState("");
   const [checkFrequencyDays, setCheckFrequencyDays] = useState(14);
+  const [isActive, setIsActive] = useState(true);
   const [brandAliases, setBrandAliases] = useState<string[]>([]);
   const [newAlias, setNewAlias] = useState("");
 
@@ -132,6 +134,7 @@ export default function MonitorSettings() {
       setScope(data.client.scope as "local" | "national");
       setCity(data.client.city || "");
       setCheckFrequencyDays(data.client.checkFrequencyDays);
+      setIsActive(data.client.isActive);
       setBrandAliases(data.client.brandAliases || []);
     }
   }, [data]);
@@ -256,6 +259,7 @@ export default function MonitorSettings() {
         scope,
         city: city || null,
         checkFrequencyDays,
+        isActive,
         brandAliases,
       } as any);
     } finally {
@@ -463,6 +467,23 @@ export default function MonitorSettings() {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5">
+                  <Label htmlFor="monitoring-active" className="text-base">Automated Monitoring</Label>
+                  <p className="text-sm text-muted-foreground">
+                    {isActive 
+                      ? "Visibility checks will run automatically on schedule." 
+                      : "Automated checks are paused. Manual scans still work."}
+                  </p>
+                </div>
+                <Switch
+                  id="monitoring-active"
+                  checked={isActive}
+                  onCheckedChange={(checked) => { setIsActive(checked); setHasChanges(true); }}
+                  data-testid="switch-monitoring-active"
+                />
               </div>
             </CardContent>
           </Card>

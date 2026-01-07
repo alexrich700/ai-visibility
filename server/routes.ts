@@ -1416,6 +1416,14 @@ export async function registerRoutes(
         });
       }
       
+      // Update lastCheckAt and calculate nextCheckAt for scheduling
+      const nextCheckAt = new Date();
+      nextCheckAt.setDate(nextCheckAt.getDate() + client.checkFrequencyDays);
+      await storage.updateMonitoringClient(clientId, {
+        lastCheckAt: new Date(),
+        nextCheckAt,
+      } as any);
+      
       // Send completion event
       sendEvent("complete", { 
         clientId, 
