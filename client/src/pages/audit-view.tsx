@@ -514,11 +514,16 @@ export default function AuditView() {
         </section>
 
         {/* Content that requires unlock */}
-        <div className="relative">
-          {/* Unlock Overlay */}
+        <div className="relative overflow-hidden">
+          {/* Opaque overlay to completely hide content when locked */}
+          {!isReportUnlocked && (
+            <div className="absolute inset-0 z-30 bg-gradient-to-b from-white/70 via-white/90 to-white pointer-events-none" />
+          )}
+          
+          {/* Unlock CTA Overlay */}
           {!isReportUnlocked && (
             <div className="absolute inset-0 z-40 flex items-start justify-center pt-32 no-print">
-              <div className="bg-white/95 backdrop-blur-sm rounded-2xl p-8 shadow-2xl max-w-md mx-4 text-center border border-gray-200">
+              <div className="bg-white rounded-2xl p-8 shadow-2xl max-w-md mx-4 text-center border border-gray-200">
                 <div className="w-16 h-16 bg-[#5599f9] rounded-full flex items-center justify-center mx-auto mb-6">
                   <Lock className="text-white" size={32} />
                 </div>
@@ -537,8 +542,8 @@ export default function AuditView() {
             </div>
           )}
 
-          {/* Blurred content when locked */}
-          <div className={!isReportUnlocked ? 'blur-md select-none pointer-events-none' : ''}>
+          {/* Blurred and hidden content when locked - using very strong blur + opacity */}
+          <div className={!isReportUnlocked ? 'blur-[20px] select-none pointer-events-none opacity-30' : ''} style={!isReportUnlocked ? { filter: 'blur(20px) grayscale(100%)', WebkitUserSelect: 'none', userSelect: 'none' } : {}}>
             {/* 3. Simulated Prompt Log with Tabs */}
             <section className="p-12 border-b border-gray-200 bg-gray-50">
               <SectionHeader title="Simulated Prompt Log" icon={Cpu} />
