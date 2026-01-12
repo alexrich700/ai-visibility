@@ -143,6 +143,24 @@ export async function registerRoutes(
     }
   });
 
+  // Get single audit by ID (public - for viewing audit results)
+  app.get("/api/audit/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid audit ID" });
+      }
+      const audit = await storage.getAuditById(id);
+      if (!audit) {
+        return res.status(404).json({ error: "Audit not found" });
+      }
+      res.json(audit);
+    } catch (error) {
+      console.error("Get audit error:", error);
+      res.status(500).json({ error: "Failed to get audit" });
+    }
+  });
+
   // Capture lead
   app.post("/api/leads", async (req, res) => {
     try {

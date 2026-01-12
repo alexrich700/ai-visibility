@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import Home from "@/pages/home";
 import Admin from "@/pages/admin";
 import AdminAuditView from "@/pages/admin-audit-view";
+import AuditView from "@/pages/audit-view";
 import MonitorClients from "@/pages/monitor-clients";
 import MonitorSetup from "@/pages/monitor-setup";
 import MonitorDashboard from "@/pages/monitor-dashboard";
@@ -16,6 +17,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/audit/:id" component={AuditView} />
       <Route path="/admin" component={Admin} />
       <Route path="/admin/audit/:id" component={AdminAuditView} />
       <Route path="/monitor/clients" component={MonitorClients} />
