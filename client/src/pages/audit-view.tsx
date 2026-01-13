@@ -563,8 +563,8 @@ export default function AuditView() {
 
           {/* Blurred and hidden content when locked - using very strong blur + opacity */}
           <div className={!isReportUnlocked ? 'blur-[20px] select-none pointer-events-none opacity-30' : ''} style={!isReportUnlocked ? { filter: 'blur(20px) grayscale(100%)', WebkitUserSelect: 'none', userSelect: 'none' } : {}}>
-            {/* 3. Simulated Prompt Log with Tabs */}
-            <section className="p-12 border-b border-gray-200 bg-gray-50">
+            {/* 3. Simulated Prompt Log - Web View with Tabs (hidden when printing) */}
+            <section className="p-12 border-b border-gray-200 bg-gray-50 no-print">
               <SectionHeader title="Simulated Prompt Log" icon={Cpu} />
               <p className="mb-4 text-gray-600">We simulated the following user queries to test brand presence across AI platforms.</p>
               <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-6">
@@ -576,7 +576,7 @@ export default function AuditView() {
 
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                 {/* Platform Tabs */}
-                <div className="flex border-b border-gray-200 no-print">
+                <div className="flex border-b border-gray-200">
                   <button
                     type="button"
                     onClick={() => setPromptLogTab("chatgpt")}
@@ -640,7 +640,7 @@ export default function AuditView() {
                               {response.length > 150 && (
                                 <button
                                   onClick={() => toggleRowExpansion(rowKey)}
-                                  className="text-xs font-medium text-[#5599f9] hover:text-[#4a8ce8] flex items-center gap-1 mt-2 no-print"
+                                  className="text-xs font-medium text-[#5599f9] hover:text-[#4a8ce8] flex items-center gap-1 mt-2"
                                   data-testid={`button-expand-response-${idx}-${promptLogTab}`}
                                 >
                                   {isExpanded ? (
@@ -660,6 +660,79 @@ export default function AuditView() {
                 <div className="p-4 bg-gray-50 text-center border-t border-gray-200 text-sm text-gray-500 font-medium">
                   {auditResults.promptResults?.length || 20} prompts analyzed across ChatGPT and Google AI
                 </div>
+              </div>
+            </section>
+
+            {/* 3. Simulated Prompt Log - Print View (shows BOTH platforms with full responses) */}
+            <section className="hidden print:block p-8 border-b border-gray-200 bg-gray-50">
+              <SectionHeader title="Simulated Prompt Log" icon={Cpu} />
+              <p className="mb-4 text-gray-600 text-sm">We simulated the following user queries to test brand presence across AI platforms.</p>
+              <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 mb-6">
+                <p className="text-xs text-gray-700">
+                  <span className="font-bold text-[#5599f9]">How to read this:</span> These are generic questions users might ask AI—your brand name is not included in the prompt. 
+                  If AI doesn't recommend you here, it means you're invisible to organic AI-assisted discovery.
+                </p>
+              </div>
+
+              {/* Print layout: Each prompt gets its own card with both platform responses */}
+              <div className="space-y-6">
+                {auditResults.promptResults?.map((result, idx) => (
+                  <div key={idx} className="bg-white rounded-lg border border-gray-200 overflow-hidden break-inside-avoid">
+                    {/* Prompt Header */}
+                    <div className="bg-gray-50 p-4 border-b border-gray-200">
+                      <p className="font-bold text-[#010400] text-sm">Prompt {idx + 1}:</p>
+                      <p className="text-gray-700 text-sm mt-1">"{result.prompt}"</p>
+                    </div>
+                    
+                    {/* ChatGPT Response */}
+                    <div className="p-4 border-b border-gray-100">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Cpu size={14} className="text-[#5599f9]" />
+                        <span className="text-xs font-bold uppercase tracking-wider text-gray-500">ChatGPT Response</span>
+                        <span className="ml-auto">
+                          {result.chatgpt.found ? (
+                            <span className="inline-flex items-center gap-1 text-xs text-green-600 font-medium">
+                              <CheckCircle size={12} /> Found
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-xs text-red-500 font-medium">
+                              <X size={12} /> Not Found
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                      <div className="text-sm text-gray-700 pl-5">
+                        {result.chatgpt.response ? renderMarkdown(result.chatgpt.response) : <span className="text-gray-400 italic">No response captured.</span>}
+                      </div>
+                    </div>
+                    
+                    {/* Google AI Response */}
+                    <div className="p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Globe size={14} className="text-[#ffb41c]" />
+                        <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Google AI Response</span>
+                        <span className="ml-auto">
+                          {result.googleAI.found ? (
+                            <span className="inline-flex items-center gap-1 text-xs text-green-600 font-medium">
+                              <CheckCircle size={12} /> Found
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-xs text-red-500 font-medium">
+                              <X size={12} /> Not Found
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                      <div className="text-sm text-gray-700 pl-5">
+                        {result.googleAI.response ? renderMarkdown(result.googleAI.response) : <span className="text-gray-400 italic">No response captured.</span>}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="mt-6 text-center text-sm text-gray-500 font-medium">
+                {auditResults.promptResults?.length || 20} prompts analyzed across ChatGPT and Google AI
               </div>
             </section>
 

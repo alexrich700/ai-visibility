@@ -286,3 +286,32 @@
     inset: -1px;
   }
 }
+
+/* Print styles for PDF export */
+@media print {
+  /* Hide elements with no-print class */
+  .no-print {
+    display: none !important;
+  }
+  
+  /* Show elements that should only appear in print */
+  .print\:block {
+    display: block !important;
+  }
+  
+  /* Ensure page breaks don't split cards */
+  .break-inside-avoid {
+    break-inside: avoid;
+  }
+  
+  /* Remove shadows and simplify for print */
+  .shadow-xl, .shadow-2xl, .shadow-lg {
+    box-shadow: none !important;
+  }
+  
+  /* Ensure text is black for better printing */
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
