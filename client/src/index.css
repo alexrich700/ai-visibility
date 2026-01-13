@@ -287,6 +287,11 @@
   }
 }
 
+/* Print-only elements are hidden by default */
+.print-only {
+  display: none !important;
+}
+
 /* Print styles for PDF export */
 @media print {
   /* Hide elements with no-print class */
@@ -295,13 +300,14 @@
   }
   
   /* Show elements that should only appear in print */
-  .print\:block {
+  .print-only {
     display: block !important;
   }
   
   /* Ensure page breaks don't split cards */
   .break-inside-avoid {
     break-inside: avoid;
+    page-break-inside: avoid;
   }
   
   /* Remove shadows and simplify for print */

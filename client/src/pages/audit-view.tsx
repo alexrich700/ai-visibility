@@ -664,7 +664,7 @@ export default function AuditView() {
             </section>
 
             {/* 3. Simulated Prompt Log - Print View (shows BOTH platforms with full responses) */}
-            <section className="hidden print:block p-8 border-b border-gray-200 bg-gray-50">
+            <section className="print-only p-8 border-b border-gray-200 bg-gray-50">
               <SectionHeader title="Simulated Prompt Log" icon={Cpu} />
               <p className="mb-4 text-gray-600 text-sm">We simulated the following user queries to test brand presence across AI platforms.</p>
               <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 mb-6">
