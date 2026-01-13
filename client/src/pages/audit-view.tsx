@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
@@ -96,6 +96,25 @@ export default function AuditView() {
   const toggleRowExpansion = (key: string) => {
     setExpandedRows(prev => ({ ...prev, [key]: !prev[key] }));
   };
+
+  // Auto-expand all content when printing (handles browser Ctrl+P/Cmd+P)
+  useEffect(() => {
+    const handleBeforePrint = () => {
+      setIsPrinting(true);
+    };
+    
+    const handleAfterPrint = () => {
+      setIsPrinting(false);
+    };
+
+    window.addEventListener('beforeprint', handleBeforePrint);
+    window.addEventListener('afterprint', handleAfterPrint);
+
+    return () => {
+      window.removeEventListener('beforeprint', handleBeforePrint);
+      window.removeEventListener('afterprint', handleAfterPrint);
+    };
+  }, []);
 
   const renderMarkdown = (text: string): JSX.Element => {
     if (!text) return <span className="text-gray-400 italic">No response captured.</span>;
