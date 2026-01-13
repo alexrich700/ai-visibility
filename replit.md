@@ -44,7 +44,7 @@ Key endpoints:
 
 ### AI Service Integration
 The backend integrates with three AI platforms:
-1. **OpenAI/ChatGPT** - Uses user's direct `OPENAI_API_KEY` with gpt-5.2 model via Responses API with `web_search` tool for proper grounding
+1. **OpenAI/ChatGPT** - Uses user's direct `MY_OPENAI_API_KEY` with gpt-5.2 model via Responses API with `web_search` tool for proper grounding
 2. **Google Gemini** - Uses Replit AI Integrations (no API key needed, billed to credits) with `googleSearch` tool for grounding
 3. **Perplexity** - Requires `PERPLEXITY_API_KEY` environment variable
 
@@ -238,7 +238,7 @@ The `shared/` directory contains TypeScript schemas and types used by both front
 
 ### Environment Variables Required
 - `DATABASE_URL` - PostgreSQL connection string
-- `OPENAI_API_KEY` - OpenAI API key for ChatGPT visibility checks (required for full functionality)
+- `MY_OPENAI_API_KEY` - OpenAI API key for ChatGPT visibility checks (required for full functionality)
 - `GEMINI_API_KEY` - Google Gemini API access (optional, uses Replit AI Integrations if not set)
 - `PERPLEXITY_API_KEY` - Perplexity API access (optional, falls back to simulation)
 - `ADMIN_PASSWORD` - Password for admin portal access (defaults to "admin123" if not set)

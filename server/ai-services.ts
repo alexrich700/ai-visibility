@@ -49,7 +49,7 @@ export function generateBrandSentimentPrompts(
 
 // OpenAI client using user's direct API key
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.MY_OPENAI_API_KEY,
 });
 
 // Extract root domain from URL for detection (e.g., "buildingbrandsmarketing" from "buildingbrandsmarketing.com")
