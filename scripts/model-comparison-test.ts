@@ -95,7 +95,7 @@ async function testModel(model: string, prompt: string, business: typeof TEST_BU
 
 async function runComparison() {
   console.log("=".repeat(80));
-  console.log("MODEL COMPARISON TEST: GPT-5.1 vs GPT-5.2 vs GPT-4o");
+  console.log("MODEL COMPARISON TEST: GPT-5.0 vs GPT-5.1 vs GPT-5.2");
   console.log("All models using web_search grounding");
   console.log("=".repeat(80));
   console.log(`\nTest Business: ${TEST_BUSINESS.name}`);
@@ -104,7 +104,7 @@ async function runComparison() {
   console.log(`\nRunning ${TEST_PROMPTS.length} prompts per model...`);
   console.log("\n");
 
-  const models = ["gpt-5.1", "gpt-5.2", "gpt-4o"];
+  const models = ["gpt-5.0", "gpt-5.1", "gpt-5.2"];
   const results: TestResult[] = [];
 
   for (const prompt of TEST_PROMPTS) {
