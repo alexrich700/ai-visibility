@@ -616,9 +616,10 @@ export async function registerRoutes(
         citedCount: 0,
       });
       
-      // Run visibility checks with bounded concurrency (4 prompts at a time)
+      // Run visibility checks with bounded concurrency (8 prompts at a time)
       // Each prompt still runs ChatGPT and Gemini in parallel internally
-      const CONCURRENT_PROMPTS = 4;
+      // Increased from 4 to 8 to offset GPT-5-mini's slower response time
+      const CONCURRENT_PROMPTS = 8;
       let foundCount = 0;  // Service prompts only
       let citedCount = 0;  // Service prompts only
       let chatgptFoundCount = 0;  // Service prompts only
@@ -1109,8 +1110,9 @@ export async function registerRoutes(
       
       sendEvent("status", { message: "Running AI visibility checks...", progress: 10 });
       
-      // Run visibility checks with bounded concurrency
-      const CONCURRENT_PROMPTS = 4;
+      // Run visibility checks with bounded concurrency (8 prompts at a time)
+      // Increased from 4 to 8 to offset GPT-5-mini's slower response time
+      const CONCURRENT_PROMPTS = 8;
       let foundCount = 0;
       let citedCount = 0;
       let chatgptFoundCount = 0;

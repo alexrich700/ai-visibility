@@ -305,7 +305,7 @@ async function queryChatGPT(prompt: string, businessName: string, url?: string, 
     // Use Responses API with web_search tool for real-time grounded search results
     // The Responses API uses 'input' and 'instructions' instead of 'messages'
     const response = await openai.responses.create({
-      model: "gpt-5.2",
+      model: "gpt-5-mini",
       tools: [webSearchTool],
       instructions: "You are a helpful assistant that provides factual, detailed answers about local and national businesses. When asked about service providers, list specific company names with their website URLs when possible. At the end of your response, provide a clean bullet list of just the business names you mentioned (no ratings, reviews, hours, or other details).",
       input: prompt
@@ -663,7 +663,7 @@ Key findings: overall score ${overallScore}/100, ChatGPT ${chatgptScore}%, Googl
 Describe what this means for AI visibility. Be professional.`;
     
     const response = await openai.chat.completions.create({
-      model: "gpt-5.2",
+      model: "gpt-5-mini",
       messages: [
         { role: "system", content: "You write professional, matter-of-fact executive summaries for AI visibility audit reports. Be concise and data-driven." },
         { role: "user", content: userPrompt }
@@ -830,7 +830,7 @@ ${homepageContent}`;
   try {
     console.log(`Generating ${promptCount} research prompts with GPT-5.2 for "${targetService}"...`);
     const response = await openai.chat.completions.create({
-      model: "gpt-5.2",
+      model: "gpt-5-mini",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt }
@@ -903,7 +903,7 @@ Example formats:
   try {
     console.log("Generating sentiment prompts with GPT-5.2...");
     const response = await openai.chat.completions.create({
-      model: "gpt-5.2",
+      model: "gpt-5-mini",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt }
@@ -1142,7 +1142,7 @@ export async function generateServiceGroups(
     const locationContext = scope === "local" && city ? ` in ${city}` : "";
     
     const response = await openai.chat.completions.create({
-      model: "gpt-5.2",
+      model: "gpt-5-mini",
       messages: [
         {
           role: "system",
@@ -1522,7 +1522,7 @@ Return ONLY valid JSON:
 }`;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-5.2",
+      model: "gpt-5-mini",
       messages: [
         {
           role: "system",

@@ -22,7 +22,8 @@ import {
 } from "./scan-analytics";
 
 const SCHEDULER_INTERVAL_MS = 60 * 1000;
-const CONCURRENT_PROMPTS = 4;
+// Increased from 4 to 8 to offset GPT-5-mini's slower response time
+const CONCURRENT_PROMPTS = 8;
 
 let isSchedulerRunning = false;
 let schedulerIntervalId: NodeJS.Timeout | null = null;
