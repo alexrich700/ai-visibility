@@ -44,16 +44,16 @@ Key endpoints:
 
 ### AI Service Integration
 The backend integrates with three AI platforms:
-1. **OpenAI/ChatGPT** - Uses user's direct `MY_OPENAI_API_KEY` with gpt-5.2 model via Responses API with `web_search` tool for proper grounding
+1. **OpenAI/ChatGPT** - Uses user's direct `MY_OPENAI_API_KEY` with gpt-5-mini model via Responses API with `web_search` tool for proper grounding (switched from gpt-5.2 on Jan 14, 2026 for ~7x cost savings)
 2. **Google Gemini** - Uses Replit AI Integrations (no API key needed, billed to credits) with `googleSearch` tool for grounding
 3. **Perplexity** - Requires `PERPLEXITY_API_KEY` environment variable
 
 ### Scan Performance Optimization
-- **Bounded concurrency**: Process 4 prompts simultaneously (configurable via `CONCURRENT_PROMPTS` in routes.ts)
+- **Bounded concurrency**: Process 8 prompts simultaneously (configurable via `CONCURRENT_PROMPTS` in routes.ts and scheduler.ts)
 - **Parallel AI calls**: Each prompt runs ChatGPT and Gemini API calls in parallel (via Promise.all in runPromptCheck)
 - **Early termination**: Checks `isClientConnected` flag before/after each batch to stop wasted work
 - **Batch processing**: Prompts processed in batches with progress updates after each batch completes
-- **~70% faster scans**: 40 prompts now run in ~10 batches instead of 40 sequential calls
+- **Cost optimization**: gpt-5-mini is ~7x cheaper than gpt-5.2 with comparable quality; concurrency increased from 4 to 8 to offset slower response times (~45-80s vs ~17-26s per prompt)
 
 Each service is queried with business-specific prompts, and responses are analyzed for business mentions and competitor identification.
 
