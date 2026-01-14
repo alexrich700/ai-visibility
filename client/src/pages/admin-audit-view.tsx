@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useParams, Link } from "wouter";
-import { apiRequest } from "@/lib/queryClient";
+import { useParams, Link, useLocation } from "wouter";
+import { apiRequest, getAdminQueryFn, getAdminToken } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import {
   ArrowLeft,
@@ -53,17 +53,25 @@ interface AuditWithLead {
 
 export default function AdminAuditView() {
   const { id } = useParams();
+  const [, setLocation] = useLocation();
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
   const [isPrinting, setIsPrinting] = useState(false);
   const [promptLogTab, setPromptLogTab] = useState<"chatgpt" | "google">("chatgpt");
 
+  useEffect(() => {
+    const token = getAdminToken();
+    if (!token) {
+      setLocation("/admin");
+    }
+  }, [setLocation]);
+
   const { data: audit, isLoading, error } = useQuery<AuditWithLead>({
     queryKey: ["/api/admin/audits", id],
     queryFn: async () => {
-      const response = await apiRequest("GET", `/api/admin/audits/${id}`);
+      const response = await apiRequest("GET", `/api/admin/audits/${id}`, undefined, { useAdminAuth: true });
       return response.json();
     },
-    enabled: !!id,
+    enabled: !!id && !!getAdminToken(),
   });
 
   const toggleRowExpansion = (key: string) => {

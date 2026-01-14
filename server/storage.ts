@@ -104,19 +104,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAuditsWithLeads(): Promise<(Audit & { lead?: DbLead })[]> {
-    const allAudits = await db.select().from(audits).orderBy(desc(audits.createdAt));
-    const allLeads = await db.select().from(leads);
+    const results = await db
+      .select({
+        audit: audits,
+        lead: leads,
+      })
+      .from(audits)
+      .leftJoin(leads, eq(audits.id, leads.auditId))
+      .orderBy(desc(audits.createdAt));
     
-    const leadsByAuditId = new Map<number, DbLead>();
-    for (const lead of allLeads) {
-      if (lead.auditId) {
-        leadsByAuditId.set(lead.auditId, lead);
-      }
-    }
-    
-    return allAudits.map(audit => ({
-      ...audit,
-      lead: leadsByAuditId.get(audit.id),
+    return results.map(row => ({
+      ...row.audit,
+      lead: row.lead ?? undefined,
     }));
   }
 
@@ -210,16 +209,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getPromptsByClientId(clientId: number): Promise<MonitoringPrompt[]> {
-    const groups = await this.getGroupsByClientId(clientId);
-    const groupIds = groups.map(g => g.id);
-    if (groupIds.length === 0) return [];
+    const results = await db
+      .select({
+        prompt: monitoringPrompts,
+      })
+      .from(monitoringPrompts)
+      .innerJoin(monitoringGroups, eq(monitoringPrompts.groupId, monitoringGroups.id))
+      .where(eq(monitoringGroups.clientId, clientId))
+      .orderBy(monitoringPrompts.createdAt);
     
-    const allPrompts: MonitoringPrompt[] = [];
-    for (const groupId of groupIds) {
-      const prompts = await this.getPromptsByGroupId(groupId);
-      allPrompts.push(...prompts);
-    }
-    return allPrompts;
+    return results.map(r => r.prompt);
   }
 
   async updatePrompt(id: number, data: Partial<InsertMonitoringPrompt>): Promise<MonitoringPrompt | undefined> {

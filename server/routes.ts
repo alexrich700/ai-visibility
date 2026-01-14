@@ -22,8 +22,13 @@ import {
   type BrandSentimentFinding
 } from "./services/scan-analytics";
 import { streamExportZip } from "./services/export-generator";
-
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
+import { 
+  ADMIN_PASSWORD, 
+  requireAdminAuth, 
+  loginRateLimiter, 
+  generateAdminToken,
+  resetLoginAttempts
+} from "./middleware/auth";
 
 
 // Temporary cache for pending scan configurations (for SSE handshake only)
@@ -186,12 +191,15 @@ export async function registerRoutes(
     }
   });
 
-  // Admin login
-  app.post("/api/admin/login", async (req, res) => {
+  // Admin login with rate limiting
+  app.post("/api/admin/login", loginRateLimiter, async (req, res) => {
     try {
       const { password } = req.body;
       if (password === ADMIN_PASSWORD) {
-        res.json({ success: true });
+        const ip = req.ip || req.socket.remoteAddress || "unknown";
+        resetLoginAttempts(ip);
+        const token = generateAdminToken();
+        res.json({ success: true, token });
       } else {
         res.status(401).json({ error: "Invalid password" });
       }
@@ -202,7 +210,7 @@ export async function registerRoutes(
   });
 
   // Get all audits with lead info (for admin)
-  app.get("/api/admin/audits", async (req, res) => {
+  app.get("/api/admin/audits", requireAdminAuth, async (req, res) => {
     try {
       const auditsWithLeads = await storage.getAuditsWithLeads();
       res.json(auditsWithLeads);
@@ -213,7 +221,7 @@ export async function registerRoutes(
   });
 
   // Get all leads (for admin)
-  app.get("/api/admin/leads", async (req, res) => {
+  app.get("/api/admin/leads", requireAdminAuth, async (req, res) => {
     try {
       const leads = await storage.getLeads();
       res.json(leads);
@@ -224,7 +232,7 @@ export async function registerRoutes(
   });
 
   // Update lead status (for admin)
-  app.patch("/api/admin/leads/:id", async (req, res) => {
+  app.patch("/api/admin/leads/:id", requireAdminAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const { status } = req.body;
@@ -247,7 +255,7 @@ export async function registerRoutes(
   });
 
   // Get single audit by ID (for admin to view full results)
-  app.get("/api/admin/audits/:id", async (req, res) => {
+  app.get("/api/admin/audits/:id", requireAdminAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const audit = await storage.getAuditById(id);
@@ -2106,15 +2114,8 @@ export async function registerRoutes(
   // ADMIN: BACKFILL METRICS FROM EXISTING RESULTS
   // ============================================
   
-  app.post("/api/admin/backfill-metrics", async (req, res) => {
+  app.post("/api/admin/backfill-metrics", requireAdminAuth, async (req, res) => {
     try {
-      const password = req.body.password;
-      const adminPassword = process.env.ADMIN_PASSWORD || "admin123";
-      
-      if (password !== adminPassword) {
-        return res.status(401).json({ error: "Unauthorized" });
-      }
-      
       // Get all sessions and their results
       const allClients = await storage.getMonitoringClients();
       let totalGroupMetrics = 0;

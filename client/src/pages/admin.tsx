@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, getAdminQueryFn, setAdminToken, getAdminToken, clearAdminToken } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Lock, Check, X, Eye, ArrowLeft, Building2, Globe, Search, MapPin, Calendar, User, Mail, Phone, FileText } from "lucide-react";
+import { Lock, Check, X, Eye, ArrowLeft, Building2, Globe, Search, MapPin, Calendar, User, Mail, Phone, FileText, LogOut } from "lucide-react";
 import { Link } from "wouter";
 import { format } from "date-fns";
 
@@ -70,28 +70,43 @@ export default function Admin() {
   const [loginError, setLoginError] = useState("");
   const [selectedAudit, setSelectedAudit] = useState<Audit | null>(null);
 
+  useEffect(() => {
+    const token = getAdminToken();
+    if (token) {
+      setIsAuthenticated(true);
+    }
+  }, []);
+
   const loginMutation = useMutation({
     mutationFn: async (pwd: string) => {
       const response = await apiRequest("POST", "/api/admin/login", { password: pwd });
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      if (data.token) {
+        setAdminToken(data.token);
+      }
       setIsAuthenticated(true);
       setLoginError("");
     },
-    onError: () => {
-      setLoginError("Invalid password");
+    onError: (error: Error) => {
+      if (error.message.includes("429")) {
+        setLoginError("Too many login attempts. Please try again later.");
+      } else {
+        setLoginError("Invalid password");
+      }
     },
   });
 
   const { data: audits = [], isLoading } = useQuery<Audit[]>({
     queryKey: ["/api/admin/audits"],
+    queryFn: getAdminQueryFn({ on401: "throw" }),
     enabled: isAuthenticated,
   });
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: number; status: string }) => {
-      const response = await apiRequest("PATCH", `/api/admin/leads/${id}`, { status });
+      const response = await apiRequest("PATCH", `/api/admin/leads/${id}`, { status }, { useAdminAuth: true });
       return response.json();
     },
     onSuccess: () => {
@@ -102,6 +117,12 @@ export default function Admin() {
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     loginMutation.mutate(password);
+  };
+
+  const handleLogout = () => {
+    clearAdminToken();
+    setIsAuthenticated(false);
+    setPassword("");
   };
 
   const handleStatusChange = (leadId: number, newStatus: string) => {
@@ -181,14 +202,26 @@ export default function Admin() {
             </div>
             <h1 className="text-xl font-bold tracking-tight">Admin Dashboard</h1>
           </div>
-          <a 
-            href="/" 
-            className="text-gray-500 hover:text-gray-700 transition-colors text-sm flex items-center gap-2"
-            data-testid="link-exit-admin"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Exit Admin
-          </a>
+          <div className="flex items-center gap-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleLogout}
+              className="text-gray-500 hover:text-gray-700"
+              data-testid="button-logout"
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              Logout
+            </Button>
+            <a 
+              href="/" 
+              className="text-gray-500 hover:text-gray-700 transition-colors text-sm flex items-center gap-2"
+              data-testid="link-exit-admin"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Exit Admin
+            </a>
+          </div>
         </div>
       </header>
 

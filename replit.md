@@ -208,12 +208,27 @@ Data models include:
 
 ### Admin Portal
 - **Route**: `/admin`
-- **Authentication**: Password-based (ADMIN_PASSWORD env var, defaults to "admin123")
+- **Authentication**: Token-based authentication with session management
+  - Password validated via `ADMIN_PASSWORD` env var (defaults to "admin123")
+  - Login returns a 24-hour session token stored in sessionStorage
+  - All admin API routes protected by `requireAdminAuth` middleware
+  - Rate limiting on login endpoint (5 attempts per 15 minutes, then 15-minute block)
 - **Features**:
   - Dashboard table showing all audit submissions
   - Lead status management (New, Contacted, Not Reached, Closed)
   - Visual indicators for leads who submitted contact info
   - Detailed audit view with scores and lead contact info
+  - Logout functionality to clear session
+
+### Security Architecture
+- **Authentication Middleware**: `server/middleware/auth.ts`
+  - `requireAdminAuth` - Validates Bearer token for protected routes
+  - `loginRateLimiter` - Prevents brute force attacks
+  - `generateAdminToken` - Creates secure session tokens
+  - Token expiry: 24 hours, auto-cleanup every hour
+- **Protected Routes**: All `/api/admin/*` endpoints require valid token
+- **Session Storage**: Tokens stored in sessionStorage (client-side)
+- **Rate Limiting**: 5 failed attempts triggers 15-minute IP block
 
 ### Shared Code
 The `shared/` directory contains TypeScript schemas and types used by both frontend and backend, ensuring type safety across the stack. Zod is used for runtime validation.
