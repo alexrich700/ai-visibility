@@ -2,258 +2,97 @@
 
 ## Overview
 
-This is an AI Visibility Audit Tool built for ROSSMAN MEDIA that analyzes how visible a business is across major AI platforms (ChatGPT, Gemini, Perplexity). The tool queries multiple AI services with business-related prompts and generates visibility scores, competitor analysis, and actionable recommendations.
-
-The application follows a client-server architecture with a React frontend and Express backend, using PostgreSQL for data persistence via Drizzle ORM.
+This AI Visibility Audit Tool for ROSSMAN MEDIA assesses a business's visibility across major AI platforms (ChatGPT, Gemini, Perplexity). It queries AI services with business-related prompts to generate visibility scores, conduct competitor analysis, and provide actionable recommendations. The tool aims to enhance business presence in AI search results, identify competitive advantages, and offer data-driven insights to improve digital marketing strategies. It operates with a React frontend, Express backend, and PostgreSQL database.
 
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
 
-**CRITICAL Design Requirement**: The existing UI design must be preserved exactly as implemented. Keep all colors, fonts, styles, layouts, and visual elements unchanged. Reference `design_guidelines.md` for the established brand identity including:
-- Primary Blue: #5599f9
-- Accent Yellow: #ffb41c
-- Bold headings with tight tracking
-- White cards with rounded-xl borders and subtle shadows
+**CRITICAL Design Requirement**: The existing UI design must be preserved exactly as implemented. Keep all colors, fonts, styles, layouts, and visual elements unchanged.
 
 ## System Architecture
 
-### Frontend Architecture
+### Frontend
 - **Framework**: React 18 with TypeScript
-- **Routing**: Wouter (lightweight React router)
-- **State Management**: TanStack React Query for server state
-- **UI Components**: shadcn/ui component library built on Radix UI primitives
-- **Styling**: Tailwind CSS with custom CSS variables for theming
-- **Build Tool**: Vite with HMR support
+- **State Management**: TanStack React Query
+- **UI Components**: shadcn/ui (built on Radix UI)
+- **Styling**: Tailwind CSS with custom CSS variables
+- **Build**: Vite
 
-The frontend uses a single-page application pattern with the main audit workflow managed through React state (input → scanning → results steps).
+The frontend is a single-page application managing the audit workflow through React state.
 
-### Backend Architecture
+### Backend
 - **Framework**: Express.js with TypeScript
-- **Runtime**: Node.js with tsx for TypeScript execution
-- **API Design**: RESTful endpoints under `/api` prefix
-- **Build**: esbuild for production bundling with dependency allowlist optimization
+- **Runtime**: Node.js
+- **API Design**: RESTful endpoints
+- **Build**: esbuild
 
-Key endpoints:
-- `POST /api/audit` - Runs visibility audit across AI platforms (returns auditId)
-- `POST /api/leads` - Captures lead information from audit results (links to auditId)
-- `POST /api/admin/login` - Admin portal authentication
-- `GET /api/admin/audits` - Get all audits with associated lead info
-- `PATCH /api/admin/leads/:id` - Update lead status (new, contacted, not_reached, closed)
-- `GET /api/admin/audits/:id` - Get single audit details
+The backend handles AI service integration, data processing, and persistence. It includes endpoints for initiating audits, managing leads, and an admin portal for viewing and managing audit data.
 
 ### AI Service Integration
-The backend integrates with three AI platforms:
-1. **OpenAI/ChatGPT** - Uses user's direct `MY_OPENAI_API_KEY` with gpt-5-mini model via Responses API with `web_search` tool for proper grounding (switched from gpt-5.2 on Jan 14, 2026 for ~7x cost savings)
-2. **Google Gemini** - Uses Replit AI Integrations (no API key needed, billed to credits) with `googleSearch` tool for grounding
-3. **Perplexity** - Requires `PERPLEXITY_API_KEY` environment variable
+The tool integrates with:
+1.  **OpenAI/ChatGPT**: Uses `MY_OPENAI_API_KEY` with `gpt-5-mini` model via Responses API, utilizing a `web_search` tool for grounding.
+2.  **Google Gemini**: Integrates via Replit AI Integrations (no API key needed), using a `googleSearch` tool for grounding.
+3.  **Perplexity**: Requires `PERPLEXITY_API_KEY`.
 
-### Scan Performance Optimization
-- **Bounded concurrency**: Process 8 prompts simultaneously (configurable via `CONCURRENT_PROMPTS` in routes.ts and scheduler.ts)
-- **Parallel AI calls**: Each prompt runs ChatGPT and Gemini API calls in parallel (via Promise.all in runPromptCheck)
-- **Early termination**: Checks `isClientConnected` flag before/after each batch to stop wasted work
-- **Batch processing**: Prompts processed in batches with progress updates after each batch completes
-- **Cost optimization**: gpt-5-mini is ~7x cheaper than gpt-5.2 with comparable quality; concurrency increased from 4 to 8 to offset slower response times (~45-80s vs ~17-26s per prompt)
+AI queries are processed with bounded concurrency (8 simultaneous prompts) and parallel API calls to optimize performance and cost.
 
-Each service is queried with business-specific prompts, and responses are analyzed for business mentions and competitor identification.
+### Core Features
+-   **High-Level Category & Service Groups**: Identifies an umbrella category and 10 specific service groups for each client, generating 5 prompts per group for comprehensive analysis.
+-   **Citation Detection**: Prioritizes exact domain matches in AI responses, then business name mentions, and brand aliases.
+-   **Brand Aliases**: Allows clients to configure alternative business names for more accurate mention detection.
+-   **Brand Sentiment Prompts**: Includes specific prompts to gather AI-driven feedback on brand perception, customer experience, trust factors, and pain points, separate from visibility scoring.
+-   **Real-time Progress Streaming**: Uses Server-Sent Events (SSE) for live updates during scans, including group progress, prompt status, and early termination on client disconnect.
 
-### High-Level Category (Umbrella Term) Feature
-When generating service groups for monitoring clients:
-- AI returns both a **high-level category** (umbrella term like "Plumber", "HVAC Contractor") AND 10 specific service groups
-- The umbrella category is marked with `isHighLevelCategory: true` in the database
-- Prompt counts: 5 prompts per group (configurable via `PROMPTS_PER_GROUP` constant in `server/ai-services.ts`)
-- Total per client: 11 groups, ~55 prompts (11 × 5)
-- Frontend displays "Primary Category" badge for umbrella groups 
-
-**Citation Detection Logic:**
-1. First checks if brand's exact domain is cited in AI response URLs
-2. If no domain match, checks if business name is mentioned in response text
-3. Brand aliases are also checked - alternative business names (e.g., "SmartFix", "The Smart Fix", "BBM") stored in `brandAliases` field
-4. Fallback checks for domain mentioned in text without full URL
-
-**Brand Aliases Feature:**
-- Clients can configure alternative business names via the settings page
-- Stored as `text[]` array in the `monitoring_clients` table
-- The `generateNameVariations()` function creates variations from both the primary name and all aliases
-- Aliases are threaded through the entire query chain: `runPromptCheck` → `queryOpenAI`/`queryGoogleAI` → `checkForMentions`
-- Uses Set-based deduplication to avoid redundant comparisons
-
-**Brand Sentiment Prompts Feature:**
-- Two prompt categories: SERVICE (for visibility tracking) and BRAND_SENTIMENT (for direct feedback)
-- Brand sentiment group automatically created during client onboarding with 4 specific prompts:
-  - Perception prompt: "What do people say about {business name}?"
-  - Customer experience prompt: "What are common customer experiences with {business name}?"
-  - Trust factors prompt: "What factors affect trust in {business name}?"
-  - Pain points prompt: "What issues or problems have customers reported about {business name}?"
-- Brand sentiment prompts are **excluded from visibility scoring** (only service prompts count toward visibility metrics)
-- Tracked via `isBrandSentiment` flag on each stored result
-- Uses `servicePromptCount` for all visibility calculations (total prompts minus brand sentiment prompts)
-- `collectBrandSentimentFindings()` helper extracts issues and praise from brand prompt responses
-- Brand sentiment findings are merged into sentiment statements (prepended to positive/negative arrays, limited to 5)
-- This provides more specific, actionable feedback about the business directly from AI platforms
-
-Fallback simulation is provided when API keys are unavailable or errors occur.
-
-**Real-time Progress Streaming:**
-- Two-step SSE flow:
-  1. POST `/api/monitoring/scan-prepare` - validates and stores scan config temporarily, returns `prepareId`
-  2. GET `/api/monitoring/scan-stream/:prepareId` - EventSource connection for real-time updates
-- Uses browser's native EventSource API (not fetch) for proper SSE handling
-- Frontend stores EventSource in ref with cleanup on component unmount
-- Event types: heartbeat, status, testing, prompt_complete, group_complete, complete, error
-- Disconnect handling: cancels remaining work when client navigates away (via req.on('close'))
-- Progress updates show: current group name, prompt text preview, prompt counter (X of Y)
-- Temporary config cache auto-cleans entries older than 5 minutes
-
-### Analytics Features (Dashboard)
-The monitoring dashboard includes comprehensive analytics for each client:
-
-**Share of Voice:**
-- Competitor comparison showing brand vs competitor mention frequency
-- Visual bar chart with percentage breakdown
-- Computed from AI response analysis using `computeShareOfVoice()`
-
-**Citation Sources:**
-- Tracks which domains are cited by AI platforms
-- Top 5 citations displayed with click-through links
-- Aggregated across ChatGPT and Google AI responses
-
-**Prominence Tracking:**
-- Average mention rank across responses (1 = first mentioned)
-- Count of "first place" recommendations
-- Separate tracking for ChatGPT and Google AI
-
-**Sentiment Analysis:**
-- **Sentiment Score**: Numerical 0-100 score computed using weighted word analysis
-  - Positive words add points, negative words subtract
-  - Strong words (excellent, terrible, etc.) weighted 2x
-  - Score of 50 = neutral, 70+ = positive perception, <40 = needs improvement
-- Percentage breakdown visualization (positive/neutral/negative)
-- Based on context around brand mentions
-- **Sentiment Narratives (Key Sentiment Drivers)**: AI-synthesized clean statements from raw AI responses
-  - Two-column SEMRush-style layout: "Brand Strength Factors" (green) and "Areas for Improvement" (amber)
-  - Each narrative includes a 1-5 strength score shown as 5-segment colored bars
-  - Generated by `synthesizeSentimentNarratives()` function using gpt-5.2 model
-  - **IMPORTANT**: gpt-5.2 model requires `max_completion_tokens` parameter (not `max_tokens`)
-  - Data structure: `{ strengths: [{text, strength}], improvements: [{text, strength}] }`
-  - Conditionally rendered - only displays when data exists
-
-**Competitor Visibility:**
-- Tracks top 5 competitors by visibility percentage
-- Filters out city names using 100+ US cities database to prevent false positives
-- Shows mention count per competitor
-- Visibility calculated as: (mentions / total prompts where business was found) × 100
-
-**Response Viewer:**
-- Full AI response modal with brand name highlighting
-- Tabbed view for ChatGPT vs Google AI responses
-- Competitors mentioned displayed as badges
-
-**Historical Trending:**
-- Session-level metrics stored for trend analysis
-- Data includes: overall score, platform scores, found/cited counts
-- API returns `trendData` array for historical visualization
-
-**Visibility Trend Views (Tabbed Interface):**
-- Three switchable chart views via tabs in the dashboard:
-  1. **Overall**: AreaChart showing overall visibility score with ChatGPT/Google AI line overlays
-  2. **By Group**: LineChart with multi-colored lines tracking each service group's visibility over time
-  3. **Competitors**: LineChart showing top 10 competitors' visibility percentages over time
-- Data stored in separate tables for efficient time-series queries:
-  - `check_group_metrics`: Per-group visibility score, found count, total prompts per session
-  - `check_competitor_metrics`: Per-competitor visibility percent and mention count per session
-- API endpoints:
-  - `GET /api/monitoring/trends/groups/:clientId` - Returns group trend data
-  - `GET /api/monitoring/trends/competitors/:clientId` - Returns top 10 competitor trends
-- Chart data uses ISO date keys for proper chronological sorting across years
-
-**Platform Visibility:**
-- Shows per-platform visibility percentages (ChatGPT vs Google AI)
-- Displays found/total counts per platform (e.g., "45/55")
-- Compact dual-pill design with color-coded indicators (blue=ChatGPT, orange=GoogleAI)
-
-**Data Export:**
-- GET `/api/monitoring/exports/:id` endpoint generates ZIP file
-- Supports date range filtering via `startDate` and `endDate` query params
-- Export includes:
-  - README.txt with AI assistant instructions for website optimization
-  - summary.json with visibility metrics and recommendations
-  - chatgpt_results.csv with all ChatGPT prompts, responses, found/cited status
-  - google_results.csv with all Google AI prompts, responses, found/cited status
-  - metadata.json with export parameters and timestamps
-- Export generator service: `server/services/export-generator.ts`
-
-Analytics helper functions in `server/services/scan-analytics.ts`:
-- `extractCitations()` - Parses URLs from AI responses
-- `computeShareOfVoice()` - Calculates brand vs competitor percentages
-- `detectMentionRank()` - Finds position of brand in response
-- `classifySentiment()` - Analyzes mention context
-- `buildSnippets()` - Extracts context around brand mentions
-- `aggregateCitations()` - Consolidates citations across responses
-- `aggregateSentiment()` - Computes sentiment percentages
-- `computeSentimentScore()` - Calculates 0-100 numerical sentiment score using weighted word analysis
-- `computeCompetitorVisibility()` - Calculates visibility % for top 5 competitors with city filtering
-- `extractSentimentStatements()` - Extracts positive/negative quotes from AI responses with platform attribution
+### Analytics Dashboard
+The monitoring dashboard provides:
+-   **Share of Voice**: Compares brand vs. competitor mention frequency.
+-   **Citation Sources**: Tracks and displays top domains cited by AI platforms.
+-   **Prominence Tracking**: Measures average mention rank and "first place" recommendations.
+-   **Sentiment Analysis**: Provides a numerical 0-100 sentiment score and AI-synthesized narratives (strengths and improvements) based on brand mentions.
+-   **Competitor Visibility**: Identifies and tracks top 5 competitors, filtering out city names.
+-   **Response Viewer**: Allows detailed viewing of AI responses with brand highlighting.
+-   **Historical Trending**: Stores session-level metrics for trend analysis, including overall visibility, group-specific visibility, and competitor visibility over time, presented in tabbed charts.
+-   **Platform Visibility**: Shows per-platform visibility percentages for ChatGPT and Google AI.
+-   **Data Export**: Allows exporting comprehensive audit data (summaries, raw results, metadata) in a ZIP format with date range filtering.
 
 ### Data Layer
-- **ORM**: Drizzle ORM with PostgreSQL dialect
-- **Schema Location**: `shared/schema.ts`
-- **Migrations**: Managed via `drizzle-kit push`
-- **Current Storage**: PostgreSQL database with Drizzle ORM
-
-Data models include:
-- Users (authentication ready)
-- Audits (full audit results with scores, stored as JSON)
-- Leads (contact capture linked to audits with status tracking)
+-   **ORM**: Drizzle ORM with PostgreSQL.
+-   **Schema**: Defined in `shared/schema.ts`.
+-   **Migrations**: Managed via `drizzle-kit`.
+-   **Models**: Users, Audits (JSON storage), and Leads.
 
 ### Admin Portal
-- **Route**: `/admin`
-- **Authentication**: Token-based authentication with session management
-  - Password validated via `ADMIN_PASSWORD` env var (defaults to "admin123")
-  - Login returns a 24-hour session token stored in sessionStorage
-  - All admin API routes protected by `requireAdminAuth` middleware
-  - Rate limiting on login endpoint (5 attempts per 15 minutes, then 15-minute block)
-- **Features**:
-  - Dashboard table showing all audit submissions
-  - Lead status management (New, Contacted, Not Reached, Closed)
-  - Visual indicators for leads who submitted contact info
-  - Detailed audit view with scores and lead contact info
-  - Logout functionality to clear session
+-   **Functionality**: Provides a dashboard for viewing audit submissions, managing lead statuses, and detailed audit reports.
+-   **Authentication**: Token-based authentication with `ADMIN_PASSWORD` and rate limiting.
 
-### Security Architecture
-- **Authentication Middleware**: `server/middleware/auth.ts`
-  - `requireAdminAuth` - Validates Bearer token for protected routes
-  - `loginRateLimiter` - Prevents brute force attacks
-  - `generateAdminToken` - Creates secure session tokens
-  - Token expiry: 24 hours, auto-cleanup every hour
-- **Protected Routes**: All `/api/admin/*` endpoints require valid token
-- **Session Storage**: Tokens stored in sessionStorage (client-side)
-- **Rate Limiting**: 5 failed attempts triggers 15-minute IP block
+### Security
+-   **Authentication Middleware**: Ensures secure access to admin routes with token validation and rate limiting.
+-   **Protected Routes**: All `/api/admin/*` endpoints are secured.
 
 ### Shared Code
-The `shared/` directory contains TypeScript schemas and types used by both frontend and backend, ensuring type safety across the stack. Zod is used for runtime validation.
+The `shared/` directory contains common TypeScript schemas and types, using Zod for runtime validation.
 
 ## External Dependencies
 
 ### AI Services
-- **OpenAI API** (direct API key) - Primary LLM for ChatGPT visibility checks using gpt-4o model
-- **Google Gemini API** (via Replit AI Integrations) - Secondary AI platform visibility analysis
-- **Perplexity API** - Search-focused AI visibility analysis
+-   **OpenAI API**: For ChatGPT visibility checks.
+-   **Google Gemini API**: Accessed via Replit AI Integrations for Google AI visibility.
+-   **Perplexity API**: For additional AI visibility analysis.
 
 ### Database
-- **PostgreSQL** - Primary database (requires `DATABASE_URL` environment variable)
-- **Drizzle ORM** - Type-safe database queries and schema management
+-   **PostgreSQL**: Primary database for all application data.
+-   **Drizzle ORM**: Used for database interaction.
 
 ### Key npm Packages
-- `@tanstack/react-query` - Server state management
-- `@radix-ui/*` - Accessible UI primitives
-- `class-variance-authority` - Component variant styling
-- `zod` - Schema validation
-- `drizzle-orm` / `drizzle-zod` - Database ORM with Zod integration
+-   `@tanstack/react-query`: Server state management.
+-   `shadcn/ui`: UI component library.
+-   `zod`: Schema validation.
+-   `drizzle-orm`: ORM for PostgreSQL.
 
-### Environment Variables Required
-- `DATABASE_URL` - PostgreSQL connection string
-- `MY_OPENAI_API_KEY` - OpenAI API key for ChatGPT visibility checks (required for full functionality)
-- `GEMINI_API_KEY` - Google Gemini API access (optional, uses Replit AI Integrations if not set)
-- `PERPLEXITY_API_KEY` - Perplexity API access (optional, falls back to simulation)
-- `ADMIN_PASSWORD` - Password for admin portal access (defaults to "admin123" if not set)
+### Environment Variables
+-   `DATABASE_URL`: PostgreSQL connection string.
+-   `MY_OPENAI_API_KEY`: OpenAI API key.
+-   `GEMINI_API_KEY`: Google Gemini API key (optional).
+-   `PERPLEXITY_API_KEY`: Perplexity API key (optional).
+-   `ADMIN_PASSWORD`: Admin portal password.
