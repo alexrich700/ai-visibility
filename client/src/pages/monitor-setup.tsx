@@ -113,15 +113,137 @@ export default function MonitorSetup() {
   // EventSource ref for cleanup on unmount
   const eventSourceRef = useRef<EventSource | null>(null);
   
+  // Session tracking for auto-reconnect on disconnect
+  const activeSessionIdRef = useRef<number | null>(null);
+  const activeClientIdRef = useRef<number | null>(null);
+  const reconnectAttemptsRef = useRef<number>(0);
+  const MAX_RECONNECT_ATTEMPTS = 3;
+  const isReconnectingRef = useRef<boolean>(false);
+  const isMountedRef = useRef<boolean>(true); // Cancellation flag to prevent actions after unmount
+  
   // Cleanup EventSource on unmount or navigation
   useEffect(() => {
+    isMountedRef.current = true; // Mark as mounted
     return () => {
+      isMountedRef.current = false; // Mark as unmounted to cancel pending reconnects
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
         eventSourceRef.current = null;
       }
+      // Reset reconnect state
+      activeSessionIdRef.current = null;
+      activeClientIdRef.current = null;
+      reconnectAttemptsRef.current = 0;
+      isReconnectingRef.current = false;
     };
   }, []);
+  
+  // Auto-reconnect function using resume endpoint
+  const attemptReconnect = async () => {
+    const sessionId = activeSessionIdRef.current;
+    
+    if (!sessionId || isReconnectingRef.current) {
+      console.log("[Reconnect] No session ID or already reconnecting, skipping");
+      return false;
+    }
+    
+    if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
+      console.log(`[Reconnect] Max attempts (${MAX_RECONNECT_ATTEMPTS}) reached, giving up`);
+      return false;
+    }
+    
+    isReconnectingRef.current = true;
+    reconnectAttemptsRef.current++;
+    
+    console.log(`[Reconnect] Attempt ${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS} for session ${sessionId}`);
+    setScanStatus("Reconnecting...");
+    setScanSubStatus(`Attempt ${reconnectAttemptsRef.current} of ${MAX_RECONNECT_ATTEMPTS}`);
+    
+    // Wait a bit before reconnecting (1-3 seconds with some randomness)
+    const delay = 1000 + Math.random() * 2000;
+    await new Promise(resolve => setTimeout(resolve, delay));
+    
+    // Check if component was unmounted during delay
+    if (!isMountedRef.current) {
+      console.log("[Reconnect] Component unmounted during delay, cancelling reconnect");
+      isReconnectingRef.current = false;
+      return false;
+    }
+    
+    try {
+      // Close existing EventSource if any
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+      
+      // Connect to resume endpoint
+      const eventSource = new EventSource(`/api/monitoring/resume-stream/${sessionId}`);
+      eventSourceRef.current = eventSource;
+      
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          // Successful message means reconnection worked
+          if (reconnectAttemptsRef.current > 0) {
+            console.log("[Reconnect] Successfully reconnected!");
+            reconnectAttemptsRef.current = 0;
+            toast({
+              title: "Reconnected",
+              description: "Scan resumed successfully",
+            });
+          }
+          isReconnectingRef.current = false;
+          
+          handleStreamEvent(data);
+          
+          // Close EventSource when scan is complete or errored
+          if (data.type === "complete" || data.type === "error") {
+            eventSource.close();
+            eventSourceRef.current = null;
+            activeSessionIdRef.current = null;
+          }
+        } catch (e) {
+          console.error("Failed to parse SSE event:", e);
+        }
+      };
+      
+      eventSource.onerror = async () => {
+        console.error("[Reconnect] EventSource error during reconnection");
+        eventSource.close();
+        eventSourceRef.current = null;
+        isReconnectingRef.current = false;
+        
+        // Check if component was unmounted
+        if (!isMountedRef.current) {
+          console.log("[Reconnect] Component unmounted, cancelling retry");
+          return;
+        }
+        
+        // Try again if we have attempts left
+        if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
+          await attemptReconnect();
+        } else {
+          // All reconnection attempts failed
+          toast({
+            title: "Connection lost",
+            description: "Unable to reconnect after multiple attempts. Your progress has been saved - you can resume from the dashboard.",
+            variant: "destructive",
+          });
+          setScanStatus("Disconnected");
+          setScanSubStatus("Progress saved. Resume from dashboard.");
+          setIsScanning(false);
+        }
+      };
+      
+      return true;
+    } catch (error) {
+      console.error("[Reconnect] Error during reconnection:", error);
+      isReconnectingRef.current = false;
+      return false;
+    }
+  };
 
   // Generate groups mutation
   const generateGroupsMutation = useMutation({
@@ -288,18 +410,36 @@ export default function MonitorSetup() {
         }
       };
       
-      eventSource.onerror = (error) => {
-        console.error("EventSource error:", error);
+      eventSource.onerror = async () => {
+        console.error("EventSource error - attempting to reconnect...");
         eventSource.close();
         eventSourceRef.current = null;
-        toast({
-          title: "Connection lost",
-          description: "Lost connection to the scan. Please try again.",
-          variant: "destructive",
-        });
-        setScanProgress(0);
-        setScanStatus("Failed");
-        setIsScanning(false);
+        
+        // Check if component was unmounted
+        if (!isMountedRef.current) {
+          console.log("[SSE] Component unmounted, not attempting reconnect");
+          return;
+        }
+        
+        // Attempt auto-reconnect if we have a session ID
+        if (activeSessionIdRef.current) {
+          const reconnected = await attemptReconnect();
+          if (reconnected) {
+            return; // Successfully initiated reconnection
+          }
+        }
+        
+        // Only show error if reconnection failed or wasn't possible
+        if (!isReconnectingRef.current && isMountedRef.current) {
+          toast({
+            title: "Connection lost",
+            description: "Lost connection to the scan. Your progress has been saved.",
+            variant: "destructive",
+          });
+          setScanStatus("Disconnected");
+          setScanSubStatus("Progress saved. Resume from dashboard.");
+          setIsScanning(false);
+        }
       };
     } catch (error) {
       toast({
@@ -331,7 +471,19 @@ export default function MonitorSetup() {
     switch (event.type) {
       case "heartbeat":
         // Stream confirmed active
-        console.log("SSE stream connected");
+        console.log("SSE heartbeat received");
+        break;
+      case "session_created":
+        // Store session ID for potential reconnection
+        if (event.sessionId) {
+          activeSessionIdRef.current = event.sessionId;
+          console.log(`[Session] Tracking session ${event.sessionId} for reconnection`);
+        }
+        if (event.clientId) {
+          activeClientIdRef.current = event.clientId;
+        }
+        // Reset reconnect counter on new session
+        reconnectAttemptsRef.current = 0;
         break;
       case "status":
         setScanStatus(event.message || "");
@@ -359,6 +511,10 @@ export default function MonitorSetup() {
         setScanStatus("Scan Complete!");
         setScanSubStatus(`Overall Score: ${event.overallScore}%`);
         setIsScanning(false);
+        // Clear session tracking on successful completion
+        activeSessionIdRef.current = null;
+        activeClientIdRef.current = null;
+        reconnectAttemptsRef.current = 0;
         setTimeout(() => {
           if (event.clientId) {
             setLocation(`/monitor/dashboard/${event.clientId}`);
@@ -372,6 +528,10 @@ export default function MonitorSetup() {
           variant: "destructive",
         });
         setIsScanning(false);
+        // Clear session tracking on error
+        activeSessionIdRef.current = null;
+        activeClientIdRef.current = null;
+        reconnectAttemptsRef.current = 0;
         break;
     }
   };

@@ -706,12 +706,12 @@ export async function registerRoutes(
         };
       }
       
-      // Setup heartbeat interval to keep SSE connection alive (every 15 seconds)
+      // Setup heartbeat interval to keep SSE connection alive (every 5 seconds for production proxy compatibility)
       heartbeatInterval = setInterval(() => {
         if (isClientConnected) {
           sendEvent("heartbeat", { timestamp: Date.now(), completedCount, totalPrompts });
         }
-      }, 15000);
+      }, 5000);
       
       // Process prompts in concurrent batches
       for (let i = 0; i < allPromptsWithGroups.length; i += CONCURRENT_PROMPTS) {
@@ -1305,12 +1305,12 @@ export async function registerRoutes(
         };
       }
       
-      // Setup heartbeat interval to keep SSE connection alive (every 15 seconds)
+      // Setup heartbeat interval to keep SSE connection alive (every 5 seconds for production proxy compatibility)
       heartbeatInterval = setInterval(() => {
         if (isClientConnected) {
           sendEvent("heartbeat", { timestamp: Date.now(), completedCount, totalPrompts });
         }
-      }, 15000);
+      }, 5000);
       
       // Process prompts in concurrent batches
       for (let i = 0; i < promptsWithGroups.length; i += CONCURRENT_PROMPTS) {
@@ -1804,12 +1804,12 @@ export async function registerRoutes(
       let currentCompleted = completedCount;
       const location = targetSession.city || client.city || undefined;
       
-      // Setup heartbeat
+      // Setup heartbeat (every 5 seconds for production proxy compatibility)
       heartbeatInterval = setInterval(() => {
         if (isClientConnected) {
           sendEvent("heartbeat", { timestamp: Date.now(), completedCount: currentCompleted, totalPrompts: totalPromptsInSession });
         }
-      }, 15000);
+      }, 5000);
       
       // Map prompts with group names
       const promptsWithGroups = remainingPrompts.map((prompt, index) => {
