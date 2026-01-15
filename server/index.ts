@@ -3,8 +3,50 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { startScheduler } from "./services/scheduler";
+import { validateOpenAIKey } from "./ai-services";
 
 const app = express();
+
+// ============================================
+// STARTUP VALIDATION
+// ============================================
+function validateEnvironment() {
+  console.log("\n========================================");
+  console.log("ENVIRONMENT VALIDATION");
+  console.log("========================================");
+  
+  // Validate OpenAI API key
+  const openaiResult = validateOpenAIKey();
+  if (!openaiResult.valid) {
+    console.error(`[CRITICAL] ${openaiResult.message}`);
+    console.error("[CRITICAL] Prompt generation will use fallback defaults - AI prompts won't be customized!");
+  }
+  
+  // Check other important environment variables
+  if (!process.env.DATABASE_URL) {
+    console.warn("[WARNING] DATABASE_URL is not set - database operations will fail");
+  } else {
+    console.log("[OK] DATABASE_URL is configured");
+  }
+  
+  if (!process.env.ADMIN_PASSWORD) {
+    console.warn("[WARNING] ADMIN_PASSWORD is not set - admin portal will be inaccessible");
+  } else {
+    console.log("[OK] ADMIN_PASSWORD is configured");
+  }
+  
+  // Optional API keys
+  if (process.env.PERPLEXITY_API_KEY) {
+    console.log("[OK] PERPLEXITY_API_KEY is configured");
+  } else {
+    console.log("[INFO] PERPLEXITY_API_KEY not set - Perplexity checks will be skipped");
+  }
+  
+  console.log("========================================\n");
+}
+
+// Run validation on startup
+validateEnvironment();
 const httpServer = createServer(app);
 
 declare module "http" {

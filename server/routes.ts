@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { generateServiceGroups, generateServiceGroupsMultiCategory, generatePromptsForGroups, runPromptCheck, synthesizeSentimentNarratives, generateBrandSentimentPrompts, type SynthesizedNarratives, type MultiCategoryServiceGroupsResult } from "./ai-services";
+import { generateServiceGroups, generateServiceGroupsMultiCategory, generatePromptsForGroups, runPromptCheck, synthesizeSentimentNarratives, generateBrandSentimentPrompts, type SynthesizedNarratives, type MultiCategoryServiceGroupsResult, getPromptGenerationStats, testOpenAIConnectivity } from "./ai-services";
 import { monitoringClientRequestSchema } from "@shared/schema";
 import { z } from "zod";
 import { randomUUID } from "crypto";
@@ -125,6 +125,41 @@ export async function registerRoutes(
   
   // Mount modular routes for audit, leads, and admin
   app.use("/api", apiRouter);
+
+  // ============================================
+  // DIAGNOSTICS ENDPOINTS
+  // ============================================
+
+  // Health check endpoint
+  app.get("/api/health", async (req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
+  // OpenAI connectivity test (admin only - checks if API is working)
+  app.get("/api/diagnostics/openai", async (req, res) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || authHeader !== `Bearer ${process.env.ADMIN_PASSWORD}`) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    
+    const result = await testOpenAIConnectivity();
+    res.json(result);
+  });
+
+  // Prompt generation statistics (admin only)
+  app.get("/api/diagnostics/prompt-stats", async (req, res) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || authHeader !== `Bearer ${process.env.ADMIN_PASSWORD}`) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    
+    const stats = getPromptGenerationStats();
+    res.json({
+      ...stats,
+      serverTime: new Date().toISOString(),
+      environment: process.env.NODE_ENV || "development"
+    });
+  });
 
   // ============================================
   // MONITORING ENDPOINTS

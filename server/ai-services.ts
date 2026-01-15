@@ -10,6 +10,197 @@ import {
 // Configuration constants for prompt generation
 export const PROMPTS_PER_GROUP = 5; // Number of prompts to generate per service group
 
+// ============================================
+// ERROR CLASSIFICATION AND DIAGNOSTICS
+// ============================================
+
+export type PromptGenerationFailureReason = 
+  | 'API_KEY_MISSING'
+  | 'API_RATE_LIMIT'
+  | 'API_TIMEOUT'
+  | 'API_AUTH_ERROR'
+  | 'API_SERVER_ERROR'
+  | 'JSON_PARSE_ERROR'
+  | 'INSUFFICIENT_RESULTS'
+  | 'NETWORK_ERROR'
+  | 'UNKNOWN_ERROR';
+
+interface PromptGenerationDiagnostics {
+  reason: PromptGenerationFailureReason;
+  message: string;
+  timestamp: string;
+  details?: Record<string, unknown>;
+}
+
+function classifyError(error: unknown): PromptGenerationDiagnostics {
+  const timestamp = new Date().toISOString();
+  
+  if (error instanceof SyntaxError) {
+    return {
+      reason: 'JSON_PARSE_ERROR',
+      message: `Failed to parse AI response as JSON: ${error.message}`,
+      timestamp,
+      details: { errorType: 'SyntaxError' }
+    };
+  }
+  
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase();
+    
+    if (msg.includes('api key') || msg.includes('apikey') || msg.includes('unauthorized') || msg.includes('401')) {
+      return {
+        reason: 'API_AUTH_ERROR',
+        message: `OpenAI authentication failed: ${error.message}`,
+        timestamp,
+        details: { errorType: error.name }
+      };
+    }
+    
+    if (msg.includes('rate limit') || msg.includes('429') || msg.includes('too many requests')) {
+      return {
+        reason: 'API_RATE_LIMIT',
+        message: `OpenAI rate limit exceeded: ${error.message}`,
+        timestamp,
+        details: { errorType: error.name }
+      };
+    }
+    
+    if (msg.includes('timeout') || msg.includes('timed out') || msg.includes('etimedout')) {
+      return {
+        reason: 'API_TIMEOUT',
+        message: `OpenAI request timed out: ${error.message}`,
+        timestamp,
+        details: { errorType: error.name }
+      };
+    }
+    
+    if (msg.includes('500') || msg.includes('502') || msg.includes('503') || msg.includes('server error')) {
+      return {
+        reason: 'API_SERVER_ERROR',
+        message: `OpenAI server error: ${error.message}`,
+        timestamp,
+        details: { errorType: error.name }
+      };
+    }
+    
+    if (msg.includes('network') || msg.includes('econnrefused') || msg.includes('enotfound') || msg.includes('fetch failed')) {
+      return {
+        reason: 'NETWORK_ERROR',
+        message: `Network error connecting to OpenAI: ${error.message}`,
+        timestamp,
+        details: { errorType: error.name }
+      };
+    }
+    
+    return {
+      reason: 'UNKNOWN_ERROR',
+      message: `Unexpected error: ${error.message}`,
+      timestamp,
+      details: { errorType: error.name, stack: error.stack?.slice(0, 500) }
+    };
+  }
+  
+  return {
+    reason: 'UNKNOWN_ERROR',
+    message: `Unknown error type: ${String(error)}`,
+    timestamp
+  };
+}
+
+// Track fallback usage for diagnostics
+let fallbackStats = {
+  totalCalls: 0,
+  fallbackCount: 0,
+  lastFallbackReason: null as PromptGenerationDiagnostics | null,
+  reasonCounts: {} as Record<PromptGenerationFailureReason, number>
+};
+
+export function getPromptGenerationStats() {
+  return {
+    ...fallbackStats,
+    fallbackRate: fallbackStats.totalCalls > 0 
+      ? (fallbackStats.fallbackCount / fallbackStats.totalCalls * 100).toFixed(1) + '%'
+      : '0%'
+  };
+}
+
+function recordFallback(diagnostics: PromptGenerationDiagnostics) {
+  fallbackStats.fallbackCount++;
+  fallbackStats.lastFallbackReason = diagnostics;
+  fallbackStats.reasonCounts[diagnostics.reason] = (fallbackStats.reasonCounts[diagnostics.reason] || 0) + 1;
+  
+  console.error(`[PROMPT_GENERATION_FALLBACK] Reason: ${diagnostics.reason}`);
+  console.error(`[PROMPT_GENERATION_FALLBACK] Message: ${diagnostics.message}`);
+  console.error(`[PROMPT_GENERATION_FALLBACK] Timestamp: ${diagnostics.timestamp}`);
+  if (diagnostics.details) {
+    console.error(`[PROMPT_GENERATION_FALLBACK] Details:`, JSON.stringify(diagnostics.details));
+  }
+}
+
+// ============================================
+// API KEY VALIDATION
+// ============================================
+
+let openaiKeyValidated = false;
+let openaiKeyValid = false;
+
+export function validateOpenAIKey(): { valid: boolean; message: string } {
+  const apiKey = process.env.MY_OPENAI_API_KEY;
+  
+  if (!apiKey) {
+    console.error('[CRITICAL] MY_OPENAI_API_KEY is not set! Prompt generation will use fallback defaults.');
+    return { valid: false, message: 'MY_OPENAI_API_KEY environment variable is not set' };
+  }
+  
+  if (apiKey.length < 20) {
+    console.error('[CRITICAL] MY_OPENAI_API_KEY appears to be invalid (too short).');
+    return { valid: false, message: 'MY_OPENAI_API_KEY appears to be invalid' };
+  }
+  
+  if (!apiKey.startsWith('sk-')) {
+    console.warn('[WARNING] MY_OPENAI_API_KEY does not start with "sk-" - this may be an invalid key format.');
+  }
+  
+  console.log('[OK] MY_OPENAI_API_KEY is configured');
+  return { valid: true, message: 'API key is configured' };
+}
+
+export async function testOpenAIConnectivity(): Promise<{ success: boolean; message: string; latencyMs?: number }> {
+  const startTime = Date.now();
+  
+  const keyValidation = validateOpenAIKey();
+  if (!keyValidation.valid) {
+    return { success: false, message: keyValidation.message };
+  }
+  
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-5-mini",
+      messages: [{ role: "user", content: "Reply with just the word 'OK'" }],
+      max_completion_tokens: 10,
+    });
+    
+    const latencyMs = Date.now() - startTime;
+    const content = response.choices[0]?.message?.content || "";
+    
+    if (content.toLowerCase().includes('ok')) {
+      openaiKeyValidated = true;
+      openaiKeyValid = true;
+      console.log(`[OK] OpenAI connectivity test passed (${latencyMs}ms)`);
+      return { success: true, message: 'OpenAI connection successful', latencyMs };
+    } else {
+      console.warn(`[WARNING] OpenAI responded but with unexpected content: "${content}"`);
+      return { success: true, message: 'OpenAI responded but with unexpected content', latencyMs };
+    }
+  } catch (error) {
+    const diagnostics = classifyError(error);
+    console.error(`[ERROR] OpenAI connectivity test failed: ${diagnostics.message}`);
+    openaiKeyValidated = true;
+    openaiKeyValid = false;
+    return { success: false, message: diagnostics.message };
+  }
+}
+
 // Retry helper with exponential backoff for API calls
 async function retryWithBackoff<T>(
   fn: () => Promise<T>,
@@ -855,6 +1046,21 @@ Here is homepage content for context about typical services in this industry (bu
 ${homepageContent}`;
   }
   
+  // Track this call for diagnostics
+  fallbackStats.totalCalls++;
+  
+  // Check API key before making call
+  if (!process.env.MY_OPENAI_API_KEY) {
+    const diagnostics: PromptGenerationDiagnostics = {
+      reason: 'API_KEY_MISSING',
+      message: 'MY_OPENAI_API_KEY environment variable is not set',
+      timestamp: new Date().toISOString(),
+      details: { targetService, location }
+    };
+    recordFallback(diagnostics);
+    return getFallbackResearchPrompts(keyword, location, serviceCategory).slice(0, promptCount);
+  }
+  
   try {
     console.log(`Generating ${promptCount} research prompts with GPT-5.2 for "${targetService}"...`);
     const response = await retryWithBackoff(() => 
@@ -871,8 +1077,21 @@ ${homepageContent}`;
     const text = response.choices[0]?.message?.content || "";
     console.log("OpenAI research prompts response:", text.slice(0, 200));
     
-    const cleanText = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    const parsed = JSON.parse(cleanText);
+    // Attempt to parse JSON
+    let parsed: unknown;
+    try {
+      const cleanText = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      parsed = JSON.parse(cleanText);
+    } catch (parseError) {
+      const diagnostics = classifyError(parseError);
+      diagnostics.details = { 
+        ...diagnostics.details, 
+        targetService, 
+        rawResponse: text.slice(0, 500) 
+      };
+      recordFallback(diagnostics);
+      return getFallbackResearchPrompts(keyword, location, serviceCategory).slice(0, promptCount);
+    }
     
     if (Array.isArray(parsed)) {
       const validPrompts = parsed
@@ -882,23 +1101,38 @@ ${homepageContent}`;
       
       // Accept if we got at least the required number of prompts (more flexible than exact match)
       if (validPrompts.length >= promptCount) {
-        console.log(`Generated ${validPrompts.length} valid research prompts for "${targetService}"`);
+        console.log(`[SUCCESS] Generated ${validPrompts.length} valid research prompts for "${targetService}"`);
         return validPrompts.slice(0, promptCount);
       } else if (validPrompts.length >= 3) {
         // Accept fewer prompts if we got at least 3 (pad with fallback if needed)
-        console.log(`OpenAI returned ${validPrompts.length} prompts, padding with fallback for "${targetService}"`);
+        console.log(`[PARTIAL] OpenAI returned ${validPrompts.length} prompts, padding with fallback for "${targetService}"`);
         const fallbackPrompts = getFallbackResearchPrompts(keyword, location, serviceCategory);
         const combined = [...validPrompts, ...fallbackPrompts.slice(0, promptCount - validPrompts.length)];
         return combined.slice(0, promptCount);
       } else {
-        console.log(`OpenAI returned only ${validPrompts.length} valid prompts (need ${promptCount}), using fallback`);
+        const diagnostics: PromptGenerationDiagnostics = {
+          reason: 'INSUFFICIENT_RESULTS',
+          message: `OpenAI returned only ${validPrompts.length} valid prompts (need ${promptCount})`,
+          timestamp: new Date().toISOString(),
+          details: { targetService, validPromptCount: validPrompts.length, requiredCount: promptCount }
+        };
+        recordFallback(diagnostics);
       }
+    } else {
+      const diagnostics: PromptGenerationDiagnostics = {
+        reason: 'JSON_PARSE_ERROR',
+        message: 'OpenAI response was not a valid array',
+        timestamp: new Date().toISOString(),
+        details: { targetService, parsedType: typeof parsed }
+      };
+      recordFallback(diagnostics);
     }
   } catch (error) {
-    console.error("Research prompt generation error:", error);
+    const diagnostics = classifyError(error);
+    diagnostics.details = { ...diagnostics.details, targetService, location };
+    recordFallback(diagnostics);
   }
   
-  console.log(`Using fallback research prompts for "${targetService}"`);
   return getFallbackResearchPrompts(keyword, location, serviceCategory).slice(0, promptCount);
 }
 
