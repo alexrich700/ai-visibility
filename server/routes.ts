@@ -476,9 +476,22 @@ export async function registerRoutes(
 
     // Track if client disconnected to cancel remaining work
     let isClientConnected = true;
-    req.on("close", () => {
+    let activeSessionId: number | null = null; // Track session for pause on disconnect
+    
+    req.on("close", async () => {
       isClientConnected = false;
       console.log("Client disconnected from scan stream");
+      // Mark session as paused so it can be resumed later
+      if (activeSessionId) {
+        try {
+          await storage.updateCheckSession(activeSessionId, {
+            status: 'paused',
+          } as any);
+          console.log(`Session ${activeSessionId} marked as paused for resume`);
+        } catch (err) {
+          console.error("Failed to mark session as paused:", err);
+        }
+      }
     });
 
     // Helper to send SSE events
@@ -593,6 +606,7 @@ export async function registerRoutes(
       const servicePromptCount = totalPrompts - (promptsByGroup[brandSentimentGroupName]?.length || 0);
       
       // Create check session with city for multi-city tracking
+      // Include checkpoint fields for resume capability
       const session = await storage.createCheckSession({
         clientId: client.id,
         city: scanCity || null, // Track which city this scan was for
@@ -602,7 +616,19 @@ export async function registerRoutes(
         totalPrompts: servicePromptCount, // Store only service prompts in visibility totals
         foundCount: 0,
         citedCount: 0,
+        // Checkpoint fields for resume capability
+        status: 'running',
+        prepareId,
+        lastCompletedPromptIndex: 0,
+        totalPromptsToScan: totalPrompts,
+        errorMessage: null,
       });
+      
+      // Set activeSessionId for pause-on-disconnect handling
+      activeSessionId = session.id;
+      
+      // Send sessionId early so frontend can use it for resume on disconnect
+      sendEvent("session_created", { sessionId: session.id, clientId: client.id });
       
       // Run visibility checks with bounded concurrency (4 prompts at a time)
       // Each prompt still runs ChatGPT and Gemini in parallel internally
@@ -862,6 +888,11 @@ export async function registerRoutes(
             groupsCompleted.add(groupName);
             sendEvent("group_complete", { groupName });
           }
+          
+          // Update checkpoint after each prompt to enable resume
+          await storage.updateCheckSession(session.id, {
+            lastCompletedPromptIndex: completedCount,
+          } as any);
         }
       }
       
@@ -993,6 +1024,12 @@ export async function registerRoutes(
         checkFrequencyDays: validatedClient.checkFrequencyDays,
       });
       
+      // Mark session as complete - prevents accidental resume attempts
+      await storage.updateCheckSession(session.id, {
+        status: 'complete',
+        lastCompletedPromptIndex: totalPrompts,
+      } as any);
+      
       // Send completion event with final data
       sendEvent("complete", { 
         clientId: client.id, 
@@ -1013,6 +1050,19 @@ export async function registerRoutes(
       console.error("Scan context: prepareId =", prepareId);
       console.error("=========================");
       if (heartbeatInterval) clearInterval(heartbeatInterval);
+      
+      // Mark session as failed with error details
+      if (activeSessionId) {
+        try {
+          await storage.updateCheckSession(activeSessionId, {
+            status: 'failed',
+            errorMessage: errorMessage,
+          } as any);
+        } catch (updateErr) {
+          console.error("Failed to mark session as failed:", updateErr);
+        }
+      }
+      
       sendEvent("error", { 
         message: errorMessage,
         details: errorStack,
@@ -1095,9 +1145,22 @@ export async function registerRoutes(
 
     // Track if client disconnected to cancel remaining work
     let isClientConnected = true;
-    req.on("close", () => {
+    let activeSessionId: number | null = null; // Track session for pause on disconnect
+    
+    req.on("close", async () => {
       isClientConnected = false;
       console.log("Client disconnected from rescan stream");
+      // Mark session as paused so it can be resumed later
+      if (activeSessionId) {
+        try {
+          await storage.updateCheckSession(activeSessionId, {
+            status: 'paused',
+          } as any);
+          console.log(`Rescan session ${activeSessionId} marked as paused for resume`);
+        } catch (err) {
+          console.error("Failed to mark rescan session as paused:", err);
+        }
+      }
     });
 
     // Helper to send SSE events
@@ -1138,6 +1201,7 @@ export async function registerRoutes(
       }
       
       // Create new check session with city for multi-city tracking
+      // Include checkpoint fields for resume capability
       const session = await storage.createCheckSession({
         clientId,
         city: scanCity || null, // Track which city this scan was for
@@ -1147,9 +1211,20 @@ export async function registerRoutes(
         totalPrompts: servicePromptCount, // Store only service prompts in visibility totals
         foundCount: 0,
         citedCount: 0,
+        // Checkpoint fields for resume capability
+        status: 'running',
+        prepareId,
+        lastCompletedPromptIndex: 0,
+        totalPromptsToScan: totalPrompts,
+        errorMessage: null,
       });
       
-      sendEvent("status", { message: "Running AI visibility checks...", progress: 10 });
+      // Set activeSessionId for pause-on-disconnect handling
+      activeSessionId = session.id;
+      
+      // Send sessionId early so frontend can use it for resume on disconnect
+      sendEvent("session_created", { sessionId: session.id, clientId: client.id });
+      sendEvent("status", { message: "Running AI visibility checks...", progress: 10, sessionId: session.id });
       
       // Run visibility checks with bounded concurrency (4 prompts at a time)
       // Reduced from 8 to 4 to avoid rate limiting; retry logic handles transient failures
@@ -1396,6 +1471,11 @@ export async function registerRoutes(
             groupsCompleted.add(groupName);
             sendEvent("group_complete", { groupName });
           }
+          
+          // Update checkpoint after each prompt to enable resume
+          await storage.updateCheckSession(session.id, {
+            lastCompletedPromptIndex: completedCount,
+          } as any);
         }
       }
       
@@ -1519,6 +1599,12 @@ export async function registerRoutes(
         nextCheckAt,
       } as any);
       
+      // Mark session as complete - prevents accidental resume attempts
+      await storage.updateCheckSession(session.id, {
+        status: 'complete',
+        lastCompletedPromptIndex: totalPrompts,
+      } as any);
+      
       // Send completion event
       sendEvent("complete", { 
         clientId, 
@@ -1539,6 +1625,366 @@ export async function registerRoutes(
       console.error("Rescan context: prepareId =", prepareId);
       console.error("===========================");
       if (heartbeatInterval) clearInterval(heartbeatInterval);
+      
+      // Mark session as failed with error details
+      if (activeSessionId) {
+        try {
+          await storage.updateCheckSession(activeSessionId, {
+            status: 'failed',
+            errorMessage: errorMessage,
+          } as any);
+        } catch (updateErr) {
+          console.error("Failed to mark rescan session as failed:", updateErr);
+        }
+      }
+      
+      sendEvent("error", { 
+        message: errorMessage,
+        details: errorStack,
+      });
+      res.end();
+    }
+  });
+
+  // ============================================
+  // RESUME SCAN ENDPOINT - Resume paused/interrupted scans
+  // ============================================
+  
+  // Get resumable sessions for a client
+  app.get("/api/monitoring/resumable/:clientId", async (req, res) => {
+    try {
+      const clientId = parseInt(req.params.clientId);
+      const sessions = await storage.getResumableSessions(clientId);
+      res.json({ sessions });
+    } catch (error) {
+      console.error("Error getting resumable sessions:", error);
+      res.status(500).json({ error: "Failed to get resumable sessions" });
+    }
+  });
+
+  // Resume a paused scan - SSE endpoint
+  app.get("/api/monitoring/resume-stream/:sessionId", async (req, res) => {
+    const sessionId = parseInt(req.params.sessionId);
+    
+    // Set SSE headers
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.flushHeaders();
+
+    let isClientConnected = true;
+    
+    req.on("close", async () => {
+      isClientConnected = false;
+      console.log("Client disconnected from resume stream");
+      // Mark session as paused again
+      try {
+        await storage.updateCheckSession(sessionId, {
+          status: 'paused',
+        } as any);
+        console.log(`Resume session ${sessionId} marked as paused`);
+      } catch (err) {
+        console.error("Failed to mark resume session as paused:", err);
+      }
+    });
+
+    const sendEvent = (type: string, data: Record<string, unknown>) => {
+      if (!isClientConnected) return;
+      res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`);
+    };
+
+    let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+
+    try {
+      // Get the session directly by ID
+      const targetSession = await storage.getCheckSessionById(sessionId);
+      
+      if (!targetSession) {
+        sendEvent("error", { message: "Session not found" });
+        res.end();
+        return;
+      }
+      
+      if (targetSession.status !== 'paused' && targetSession.status !== 'running') {
+        sendEvent("error", { message: `Session cannot be resumed (status: ${targetSession.status})` });
+        res.end();
+        return;
+      }
+      
+      // Get the client for this session
+      const client = await storage.getMonitoringClientById(targetSession.clientId);
+      if (!client) {
+        sendEvent("error", { message: "Client not found for this session" });
+        res.end();
+        return;
+      }
+      
+      // Mark session as running
+      await storage.updateCheckSession(sessionId, {
+        status: 'running',
+      } as any);
+      
+      sendEvent("heartbeat", { message: "Resume stream connected" });
+      sendEvent("status", { message: "Resuming scan...", progress: 5 });
+      
+      // Get all prompts and existing results
+      const groups = await storage.getGroupsByClientId(client.id);
+      const allPrompts = await storage.getPromptsByClientId(client.id);
+      const existingResults = await storage.getCheckResultsBySessionId(sessionId);
+      
+      // Find which promptIds already have results
+      const completedPromptIds = new Set(existingResults.map(r => r.promptId));
+      
+      // Filter to only active prompts that haven't been completed
+      const activeGroups = groups.filter(g => g.isActive);
+      const activeGroupIds = new Set(activeGroups.map(g => g.id));
+      const remainingPrompts = allPrompts.filter(p => 
+        p.isActive && 
+        activeGroupIds.has(p.groupId) && 
+        !completedPromptIds.has(p.id)
+      );
+      
+      const totalPromptsInSession = targetSession.totalPromptsToScan || allPrompts.filter(p => p.isActive && activeGroupIds.has(p.groupId)).length;
+      const completedCount = completedPromptIds.size;
+      
+      sendEvent("status", { 
+        message: `Resuming from prompt ${completedCount + 1} of ${totalPromptsInSession}...`,
+        progress: 10 + Math.round((completedCount / totalPromptsInSession) * 85),
+      });
+      
+      if (remainingPrompts.length === 0) {
+        // All prompts were already completed - just finalize
+        sendEvent("status", { message: "All prompts already completed, finalizing...", progress: 95 });
+        
+        await storage.updateCheckSession(sessionId, {
+          status: 'complete',
+          lastCompletedPromptIndex: totalPromptsInSession,
+        } as any);
+        
+        sendEvent("complete", { 
+          clientId: client.id, 
+          sessionId,
+          progress: 100,
+        });
+        res.end();
+        return;
+      }
+      
+      // Track brand sentiment group for visibility exclusion
+      const brandSentimentGroupIds = new Set(
+        activeGroups.filter(g => (g as any).promptCategory === 'brand_sentiment').map(g => g.id)
+      );
+      
+      // Run remaining prompts with bounded concurrency
+      const CONCURRENT_PROMPTS = 4;
+      let currentCompleted = completedCount;
+      const location = targetSession.city || client.city || undefined;
+      
+      // Setup heartbeat
+      heartbeatInterval = setInterval(() => {
+        if (isClientConnected) {
+          sendEvent("heartbeat", { timestamp: Date.now(), completedCount: currentCompleted, totalPrompts: totalPromptsInSession });
+        }
+      }, 15000);
+      
+      // Map prompts with group names
+      const promptsWithGroups = remainingPrompts.map((prompt, index) => {
+        const group = groups.find(g => g.id === prompt.groupId);
+        return { prompt, groupName: group?.name || "Unknown", originalIndex: completedCount + index + 1 };
+      });
+      
+      // Process remaining prompts
+      for (let i = 0; i < promptsWithGroups.length; i += CONCURRENT_PROMPTS) {
+        if (!isClientConnected) {
+          console.log("Resume cancelled - client disconnected");
+          clearInterval(heartbeatInterval);
+          return;
+        }
+        
+        const batch = promptsWithGroups.slice(i, i + CONCURRENT_PROMPTS);
+        
+        // Send testing events
+        for (const item of batch) {
+          sendEvent("testing", { 
+            groupName: item.groupName,
+            promptIndex: item.originalIndex,
+            totalPrompts: totalPromptsInSession,
+            promptText: item.prompt.promptText.slice(0, 60) + (item.prompt.promptText.length > 60 ? "..." : ""),
+            progress: 10 + Math.round((item.originalIndex / totalPromptsInSession) * 85),
+          });
+        }
+        
+        // Run batch concurrently
+        const batchResults = await Promise.all(
+          batch.map(async (item) => {
+            if (!isClientConnected) return null;
+            
+            try {
+              const result = await retryWithBackoff(() => 
+                runPromptCheck(
+                  item.prompt.promptText,
+                  client.businessName,
+                  client.domain,
+                  location,
+                  client.brandAliases || undefined
+                )
+              );
+              return { ...item, result };
+            } catch (error) {
+              const errMsg = error instanceof Error ? error.message : String(error);
+              console.error(`[RESUME PROMPT ERROR] Prompt ${item.originalIndex}: "${item.prompt.promptText.slice(0, 50)}..."`);
+              console.error(`[RESUME PROMPT ERROR] Error: ${errMsg}`);
+              return { 
+                ...item, 
+                result: {
+                  chatgpt: { found: false, response: `Error: ${errMsg}`, cited: false, citations: [] },
+                  googleAI: { found: false, response: `Error: ${errMsg}`, cited: false, citations: [] },
+                  competitors: []
+                }
+              };
+            }
+          })
+        );
+        
+        if (!isClientConnected) {
+          console.log("Resume cancelled during batch");
+          clearInterval(heartbeatInterval);
+          return;
+        }
+        
+        // Store results
+        for (const batchResult of batchResults) {
+          if (!batchResult || !isClientConnected) continue;
+          
+          const { prompt, groupName, originalIndex, result } = batchResult;
+          currentCompleted++;
+          const progressPercent = 10 + Math.round((currentCompleted / totalPromptsInSession) * 85);
+          
+          // Analyze responses
+          const chatgptAnalytics = analyzeResponse(result.chatgpt.response, client.businessName);
+          const googleAIAnalytics = analyzeResponse(result.googleAI.response, client.businessName);
+          const chatgptSentimentScore = calculateSentimentScore(result.chatgpt.response, client.businessName);
+          const googleAISentimentScore = calculateSentimentScore(result.googleAI.response, client.businessName);
+          
+          const chatgptCitationsToStore = result.chatgpt.citations.length > 0 
+            ? result.chatgpt.citations 
+            : chatgptAnalytics.citations;
+          const googleAICitationsToStore = result.googleAI.citations.length > 0 
+            ? result.googleAI.citations 
+            : googleAIAnalytics.citations;
+          
+          // Store result
+          await storage.createCheckResult({
+            sessionId,
+            clientId: client.id,
+            groupId: prompt.groupId,
+            promptId: prompt.id,
+            promptText: prompt.promptText,
+            chatgptFound: result.chatgpt.found,
+            chatgptResponse: result.chatgpt.response,
+            chatgptCited: result.chatgpt.cited,
+            googleAIFound: result.googleAI.found,
+            googleAIResponse: result.googleAI.response,
+            googleAICited: result.googleAI.cited,
+            competitors: JSON.stringify(result.competitors),
+            chatgptSentiment: chatgptAnalytics.sentiment,
+            googleAISentiment: googleAIAnalytics.sentiment,
+            chatgptSentimentScore,
+            googleAISentimentScore,
+            chatgptRank: chatgptAnalytics.rank,
+            googleAIRank: googleAIAnalytics.rank,
+            chatgptCitations: chatgptCitationsToStore,
+            googleAICitations: googleAICitationsToStore,
+            chatgptSnippet: chatgptAnalytics.snippet,
+            googleAISnippet: googleAIAnalytics.snippet,
+          });
+          
+          // Update checkpoint
+          await storage.updateCheckSession(sessionId, {
+            lastCompletedPromptIndex: currentCompleted,
+          } as any);
+          
+          sendEvent("prompt_complete", {
+            groupName,
+            promptIndex: originalIndex,
+            totalPrompts: totalPromptsInSession,
+            chatgptFound: result.chatgpt.found,
+            googleAIFound: result.googleAI.found,
+            progress: progressPercent,
+          });
+        }
+      }
+      
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
+      
+      // All remaining prompts completed - recalculate session scores
+      sendEvent("status", { message: "Calculating final scores...", progress: 97 });
+      
+      // Get all results for this session (including previously completed)
+      const allResults = await storage.getCheckResultsBySessionId(sessionId);
+      
+      // Calculate scores (excluding brand sentiment prompts)
+      let foundCount = 0;
+      let citedCount = 0;
+      let chatgptFoundCount = 0;
+      let googleAIFoundCount = 0;
+      
+      for (const result of allResults) {
+        const isBrandSentiment = brandSentimentGroupIds.has(result.groupId);
+        if (!isBrandSentiment) {
+          if (result.chatgptFound || result.googleAIFound) foundCount++;
+          if (result.chatgptCited || result.googleAICited) citedCount++;
+          if (result.chatgptFound) chatgptFoundCount++;
+          if (result.googleAIFound) googleAIFoundCount++;
+        }
+      }
+      
+      const servicePromptCount = allResults.filter(r => !brandSentimentGroupIds.has(r.groupId)).length;
+      const overallScore = servicePromptCount > 0 ? Math.round((foundCount / servicePromptCount) * 100) : 0;
+      const chatgptScore = servicePromptCount > 0 ? Math.round((chatgptFoundCount / servicePromptCount) * 100) : 0;
+      const googleAIScore = servicePromptCount > 0 ? Math.round((googleAIFoundCount / servicePromptCount) * 100) : 0;
+      
+      // Update session with final scores
+      await storage.updateCheckSession(sessionId, {
+        status: 'complete',
+        overallScore,
+        chatgptScore,
+        googleAIScore,
+        foundCount,
+        citedCount,
+        lastCompletedPromptIndex: totalPromptsInSession,
+      } as any);
+      
+      sendEvent("complete", { 
+        clientId: client.id, 
+        sessionId,
+        overallScore,
+        chatgptScore,
+        googleAIScore,
+        progress: 100,
+      });
+      
+      res.end();
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+      const errorStack = error instanceof Error ? error.stack : String(error);
+      console.error("=== RESUME STREAM ERROR ===");
+      console.error("Error:", errorMessage);
+      console.error("Stack:", errorStack);
+      console.error("===========================");
+      
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
+      
+      try {
+        await storage.updateCheckSession(sessionId, {
+          status: 'failed',
+          errorMessage,
+        } as any);
+      } catch (updateErr) {
+        console.error("Failed to mark resume session as failed:", updateErr);
+      }
+      
       sendEvent("error", { 
         message: errorMessage,
         details: errorStack,

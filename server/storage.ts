@@ -49,6 +49,9 @@ export interface IStorage {
   // Check session operations
   createCheckSession(session: InsertCheckSession): Promise<CheckSession>;
   getCheckSessionsByClientId(clientId: number): Promise<CheckSession[]>;
+  getCheckSessionByPrepareId(prepareId: string): Promise<CheckSession | undefined>;
+  getCheckSessionById(sessionId: number): Promise<CheckSession | undefined>;
+  getResumableSessions(clientId: number): Promise<CheckSession[]>;
   updateCheckSession(id: number, data: Partial<InsertCheckSession>): Promise<CheckSession | undefined>;
   
   // Group metrics operations (for trending by group)
@@ -267,6 +270,32 @@ export class DatabaseStorage implements IStorage {
   async getCheckSessionsByClientId(clientId: number): Promise<CheckSession[]> {
     return await db.select().from(checkSessions)
       .where(eq(checkSessions.clientId, clientId))
+      .orderBy(desc(checkSessions.createdAt));
+  }
+
+  async getCheckSessionByPrepareId(prepareId: string): Promise<CheckSession | undefined> {
+    const [session] = await db.select().from(checkSessions)
+      .where(eq(checkSessions.prepareId, prepareId));
+    return session;
+  }
+
+  async getCheckSessionById(sessionId: number): Promise<CheckSession | undefined> {
+    const [session] = await db.select().from(checkSessions)
+      .where(eq(checkSessions.id, sessionId));
+    return session;
+  }
+
+  async getResumableSessions(clientId: number): Promise<CheckSession[]> {
+    return await db.select().from(checkSessions)
+      .where(
+        and(
+          eq(checkSessions.clientId, clientId),
+          or(
+            eq(checkSessions.status, 'running'),
+            eq(checkSessions.status, 'paused')
+          )
+        )
+      )
       .orderBy(desc(checkSessions.createdAt));
   }
 

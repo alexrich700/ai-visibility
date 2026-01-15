@@ -196,23 +196,132 @@ export default function MonitorDashboard() {
   const [scanSubStatus, setScanSubStatus] = useState("");
   const [selectedScanCity, setSelectedScanCity] = useState<string>("all"); // Selected city for next scan
   const eventSourceRef = useRef<EventSource | null>(null);
+  const activeSessionIdRef = useRef<number | null>(null); // Track session for resume
+  const isScanningRef = useRef(false); // Ref to track scanning state for async operations
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Track retry timeout for cleanup
+  const isMountedRef = useRef(true); // Track mount state
+  const maxReconnectAttempts = 5;
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
-  // Cleanup EventSource on unmount
+  // Cleanup EventSource and retries on unmount
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
+      isMountedRef.current = false;
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
         eventSourceRef.current = null;
       }
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
     };
   }, []);
+  
+  // Function to attempt resuming a paused scan
+  const attemptResume = (sessionId: number, attempt: number) => {
+    // Guard: stop if unmounted, scan cancelled, or max attempts reached
+    if (!isMountedRef.current || !isScanningRef.current) {
+      return;
+    }
+    
+    if (!sessionId || attempt >= maxReconnectAttempts) {
+      if (isMountedRef.current) {
+        toast({
+          title: "Connection lost",
+          description: "Unable to resume scan after multiple attempts. Your progress has been saved - try resuming later.",
+          variant: "destructive",
+        });
+        isScanningRef.current = false;
+        setIsScanning(false);
+        setScanStatus("Paused - connection lost");
+        // Refetch to show partial results
+        queryClient.invalidateQueries({ queryKey: ["/api/monitoring/dashboard", clientId] });
+      }
+      return;
+    }
+    
+    // Exponential backoff: 1s, 2s, 4s, 8s, 16s
+    const delay = Math.pow(2, attempt) * 1000;
+    if (isMountedRef.current) {
+      setScanStatus(`Connection lost - reconnecting in ${delay/1000}s... (attempt ${attempt + 1}/${maxReconnectAttempts})`);
+    }
+    
+    // Clear any previous timeout
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+    }
+    
+    retryTimeoutRef.current = setTimeout(() => {
+      // Guard again after delay
+      if (!isMountedRef.current || !isScanningRef.current) {
+        return;
+      }
+      
+      if (isMountedRef.current) {
+        setScanStatus(`Reconnecting to scan...`);
+      }
+      
+      try {
+        // Close any existing connection
+        if (eventSourceRef.current) {
+          eventSourceRef.current.close();
+        }
+        
+        // Connect to resume stream
+        const eventSource = new EventSource(`/api/monitoring/resume-stream/${sessionId}`);
+        eventSourceRef.current = eventSource;
+        
+        eventSource.onmessage = (event) => {
+          if (!isMountedRef.current) return;
+          
+          try {
+            const data = JSON.parse(event.data);
+            
+            // Extract sessionId from complete event if available
+            if (data.type === "complete" && data.sessionId) {
+              activeSessionIdRef.current = data.sessionId;
+            }
+            
+            handleStreamEvent(data);
+            
+            if (data.type === "complete" || data.type === "error") {
+              eventSource.close();
+              eventSourceRef.current = null;
+              activeSessionIdRef.current = null;
+              isScanningRef.current = false;
+            }
+          } catch (e) {
+            console.error("Failed to parse SSE event:", e);
+          }
+        };
+        
+        eventSource.onerror = () => {
+          eventSource.close();
+          eventSourceRef.current = null;
+          // Attempt to resume with incremented attempt count
+          attemptResume(sessionId, attempt + 1);
+        };
+      } catch (error) {
+        console.error("Resume attempt failed:", error);
+        attemptResume(sessionId, attempt + 1);
+      }
+    }, delay);
+  };
   
   // Function to run a fresh scan
   const runRescan = async () => {
     if (!clientId) return;
     
+    // Clear any pending retry timeouts
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
+    
+    isScanningRef.current = true;
     setIsScanning(true);
     setScanProgress(0);
     setScanStatus("Preparing scan...");
@@ -256,11 +365,18 @@ export default function MonitorDashboard() {
       eventSource.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          
+          // Capture sessionId for potential resume
+          if (data.sessionId && typeof data.sessionId === 'number') {
+            activeSessionIdRef.current = data.sessionId;
+          }
+          
           handleStreamEvent(data);
           
           if (data.type === "complete" || data.type === "error") {
             eventSource.close();
             eventSourceRef.current = null;
+            activeSessionIdRef.current = null;
           }
         } catch (e) {
           console.error("Failed to parse SSE event:", e);
@@ -270,14 +386,24 @@ export default function MonitorDashboard() {
       eventSource.onerror = () => {
         eventSource.close();
         eventSourceRef.current = null;
-        toast({
-          title: "Connection lost",
-          description: "Lost connection to the scan. Please try again.",
-          variant: "destructive",
-        });
-        setScanProgress(0);
-        setScanStatus("Failed");
-        setIsScanning(false);
+        
+        // Attempt to resume if we have a session ID
+        const sessionId = activeSessionIdRef.current;
+        if (sessionId && isScanningRef.current) {
+          console.log(`Connection lost, attempting to resume session ${sessionId}...`);
+          attemptResume(sessionId, 0);
+        } else {
+          // No session to resume - show error
+          toast({
+            title: "Connection lost",
+            description: "Lost connection before scan session was created. Please try again.",
+            variant: "destructive",
+          });
+          isScanningRef.current = false;
+          setScanProgress(0);
+          setScanStatus("Failed");
+          setIsScanning(false);
+        }
       };
     } catch (error) {
       toast({
@@ -285,6 +411,7 @@ export default function MonitorDashboard() {
         description: error instanceof Error ? error.message : "Unknown error",
         variant: "destructive",
       });
+      isScanningRef.current = false;
       setScanProgress(0);
       setScanStatus("Failed");
       setIsScanning(false);
@@ -301,10 +428,19 @@ export default function MonitorDashboard() {
     totalPrompts?: number;
     promptText?: string;
     overallScore?: number;
+    sessionId?: number;
+    clientId?: number;
   }) => {
     switch (event.type) {
       case "heartbeat":
         console.log("Rescan stream connected");
+        break;
+      case "session_created":
+        // Capture sessionId for potential resume on disconnect
+        if (event.sessionId) {
+          activeSessionIdRef.current = event.sessionId;
+          console.log(`Scan session created: ${event.sessionId}`);
+        }
         break;
       case "status":
         setScanStatus(event.message || "");
@@ -325,6 +461,8 @@ export default function MonitorDashboard() {
         setScanProgress(100);
         setScanStatus("Scan Complete!");
         setScanSubStatus(`Overall Score: ${event.overallScore}%`);
+        isScanningRef.current = false;
+        activeSessionIdRef.current = null;
         setIsScanning(false);
         toast({
           title: "Scan Complete",
@@ -339,6 +477,8 @@ export default function MonitorDashboard() {
           description: event.message || "Unknown error occurred",
           variant: "destructive",
         });
+        isScanningRef.current = false;
+        activeSessionIdRef.current = null;
         setIsScanning(false);
         break;
     }

@@ -45,6 +45,12 @@ AI queries are processed with bounded concurrency (8 simultaneous prompts) and p
 -   **Brand Aliases**: Allows clients to configure alternative business names for more accurate mention detection.
 -   **Brand Sentiment Prompts**: Includes specific prompts to gather AI-driven feedback on brand perception, customer experience, trust factors, and pain points, separate from visibility scoring.
 -   **Real-time Progress Streaming**: Uses Server-Sent Events (SSE) for live updates during scans, including group progress, prompt status, and early termination on client disconnect.
+-   **Resilient Scan System**: Implements checkpoint/resume architecture for long-running scans:
+    - Sessions created at scan start with 'running' status and track progress incrementally
+    - Checkpoint updated after each prompt completion (lastCompletedPromptIndex)
+    - Auto-reconnection on connection drops with exponential backoff (1s, 2s, 4s, 8s, 16s up to 5 attempts)
+    - Resume endpoint (`/api/monitoring/resume-stream/:sessionId`) continues from last checkpoint
+    - Partial results preserved even if scan fails to complete
 
 ### Analytics Dashboard
 The monitoring dashboard provides:

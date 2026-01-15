@@ -251,6 +251,16 @@ export type MonitoringPrompt = typeof monitoringPrompts.$inferSelect;
 // CHECK SESSIONS - Aggregated check run data
 // ============================================
 
+// Scan status for checkpoint/resume capability
+export const SCAN_STATUS = {
+  PENDING: 'pending',
+  RUNNING: 'running', 
+  PAUSED: 'paused',
+  COMPLETE: 'complete',
+  FAILED: 'failed',
+} as const;
+export type ScanStatus = typeof SCAN_STATUS[keyof typeof SCAN_STATUS];
+
 export const checkSessions = pgTable("check_sessions", {
   id: serial("id").primaryKey(),
   clientId: integer("client_id").references(() => monitoringClients.id).notNull(),
@@ -272,6 +282,12 @@ export const checkSessions = pgTable("check_sessions", {
   sentimentScore: integer("sentiment_score"), // 0-100 overall sentiment score
   competitorVisibility: jsonb("competitor_visibility"), // [{name, visibilityPercent, mentionCount}]
   sentimentStatements: jsonb("sentiment_statements"), // {positive: [{text, platform}], negative: [{text, platform}]}
+  // Checkpoint/Resume fields for resilient long-running scans
+  status: text("status").notNull().default('pending'), // pending, running, paused, complete, failed
+  prepareId: text("prepare_id"), // Unique ID linking to prepared scan data (for resume)
+  lastCompletedPromptIndex: integer("last_completed_prompt_index").default(0), // Track progress for resume
+  totalPromptsToScan: integer("total_prompts_to_scan"), // Total prompts in this scan
+  errorMessage: text("error_message"), // Error details if failed
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
