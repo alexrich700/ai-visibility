@@ -109,7 +109,7 @@ interface DashboardData {
   groups: MonitoringGroup[];
   sessions: CheckSession[];
   latestResults: CheckResult[];
-  resultsByGroup: { groupId: number; groupName: string; results: CheckResult[] }[];
+  resultsByGroup: { groupId: number; groupName: string; promptCategory: string; results: CheckResult[] }[];
   analytics: Analytics | null;
   trendData: TrendDataPoint[];
 }
@@ -559,6 +559,22 @@ export default function MonitorDashboard() {
         : [])
     : resultsByGroup;
   
+  // Separate brand sentiment groups from service groups
+  // Brand sentiment prompts are excluded from visibility metrics and shown in a dedicated section
+  const brandSentimentGroupIds = new Set(
+    resultsByGroup
+      .filter(g => g.promptCategory === 'brand_sentiment')
+      .map(g => g.groupId)
+  );
+  
+  // Filter out brand sentiment results from visibility calculations
+  const serviceResultsOnly = cityFilteredResults.filter(r => !brandSentimentGroupIds.has(r.groupId));
+  const serviceResultsByGroup = cityFilteredResultsByGroup.filter(g => g.promptCategory !== 'brand_sentiment');
+  
+  // Get brand sentiment results separately for the dedicated section
+  const brandSentimentResults = cityFilteredResults.filter(r => brandSentimentGroupIds.has(r.groupId));
+  const brandSentimentGroups = cityFilteredResultsByGroup.filter(g => g.promptCategory === 'brand_sentiment');
+  
   const overallScore = latestSession?.overallScore ?? 0;
   const chatgptScore = latestSession?.chatgptScore ?? 0;
   const googleAIScore = latestSession?.googleAIScore ?? 0;
@@ -567,16 +583,16 @@ export default function MonitorDashboard() {
     ? overallScore - previousSession.overallScore 
     : 0;
 
-  // Calculate visibility metrics from city-filtered results
+  // Calculate visibility metrics from service results only (excluding brand sentiment)
   // Each prompt is checked across 2 platforms, so total exposures = prompts × 2
-  const promptCount = cityFilteredResults.length;
+  const promptCount = serviceResultsOnly.length;
   const totalExposures = promptCount * 2;
   
-  // Per-platform visibility metrics
-  const chatgptFoundCount = cityFilteredResults.filter(r => r.chatgptFound).length;
-  const googleAIFoundCount = cityFilteredResults.filter(r => r.googleAIFound).length;
-  const chatgptCitedCount = cityFilteredResults.filter(r => r.chatgptCited).length;
-  const googleAICitedCount = cityFilteredResults.filter(r => r.googleAICited).length;
+  // Per-platform visibility metrics (service prompts only)
+  const chatgptFoundCount = serviceResultsOnly.filter(r => r.chatgptFound).length;
+  const googleAIFoundCount = serviceResultsOnly.filter(r => r.googleAIFound).length;
+  const chatgptCitedCount = serviceResultsOnly.filter(r => r.chatgptCited).length;
+  const googleAICitedCount = serviceResultsOnly.filter(r => r.googleAICited).length;
   
   // Overall counts are sum of both platforms
   const foundCount = chatgptFoundCount + googleAIFoundCount;
@@ -590,9 +606,9 @@ export default function MonitorDashboard() {
   const chatgptVisibility = promptCount > 0 ? Math.round((chatgptFoundCount / promptCount) * 100) : 0;
   const googleAIVisibility = promptCount > 0 ? Math.round((googleAIFoundCount / promptCount) * 100) : 0;
   
-  // Calculate average rank across city-filtered results
-  const chatgptRanks = cityFilteredResults.filter(r => r.chatgptRank != null).map(r => r.chatgptRank as number);
-  const googleAIRanks = cityFilteredResults.filter(r => r.googleAIRank != null).map(r => r.googleAIRank as number);
+  // Calculate average rank across service results only (excluding brand sentiment)
+  const chatgptRanks = serviceResultsOnly.filter(r => r.chatgptRank != null).map(r => r.chatgptRank as number);
+  const googleAIRanks = serviceResultsOnly.filter(r => r.googleAIRank != null).map(r => r.googleAIRank as number);
   const allRanks = [...chatgptRanks, ...googleAIRanks];
   const avgRank = allRanks.length > 0 
     ? Math.round((allRanks.reduce((a, b) => a + b, 0) / allRanks.length) * 10) / 10
@@ -675,7 +691,8 @@ export default function MonitorDashboard() {
     "#ec4899", "#14b8a6", "#f97316", "#6366f1", "#84cc16"
   ];
 
-  const groupBarData = cityFilteredResultsByGroup.map((g) => {
+  // Use service groups only for visibility bar chart (excludes brand sentiment)
+  const groupBarData = serviceResultsByGroup.map((g) => {
     const groupFoundCount = g.results.filter(r => r.chatgptFound || r.googleAIFound).length;
     const groupTotal = g.results.length;
     return {
@@ -687,9 +704,10 @@ export default function MonitorDashboard() {
   });
 
   // Filter results by selected group (applied on top of city filtering)
+  // Use service results only for Prompt Results section (excludes brand sentiment)
   const filteredResults = selectedGroup === "all"
-    ? cityFilteredResults
-    : cityFilteredResults.filter(r => r.groupId === parseInt(selectedGroup));
+    ? serviceResultsOnly
+    : serviceResultsOnly.filter(r => r.groupId === parseInt(selectedGroup));
 
   return (
     <div className="min-h-screen bg-gray-50 selection:bg-[#5599f9] selection:text-white">
@@ -1542,8 +1560,8 @@ export default function MonitorDashboard() {
                 <SelectValue placeholder="Filter by group" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Groups</SelectItem>
-                {groups.map((group) => (
+                <SelectItem value="all">All Service Groups</SelectItem>
+                {groups.filter(g => g.promptCategory !== 'brand_sentiment').map((group) => (
                   <SelectItem key={group.id} value={group.id.toString()}>
                     {group.name}
                   </SelectItem>
@@ -1554,7 +1572,7 @@ export default function MonitorDashboard() {
           <CardContent>
             <div className="divide-y divide-gray-100">
               {filteredResults.slice(0, displayLimit).map((result) => {
-                const groupName = cityFilteredResultsByGroup.find(g => g.groupId === result.groupId)?.groupName || resultsByGroup.find(g => g.groupId === result.groupId)?.groupName;
+                const groupName = serviceResultsByGroup.find(g => g.groupId === result.groupId)?.groupName || resultsByGroup.find(g => g.groupId === result.groupId)?.groupName;
                 const isVisible = result.chatgptFound || result.googleAIFound;
                 const isCited = result.chatgptCited || result.googleAICited;
                 
@@ -1610,6 +1628,149 @@ export default function MonitorDashboard() {
             )}
           </CardContent>
         </Card>
+
+        {/* Brand Sentiment Section - Dedicated section for brand-specific prompts */}
+        {brandSentimentResults.length > 0 && (
+          <Card className="shadow-2xl shadow-blue-900/5">
+            <CardHeader>
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <CardTitle className="text-lg font-bold tracking-tight flex items-center gap-2">
+                    <Building2 className="h-5 w-5 text-[#5599f9]" />
+                    Brand Sentiment Analysis
+                  </CardTitle>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Direct AI queries about your business (excluded from visibility metrics)
+                  </p>
+                </div>
+                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                  {brandSentimentResults.length} prompts
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {/* Brand Sentiment Summary */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                {/* Positive Findings */}
+                <div className="bg-green-50 rounded-lg p-4 border border-green-100">
+                  <div className="flex items-center gap-2 mb-2">
+                    <ThumbsUp className="h-4 w-4 text-green-600" />
+                    <span className="text-sm font-semibold text-green-700">Positive Themes</span>
+                  </div>
+                  <div className="space-y-2">
+                    {(() => {
+                      const positiveResponses = brandSentimentResults.filter(r => 
+                        (r.chatgptSentiment === 'positive' || r.googleAISentiment === 'positive')
+                      );
+                      return positiveResponses.length > 0 ? (
+                        <p className="text-sm text-green-600">
+                          {positiveResponses.length} positive response{positiveResponses.length !== 1 ? 's' : ''} found
+                        </p>
+                      ) : (
+                        <p className="text-sm text-gray-500">No positive themes detected</p>
+                      );
+                    })()}
+                  </div>
+                </div>
+
+                {/* Neutral Findings */}
+                <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Meh className="h-4 w-4 text-gray-600" />
+                    <span className="text-sm font-semibold text-gray-700">Neutral Themes</span>
+                  </div>
+                  <div className="space-y-2">
+                    {(() => {
+                      const neutralResponses = brandSentimentResults.filter(r => 
+                        (r.chatgptSentiment === 'neutral' || r.googleAISentiment === 'neutral')
+                      );
+                      return neutralResponses.length > 0 ? (
+                        <p className="text-sm text-gray-600">
+                          {neutralResponses.length} neutral response{neutralResponses.length !== 1 ? 's' : ''} found
+                        </p>
+                      ) : (
+                        <p className="text-sm text-gray-500">No neutral themes detected</p>
+                      );
+                    })()}
+                  </div>
+                </div>
+
+                {/* Negative Findings */}
+                <div className="bg-red-50 rounded-lg p-4 border border-red-100">
+                  <div className="flex items-center gap-2 mb-2">
+                    <ThumbsDown className="h-4 w-4 text-red-600" />
+                    <span className="text-sm font-semibold text-red-700">Areas for Improvement</span>
+                  </div>
+                  <div className="space-y-2">
+                    {(() => {
+                      const negativeResponses = brandSentimentResults.filter(r => 
+                        (r.chatgptSentiment === 'negative' || r.googleAISentiment === 'negative')
+                      );
+                      return negativeResponses.length > 0 ? (
+                        <p className="text-sm text-red-600">
+                          {negativeResponses.length} area{negativeResponses.length !== 1 ? 's' : ''} identified
+                        </p>
+                      ) : (
+                        <p className="text-sm text-gray-500">No issues detected</p>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div>
+
+              {/* Brand Sentiment Prompt Details */}
+              <div className="divide-y divide-gray-100">
+                {brandSentimentResults.map((result) => {
+                  const overallSentiment = result.chatgptSentiment || result.googleAISentiment || 'neutral';
+                  const sentimentColors = {
+                    positive: { bg: 'bg-green-100', text: 'text-green-700', icon: ThumbsUp },
+                    neutral: { bg: 'bg-gray-100', text: 'text-gray-700', icon: Meh },
+                    negative: { bg: 'bg-red-100', text: 'text-red-700', icon: ThumbsDown },
+                  };
+                  const sentimentStyle = sentimentColors[overallSentiment as keyof typeof sentimentColors] || sentimentColors.neutral;
+                  const SentimentIcon = sentimentStyle.icon;
+
+                  return (
+                    <div 
+                      key={result.id} 
+                      className="py-4 cursor-pointer hover:bg-gray-50 transition-colors rounded-lg px-2"
+                      onClick={() => setSelectedResult(result)}
+                      data-testid={`brand-sentiment-result-${result.id}`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={`p-2 rounded-full ${sentimentStyle.bg}`}>
+                          <SentimentIcon className={`h-4 w-4 ${sentimentStyle.text}`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{result.promptText}</p>
+                          <div className="flex items-center gap-3 mt-2">
+                            <Badge variant="outline" className={`${sentimentStyle.bg} ${sentimentStyle.text} capitalize`}>
+                              {overallSentiment}
+                            </Badge>
+                            {result.chatgptResponse && (
+                              <span className="text-xs text-gray-500">ChatGPT responded</span>
+                            )}
+                            {result.googleAIResponse && (
+                              <span className="text-xs text-gray-500">Google AI responded</span>
+                            )}
+                          </div>
+                        </div>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="shrink-0"
+                          data-testid={`view-brand-sentiment-${result.id}`}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </main>
 
       {/* Response Detail Dialog */}

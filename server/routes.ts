@@ -2046,10 +2046,11 @@ export async function registerRoutes(
         latestResults = await storage.getCheckResultsBySessionId(sessions[0].id);
       }
       
-      // Group results by group
+      // Group results by group (include promptCategory for filtering brand sentiment)
       const resultsByGroup = groups.map(group => ({
         groupId: group.id,
         groupName: group.name,
+        promptCategory: group.promptCategory,
         results: latestResults.filter(r => r.groupId === group.id),
       }));
       
