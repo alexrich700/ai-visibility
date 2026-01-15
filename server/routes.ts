@@ -38,6 +38,7 @@ const pendingScanConfigs = new Map<string, PendingScanConfig>();
 // Interface for rescan config (existing client)
 interface PendingRescanConfig {
   clientId: number;
+  targetCity?: string; // Which city this scan is for (multi-city support)
   client: {
     id: number;
     businessName: string;
@@ -45,6 +46,8 @@ interface PendingRescanConfig {
     industry: string | null;
     scope: string | null;
     city: string | null;
+    cities: string[] | null; // Multiple target cities
+    primaryCategories: string[] | null; // Multiple service categories
     brandAliases: string[] | null;
     checkFrequencyDays: number;
     nextCheckAt: Date | null;
@@ -192,6 +195,9 @@ export async function registerRoutes(
         industry: validatedClient.industry,
         scope: validatedClient.scope,
         city: validatedClient.city || null,
+        cities: validatedClient.cities || null,
+        primaryCategories: validatedClient.primaryCategories || null,
+        brandAliases: validatedClient.brandAliases || null,
         checkFrequencyDays: validatedClient.checkFrequencyDays,
         isActive: true,
       });
@@ -388,6 +394,9 @@ export async function registerRoutes(
         industry: validatedClient.industry,
         scope: validatedClient.scope,
         city: validatedClient.city || null,
+        cities: validatedClient.cities || null,
+        primaryCategories: validatedClient.primaryCategories || null,
+        brandAliases: validatedClient.brandAliases || null,
         checkFrequencyDays: validatedClient.checkFrequencyDays,
         isActive: true,
       });
