@@ -1363,8 +1363,10 @@ function getDefaultGroups(industry: string): { name: string; description: string
   ];
 }
 
-// Generate prompts for each group by reusing the unified generateResearchPrompts function
-// This ensures one source of truth for prompt generation logic - edit once, apply everywhere
+// Generate prompts for each group using PARALLEL execution with bounded concurrency
+// This ensures prompt generation completes within production timeout limits
+const PROMPT_GENERATION_CONCURRENCY = 5;
+
 export async function generatePromptsForGroups(
   businessName: string,
   domain: string,
@@ -1372,35 +1374,43 @@ export async function generatePromptsForGroups(
   scope: string,
   city: string | undefined,
   groups: { name: string; description: string }[],
-  maxPromptsPerGroup?: number // Optional: limit prompts per group (default uses PROMPTS_PER_GROUP constant)
+  maxPromptsPerGroup?: number
 ): Promise<{ groupName: string; prompts: string[] }[]> {
   const promptLimit = maxPromptsPerGroup || PROMPTS_PER_GROUP;
-  console.log(`Generating prompts for ${groups.length} groups (max ${promptLimit} per group)...`);
+  console.log(`Generating prompts for ${groups.length} groups (max ${promptLimit} per group) with concurrency ${PROMPT_GENERATION_CONCURRENCY}...`);
   
-  // Generate prompts for each group sequentially (to avoid rate limiting)
+  const generateForGroup = async (group: { name: string; description: string }): Promise<{ groupName: string; prompts: string[] }> => {
+    try {
+      console.log(`Generating prompts for group: ${group.name}`);
+      
+      let prompts = await generateResearchPrompts(
+        industry,
+        scope as "local" | "national",
+        city,
+        undefined,
+        group.name
+      );
+      
+      if (prompts.length > promptLimit) {
+        prompts = prompts.slice(0, promptLimit);
+      }
+      
+      console.log(`Completed prompts for group: ${group.name} (${prompts.length} prompts)`);
+      return { groupName: group.name, prompts };
+    } catch (error) {
+      console.error(`Error generating prompts for group ${group.name}:`, error);
+      return { groupName: group.name, prompts: [] };
+    }
+  };
+
   const results: { groupName: string; prompts: string[] }[] = [];
   
-  for (const group of groups) {
-    console.log(`Generating prompts for group: ${group.name}`);
+  for (let i = 0; i < groups.length; i += PROMPT_GENERATION_CONCURRENCY) {
+    const batch = groups.slice(i, i + PROMPT_GENERATION_CONCURRENCY);
+    console.log(`Processing batch ${Math.floor(i / PROMPT_GENERATION_CONCURRENCY) + 1}: ${batch.map(g => g.name).join(', ')}`);
     
-    // Use the unified generateResearchPrompts with serviceCategory parameter
-    let prompts = await generateResearchPrompts(
-      industry,
-      scope as "local" | "national",
-      city,
-      undefined, // no URL scraping for group-specific prompts
-      group.name // serviceCategory - this focuses prompts on this specific service
-    );
-    
-    // Limit prompts to the configured limit
-    if (prompts.length > promptLimit) {
-      prompts = prompts.slice(0, promptLimit);
-    }
-    
-    results.push({
-      groupName: group.name,
-      prompts
-    });
+    const batchResults = await Promise.all(batch.map(generateForGroup));
+    results.push(...batchResults);
   }
   
   console.log(`Generated prompts for all ${results.length} groups`);
