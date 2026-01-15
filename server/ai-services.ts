@@ -6,6 +6,8 @@ import {
   extractUrlsFromText, 
   mergeCitations 
 } from "./services/citation-extractor";
+import { db } from "./db";
+import { promptFallbackLogs } from "@shared/schema";
 
 // Configuration constants for prompt generation
 export const PROMPTS_PER_GROUP = 5; // Number of prompts to generate per service group
@@ -124,7 +126,13 @@ export function getPromptGenerationStats() {
   };
 }
 
-function recordFallback(diagnostics: PromptGenerationDiagnostics) {
+interface FallbackContext {
+  businessName?: string;
+  industry?: string;
+  promptCount?: number;
+}
+
+async function recordFallback(diagnostics: PromptGenerationDiagnostics, context?: FallbackContext) {
   fallbackStats.fallbackCount++;
   fallbackStats.lastFallbackReason = diagnostics;
   fallbackStats.reasonCounts[diagnostics.reason] = (fallbackStats.reasonCounts[diagnostics.reason] || 0) + 1;
@@ -134,6 +142,22 @@ function recordFallback(diagnostics: PromptGenerationDiagnostics) {
   console.error(`[PROMPT_GENERATION_FALLBACK] Timestamp: ${diagnostics.timestamp}`);
   if (diagnostics.details) {
     console.error(`[PROMPT_GENERATION_FALLBACK] Details:`, JSON.stringify(diagnostics.details));
+  }
+  
+  // Persist to database for production debugging
+  try {
+    await db.insert(promptFallbackLogs).values({
+      reason: diagnostics.reason,
+      errorMessage: diagnostics.message,
+      errorDetails: diagnostics.details || null,
+      businessName: context?.businessName || null,
+      industry: context?.industry || null,
+      promptCount: context?.promptCount || null,
+      environment: process.env.NODE_ENV || 'development',
+    });
+    console.log(`[PROMPT_GENERATION_FALLBACK] Logged to database`);
+  } catch (dbError) {
+    console.error(`[PROMPT_GENERATION_FALLBACK] Failed to log to database:`, dbError);
   }
 }
 
@@ -1057,7 +1081,7 @@ ${homepageContent}`;
       timestamp: new Date().toISOString(),
       details: { targetService, location }
     };
-    recordFallback(diagnostics);
+    await recordFallback(diagnostics, { industry: keyword, promptCount });
     return getFallbackResearchPrompts(keyword, location, serviceCategory).slice(0, promptCount);
   }
   
@@ -1089,7 +1113,7 @@ ${homepageContent}`;
         targetService, 
         rawResponse: text.slice(0, 500) 
       };
-      recordFallback(diagnostics);
+      await recordFallback(diagnostics, { industry: keyword, promptCount });
       return getFallbackResearchPrompts(keyword, location, serviceCategory).slice(0, promptCount);
     }
     
@@ -1116,7 +1140,7 @@ ${homepageContent}`;
           timestamp: new Date().toISOString(),
           details: { targetService, validPromptCount: validPrompts.length, requiredCount: promptCount }
         };
-        recordFallback(diagnostics);
+        await recordFallback(diagnostics, { industry: keyword, promptCount });
       }
     } else {
       const diagnostics: PromptGenerationDiagnostics = {
@@ -1125,12 +1149,12 @@ ${homepageContent}`;
         timestamp: new Date().toISOString(),
         details: { targetService, parsedType: typeof parsed }
       };
-      recordFallback(diagnostics);
+      await recordFallback(diagnostics, { industry: keyword, promptCount });
     }
   } catch (error) {
     const diagnostics = classifyError(error);
     diagnostics.details = { ...diagnostics.details, targetService, location };
-    recordFallback(diagnostics);
+    await recordFallback(diagnostics, { industry: keyword, promptCount });
   }
   
   return getFallbackResearchPrompts(keyword, location, serviceCategory).slice(0, promptCount);
