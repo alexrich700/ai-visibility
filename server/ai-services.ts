@@ -25,6 +25,8 @@ export type PromptGenerationFailureReason =
   | 'JSON_PARSE_ERROR'
   | 'INSUFFICIENT_RESULTS'
   | 'NETWORK_ERROR'
+  | 'CONTENT_FILTER'
+  | 'EMPTY_RESPONSE'
   | 'UNKNOWN_ERROR';
 
 interface PromptGenerationDiagnostics {
@@ -1146,8 +1148,51 @@ ${homepageContent}`;
       })
     );
     
-    const text = response.choices[0]?.message?.content || "";
+    // Detailed logging to diagnose empty responses
+    const choice = response.choices[0];
+    const text = choice?.message?.content || "";
+    const finishReason = choice?.finish_reason;
+    const refusal = (choice?.message as any)?.refusal;
+    
+    console.log(`[OPENAI_DEBUG] Response for "${targetService}":`);
+    console.log(`  - finish_reason: ${finishReason}`);
+    console.log(`  - refusal: ${refusal || 'none'}`);
+    console.log(`  - content length: ${text.length} chars`);
+    console.log(`  - has choices: ${response.choices?.length || 0}`);
+    if (response.usage) {
+      console.log(`  - tokens: prompt=${response.usage.prompt_tokens}, completion=${response.usage.completion_tokens}`);
+    }
+    if (!text && finishReason !== 'stop') {
+      console.log(`  - FULL RESPONSE: ${JSON.stringify(response).slice(0, 1000)}`);
+    }
+    
     console.log("OpenAI research prompts response:", text.slice(0, 200));
+    
+    // Check for refusal or abnormal finish reason
+    if (refusal) {
+      const diagnostics: PromptGenerationDiagnostics = {
+        reason: 'CONTENT_FILTER',
+        message: `OpenAI refused to generate content: ${refusal}`,
+        timestamp: new Date().toISOString(),
+        details: { targetService, refusal, finishReason }
+      };
+      console.log(`[OPENAI_REFUSAL] ${refusal}`);
+      await recordFallback(diagnostics, { industry: keyword, promptCount });
+      return getFallbackResearchPrompts(keyword, location, serviceCategory).slice(0, promptCount);
+    }
+    
+    // Check for empty response with abnormal finish reason
+    if (!text && finishReason !== 'stop') {
+      const diagnostics: PromptGenerationDiagnostics = {
+        reason: 'EMPTY_RESPONSE',
+        message: `OpenAI returned empty content with finish_reason: ${finishReason}`,
+        timestamp: new Date().toISOString(),
+        details: { targetService, finishReason, choiceCount: response.choices?.length || 0 }
+      };
+      console.log(`[OPENAI_EMPTY] Empty response, finish_reason=${finishReason}`);
+      await recordFallback(diagnostics, { industry: keyword, promptCount });
+      return getFallbackResearchPrompts(keyword, location, serviceCategory).slice(0, promptCount);
+    }
     
     // Attempt to parse JSON
     let parsed: unknown;
@@ -1159,7 +1204,8 @@ ${homepageContent}`;
       diagnostics.details = { 
         ...diagnostics.details, 
         targetService, 
-        rawResponse: text.slice(0, 500) 
+        rawResponse: text.slice(0, 500),
+        finishReason 
       };
       await recordFallback(diagnostics, { industry: keyword, promptCount });
       return getFallbackResearchPrompts(keyword, location, serviceCategory).slice(0, promptCount);
