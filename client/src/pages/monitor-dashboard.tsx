@@ -27,7 +27,7 @@ import {
 import {
   TrendingUp, TrendingDown, Eye, Target, Calendar, Clock, Settings,
   ArrowLeft, RefreshCw, Loader2, CheckCircle2, XCircle, Minus, Building2,
-  Users, Link2, Award, ThumbsUp, ThumbsDown, Meh, ExternalLink, Download, HelpCircle
+  Users, Link2, Award, ThumbsUp, ThumbsDown, Meh, ExternalLink, Download, HelpCircle, AlertTriangle
 } from "lucide-react";
 import {
   Tooltip as InfoTooltip,
@@ -527,27 +527,36 @@ export default function MonitorDashboard() {
 
   const { client, groups, sessions, latestResults, resultsByGroup, analytics, trendData } = data;
 
+  // Check if a specific city is selected (not "all")
+  const isSpecificCitySelected = selectedViewCity && selectedViewCity !== "all";
+  
   // Filter sessions by selected city if multi-city client and city is selected
-  const filteredSessions = selectedViewCity && selectedViewCity !== "all"
+  const filteredSessions = isSpecificCitySelected
     ? sessions.filter(s => (s as any).city === selectedViewCity)
     : sessions;
+
+  // Track if the selected city has no scan data yet
+  const selectedCityHasNoData = isSpecificCitySelected && filteredSessions.length === 0;
 
   // Calculate scores - use filtered sessions
   const latestSession = filteredSessions[0];
   const previousSession = filteredSessions[1];
   
   // Filter latestResults to only include results from the selected city's session
-  // This ensures all scorecard metrics are based on the filtered session
-  const cityFilteredResults = selectedViewCity && selectedViewCity !== "all" && latestSession
-    ? latestResults.filter(r => r.sessionId === latestSession.id)
+  // IMPORTANT: When a specific city is selected but has no sessions, return empty array (not all results)
+  const cityFilteredResults = isSpecificCitySelected
+    ? (latestSession ? latestResults.filter(r => r.sessionId === latestSession.id) : [])
     : latestResults;
   
   // Filter resultsByGroup similarly for city filtering
-  const cityFilteredResultsByGroup = selectedViewCity && selectedViewCity !== "all" && latestSession
-    ? resultsByGroup.map(g => ({
-        ...g,
-        results: g.results.filter(r => r.sessionId === latestSession.id)
-      })).filter(g => g.results.length > 0)
+  // When a specific city is selected but has no sessions, return empty array
+  const cityFilteredResultsByGroup = isSpecificCitySelected
+    ? (latestSession 
+        ? resultsByGroup.map(g => ({
+            ...g,
+            results: g.results.filter(r => r.sessionId === latestSession.id)
+          })).filter(g => g.results.length > 0)
+        : [])
     : resultsByGroup;
   
   const overallScore = latestSession?.overallScore ?? 0;
@@ -816,6 +825,25 @@ export default function MonitorDashboard() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* No data for selected city warning */}
+        {selectedCityHasNoData && (
+          <Card className="bg-amber-50 border-amber-200">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-600" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-amber-800">
+                    No scan data for {selectedViewCity}
+                  </p>
+                  <p className="text-sm text-amber-600 mt-1">
+                    You haven't run a scan for this city yet. Use the "Run New Scan" button above and select "{selectedViewCity}" to scan this location.
+                  </p>
                 </div>
               </div>
             </CardContent>
