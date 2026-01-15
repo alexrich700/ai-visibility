@@ -1861,8 +1861,12 @@ function normalizeGroupName(name: string): string {
 }
 
 // Generate prompts for each group using PARALLEL execution with bounded concurrency
-// This ensures prompt generation completes within production timeout limits
-const PROMPT_GENERATION_CONCURRENCY = 5;
+// Reduced concurrency to 3 and added delays between batches to avoid rate limiting
+const PROMPT_GENERATION_CONCURRENCY = 3;
+const BATCH_DELAY_MS = 1500; // 1.5 second delay between batches to avoid rate limits
+
+// Helper to add delay between operations
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export async function generatePromptsForGroups(
   businessName: string,
@@ -1874,7 +1878,7 @@ export async function generatePromptsForGroups(
   maxPromptsPerGroup?: number
 ): Promise<{ groupName: string; prompts: string[] }[]> {
   const promptLimit = maxPromptsPerGroup || PROMPTS_PER_GROUP;
-  console.log(`Generating prompts for ${groups.length} groups (max ${promptLimit} per group) with concurrency ${PROMPT_GENERATION_CONCURRENCY}...`);
+  console.log(`Generating prompts for ${groups.length} groups (max ${promptLimit} per group) with concurrency ${PROMPT_GENERATION_CONCURRENCY}, ${BATCH_DELAY_MS}ms delay between batches...`);
   
   const generateForGroup = async (group: { name: string; description: string }): Promise<{ groupName: string; prompts: string[] }> => {
     try {
@@ -1901,13 +1905,21 @@ export async function generatePromptsForGroups(
   };
 
   const results: { groupName: string; prompts: string[] }[] = [];
+  const totalBatches = Math.ceil(groups.length / PROMPT_GENERATION_CONCURRENCY);
   
   for (let i = 0; i < groups.length; i += PROMPT_GENERATION_CONCURRENCY) {
+    const batchNum = Math.floor(i / PROMPT_GENERATION_CONCURRENCY) + 1;
     const batch = groups.slice(i, i + PROMPT_GENERATION_CONCURRENCY);
-    console.log(`Processing batch ${Math.floor(i / PROMPT_GENERATION_CONCURRENCY) + 1}: ${batch.map(g => g.name).join(', ')}`);
+    console.log(`Processing batch ${batchNum}/${totalBatches}: ${batch.map(g => g.name).join(', ')}`);
     
     const batchResults = await Promise.all(batch.map(generateForGroup));
     results.push(...batchResults);
+    
+    // Add delay between batches to avoid rate limiting (skip delay after last batch)
+    if (i + PROMPT_GENERATION_CONCURRENCY < groups.length) {
+      console.log(`Waiting ${BATCH_DELAY_MS}ms before next batch to avoid rate limits...`);
+      await delay(BATCH_DELAY_MS);
+    }
   }
   
   console.log(`Generated prompts for all ${results.length} groups`);
