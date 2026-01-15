@@ -226,6 +226,17 @@ export async function testOpenAIConnectivity(): Promise<{ success: boolean; mess
 }
 
 // Retry helper with exponential backoff for API calls
+function isRateLimitError(error: unknown): boolean {
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase();
+    return msg.includes('rate limit') || 
+           msg.includes('429') || 
+           msg.includes('too many requests') ||
+           msg.includes('quota exceeded');
+  }
+  return false;
+}
+
 async function retryWithBackoff<T>(
   fn: () => Promise<T>,
   maxRetries: number = 3,
@@ -240,9 +251,17 @@ async function retryWithBackoff<T>(
       lastError = error instanceof Error ? error : new Error(String(error));
       
       if (attempt < maxRetries) {
-        // Exponential backoff: 10s, 20s, 30s
-        const delayMs = baseDelayMs * (attempt + 1);
-        console.log(`Retry attempt ${attempt + 1}/${maxRetries} after ${delayMs/1000}s delay...`);
+        // Use longer delays for rate limit errors
+        let delayMs: number;
+        if (isRateLimitError(error)) {
+          // Rate limit: use much longer delays - 30s, 60s, 90s
+          delayMs = 30000 * (attempt + 1);
+          console.log(`[RATE_LIMIT] Rate limit detected. Waiting ${delayMs/1000}s before retry ${attempt + 1}/${maxRetries}...`);
+        } else {
+          // Other errors: standard exponential backoff - 10s, 20s, 30s
+          delayMs = baseDelayMs * (attempt + 1);
+          console.log(`Retry attempt ${attempt + 1}/${maxRetries} after ${delayMs/1000}s delay...`);
+        }
         await new Promise(resolve => setTimeout(resolve, delayMs));
       }
     }
