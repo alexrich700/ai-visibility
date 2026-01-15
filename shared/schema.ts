@@ -174,7 +174,9 @@ export const monitoringClients = pgTable("monitoring_clients", {
   domain: text("domain").notNull(),
   industry: text("industry").notNull(),
   scope: text("scope").notNull(), // "local" or "national"
-  city: text("city"),
+  city: text("city"), // Legacy single city (for backward compatibility)
+  cities: text("cities").array(), // Multiple target cities (e.g., ["Minneapolis", "St. Paul", "Rochester"])
+  primaryCategories: text("primary_categories").array(), // Multiple service categories (e.g., ["Plumbing", "HVAC"])
   brandAliases: text("brand_aliases").array(), // Alternative names for the business (e.g., "SmartFix", "The Smart Fix")
   checkFrequencyDays: integer("check_frequency_days").notNull().default(14),
   lastCheckAt: timestamp("last_check_at"),
@@ -252,6 +254,7 @@ export type MonitoringPrompt = typeof monitoringPrompts.$inferSelect;
 export const checkSessions = pgTable("check_sessions", {
   id: serial("id").primaryKey(),
   clientId: integer("client_id").references(() => monitoringClients.id).notNull(),
+  city: text("city"), // Which city this scan was for (null = all cities or legacy scan)
   overallScore: integer("overall_score").notNull(),
   chatgptScore: integer("chatgpt_score").notNull(),
   googleAIScore: integer("google_ai_score").notNull(),
@@ -380,7 +383,10 @@ export const monitoringClientRequestSchema = z.object({
   domain: z.string().min(1, "Domain is required"),
   industry: z.string().min(1, "Industry is required"),
   scope: z.enum(["local", "national"]),
-  city: z.string().optional(),
+  city: z.string().optional(), // Legacy single city
+  cities: z.array(z.string()).optional(), // Multiple cities for multi-location businesses
+  primaryCategories: z.array(z.string()).optional(), // Multiple service categories (e.g., ["Plumbing", "HVAC"])
+  brandAliases: z.array(z.string()).optional(), // Alternative business names for detection
   checkFrequencyDays: z.number().min(1).max(90).default(14),
 });
 
