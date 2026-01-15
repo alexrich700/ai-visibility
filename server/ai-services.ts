@@ -1132,21 +1132,34 @@ export interface ServiceGroupsResult {
   groups: { name: string; description: string }[];
 }
 
+const GENERIC_TERMS = [
+  "core services", "specialty services", "primary services", "main services",
+  "other services", "additional services", "general services", "basic services",
+  "standard services", "premium services", "custom solutions", "custom services",
+  "training & education", "planning & strategy", "consulting", "maintenance & support",
+  "maintenance and support", "training and education", "planning and strategy"
+];
+
+function isGenericGroupName(name: string): boolean {
+  const normalized = name.toLowerCase().trim();
+  return GENERIC_TERMS.some(term => normalized === term || normalized.includes(term));
+}
+
+function validateServiceGroups(groups: { name: string; description: string }[]): boolean {
+  if (!groups || groups.length < 5) return false;
+  const genericCount = groups.filter(g => isGenericGroupName(g.name)).length;
+  return genericCount <= 2;
+}
+
 export async function generateServiceGroups(
   businessName: string,
   industry: string,
   scope: string,
   city?: string
 ): Promise<ServiceGroupsResult> {
-  try {
-    const locationContext = scope === "local" && city ? ` in ${city}` : "";
-    
-    const response = await openai.chat.completions.create({
-      model: "gpt-5-mini",
-      messages: [
-        {
-          role: "system",
-          content: `You are an expert marketing strategist specializing in service/product categorization for AI visibility tracking. Your task is to:
+  const locationContext = scope === "local" && city ? ` in ${city}` : "";
+  
+  const systemPrompt = `You are an expert marketing strategist specializing in service/product categorization for AI visibility tracking. Your task is to:
 1. Identify ONE high-level category (umbrella term) that best describes the business type
 2. Generate exactly 10 distinct service/product groups that represent specific offerings
 
@@ -1163,12 +1176,42 @@ export async function generateServiceGroups(
 - Groups should cover the full spectrum of typical offerings for this industry
 - Names should be 1-4 words, matching natural search language
 
+# CRITICAL: DO NOT USE THESE GENERIC TERMS
+The following are FORBIDDEN as group names - NEVER use them:
+- "Core Services", "Primary Services", "Main Services", "General Services"
+- "Specialty Services", "Premium Services", "Standard Services", "Basic Services"  
+- "Other Services", "Additional Services", "Custom Solutions"
+- "Consulting", "Maintenance & Support", "Training & Education", "Planning & Strategy"
+
+Instead, use SPECIFIC, SEARCHABLE service names like:
+- "Drain Cleaning" NOT "Core Plumbing Services"
+- "AC Repair" NOT "Primary HVAC Services"
+- "Roof Leak Repair" NOT "Specialty Roofing"
+- "Kitchen Remodeling" NOT "Custom Solutions"
+
 # Output Format
 Return a JSON object with:
 - "highLevelCategory": object with "name" and "description" fields
 - "groups": array of exactly 10 objects, each with "name" and "description" fields
 
 # Examples
+
+For a "plumbing, heating, and cooling" business:
+{
+  "highLevelCategory": {"name": "HVAC & Plumbing Contractor", "description": "Heating, cooling, and plumbing services"},
+  "groups": [
+    {"name": "AC Repair", "description": "Air conditioning system repairs and troubleshooting"},
+    {"name": "AC Installation", "description": "New air conditioning system installations"},
+    {"name": "Heater Repair", "description": "Furnace and heating system repairs"},
+    {"name": "Furnace Installation", "description": "New furnace and heating system installations"},
+    {"name": "Drain Cleaning", "description": "Clogged drain and sewer line cleaning"},
+    {"name": "Water Heater Repair", "description": "Water heater troubleshooting and repairs"},
+    {"name": "Plumbing Leak Repair", "description": "Pipe leak detection and repair services"},
+    {"name": "Toilet Repair", "description": "Toilet installation and repair services"},
+    {"name": "Duct Cleaning", "description": "Air duct cleaning and indoor air quality services"},
+    {"name": "Emergency Plumber", "description": "24/7 emergency plumbing services"}
+  ]
+}
 
 For a local HVAC company:
 {
@@ -1219,56 +1262,71 @@ For a personal injury law firm:
     {"name": "Pedestrian Accident Lawyer", "description": "Legal help for injured pedestrians"},
     {"name": "Product Liability Attorney", "description": "Cases involving defective products"}
   ]
-}
+}`;
 
-For Smart Fix Handyman:
-{
-  "highLevelCategory": {"name": "Handyman", "description": "General home repair and maintenance services"},
-  "groups": [...]
-}
+  const userPrompt = `Generate the high-level category and exactly 10 service/product groups for "${businessName}", a ${industry} business${locationContext}.
 
-For Roto-Rooter:
-{
-  "highLevelCategory": {"name": "Plumber", "description": "Plumbing repair and installation services"},
-  "groups": [...]
-}`
-        },
-        {
-          role: "user",
-          content: `Generate the high-level category and exactly 10 service/product groups for "${businessName}", a ${industry} business${locationContext}.
+IMPORTANT: Each group name must be a SPECIFIC, SEARCHABLE service that real customers would type into an AI assistant. Do NOT use generic terms like "Core Services" or "Specialty Services" - use actual service names like "Drain Cleaning", "AC Repair", "Roof Leak Repair", etc.`;
 
-Consider what real customers would search for when looking for this type of business. The high-level category should be the broadest umbrella term, while groups should be specific enough to track AI visibility by individual service/product offering.`
+  async function attemptGeneration(isRetry: boolean = false): Promise<ServiceGroupsResult> {
+    const response = await openai.chat.completions.create({
+      model: "gpt-5-mini",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { 
+          role: "user", 
+          content: isRetry 
+            ? userPrompt + "\n\nYour previous response contained generic terms. Please provide SPECIFIC service names only."
+            : userPrompt
         }
       ],
-      temperature: 0.7,
       response_format: { type: "json_object" }
     });
 
     const content = response.choices[0]?.message?.content || "{}";
     const parsed = JSON.parse(content);
     
-    // Extract high-level category
     const highLevelCategory = parsed.highLevelCategory || {
       name: industry,
       description: `${industry} services and products`
     };
     
-    // Handle different response formats for groups
-    const groups = Array.isArray(parsed.groups) ? parsed.groups : 
-                   (parsed.categories || []);
+    const groups = Array.isArray(parsed.groups) ? parsed.groups : (parsed.categories || []);
     
-    if (groups.length === 0) {
-      // Return default with fallback high-level category
+    return { highLevelCategory, groups };
+  }
+
+  try {
+    let result = await attemptGeneration(false);
+    
+    if (!validateServiceGroups(result.groups)) {
+      console.log("Service groups validation failed, retrying with stricter prompt...");
+      result = await attemptGeneration(true);
+      
+      if (!validateServiceGroups(result.groups)) {
+        console.log("Retry also produced generic results, filtering and using partial results...");
+        result.groups = result.groups.filter(g => !isGenericGroupName(g.name));
+        
+        if (result.groups.length < 5) {
+          console.log("Not enough valid groups, falling back to defaults");
+          return {
+            highLevelCategory: result.highLevelCategory,
+            groups: getDefaultGroups(industry)
+          };
+        }
+      }
+    }
+    
+    if (result.groups.length === 0) {
       return {
-        highLevelCategory,
+        highLevelCategory: result.highLevelCategory,
         groups: getDefaultGroups(industry)
       };
     }
     
-    return { highLevelCategory, groups };
+    return result;
   } catch (error) {
     console.error("Error generating service groups:", error);
-    // Return fallback with industry as high-level category
     return {
       highLevelCategory: {
         name: industry,
