@@ -225,7 +225,7 @@ export async function testOpenAIConnectivity(): Promise<{ success: boolean; mess
   }
 }
 
-// Retry helper with exponential backoff for API calls
+// Retry helper with exponential backoff for API calls (following OpenAI recommendations)
 function isRateLimitError(error: unknown): boolean {
   if (error instanceof Error) {
     const msg = error.message.toLowerCase();
@@ -237,12 +237,26 @@ function isRateLimitError(error: unknown): boolean {
   return false;
 }
 
+// Add random jitter to delays as OpenAI recommends
+function addJitter(baseDelay: number, jitterFactor: number = 0.5): number {
+  const jitter = baseDelay * jitterFactor * Math.random();
+  return Math.floor(baseDelay + jitter);
+}
+
+// Small delay with jitter to space out API requests within rate limits
+async function rateLimitDelay(): Promise<void> {
+  // Random delay between 800ms and 1500ms to stay well under RPM limits
+  const delay = 800 + Math.floor(Math.random() * 700);
+  await new Promise(resolve => setTimeout(resolve, delay));
+}
+
 async function retryWithBackoff<T>(
   fn: () => Promise<T>,
   maxRetries: number = 3,
-  baseDelayMs: number = 10000
+  initialDelayMs: number = 2000
 ): Promise<T> {
   let lastError: Error | null = null;
+  let delay = initialDelayMs;
   
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
@@ -251,18 +265,23 @@ async function retryWithBackoff<T>(
       lastError = error instanceof Error ? error : new Error(String(error));
       
       if (attempt < maxRetries) {
-        // Use longer delays for rate limit errors
-        let delayMs: number;
+        // True exponential backoff with jitter as OpenAI recommends
+        // Formula: delay *= base * (1 + jitter * random())
+        const exponentialBase = 2;
+        const jitterFactor = 0.5;
+        
         if (isRateLimitError(error)) {
-          // Rate limit: use much longer delays - 30s, 60s, 90s
-          delayMs = 30000 * (attempt + 1);
-          console.log(`[RATE_LIMIT] Rate limit detected. Waiting ${delayMs/1000}s before retry ${attempt + 1}/${maxRetries}...`);
+          // Rate limit: start with longer base delay (30s) and grow exponentially
+          delay = 30000 * Math.pow(exponentialBase, attempt);
+          delay = addJitter(delay, jitterFactor);
+          console.log(`[RATE_LIMIT] Rate limit detected. Waiting ${(delay/1000).toFixed(1)}s before retry ${attempt + 1}/${maxRetries}...`);
         } else {
-          // Other errors: standard exponential backoff - 10s, 20s, 30s
-          delayMs = baseDelayMs * (attempt + 1);
-          console.log(`Retry attempt ${attempt + 1}/${maxRetries} after ${delayMs/1000}s delay...`);
+          // Other errors: exponential backoff from 2s base
+          delay = initialDelayMs * Math.pow(exponentialBase, attempt);
+          delay = addJitter(delay, jitterFactor);
+          console.log(`Retry attempt ${attempt + 1}/${maxRetries} after ${(delay/1000).toFixed(1)}s delay...`);
         }
-        await new Promise(resolve => setTimeout(resolve, delayMs));
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
   }
@@ -1880,12 +1899,16 @@ function normalizeGroupName(name: string): string {
 }
 
 // Generate prompts for each group using PARALLEL execution with bounded concurrency
-// Reduced concurrency to 3 and added delays between batches to avoid rate limiting
-const PROMPT_GENERATION_CONCURRENCY = 3;
-const BATCH_DELAY_MS = 1500; // 1.5 second delay between batches to avoid rate limits
+// Reduced concurrency to 2 with jitter delays between batches (following OpenAI rate limit guidance)
+const PROMPT_GENERATION_CONCURRENCY = 2;
+const MIN_BATCH_DELAY_MS = 2000; // Minimum 2 second delay between batches
+const MAX_BATCH_DELAY_MS = 3500; // Maximum 3.5 second delay between batches
 
-// Helper to add delay between operations
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+// Helper to add delay with jitter between operations
+const delayWithJitter = (minMs: number, maxMs: number) => {
+  const jitteredDelay = minMs + Math.floor(Math.random() * (maxMs - minMs));
+  return new Promise(resolve => setTimeout(resolve, jitteredDelay));
+};
 
 export async function generatePromptsForGroups(
   businessName: string,
@@ -1897,10 +1920,16 @@ export async function generatePromptsForGroups(
   maxPromptsPerGroup?: number
 ): Promise<{ groupName: string; prompts: string[] }[]> {
   const promptLimit = maxPromptsPerGroup || PROMPTS_PER_GROUP;
-  console.log(`Generating prompts for ${groups.length} groups (max ${promptLimit} per group) with concurrency ${PROMPT_GENERATION_CONCURRENCY}, ${BATCH_DELAY_MS}ms delay between batches...`);
+  console.log(`[RATE_LIMIT_SAFE] Generating prompts for ${groups.length} groups (max ${promptLimit} per group) with concurrency ${PROMPT_GENERATION_CONCURRENCY}, ${MIN_BATCH_DELAY_MS}-${MAX_BATCH_DELAY_MS}ms jittered delay between batches...`);
   
-  const generateForGroup = async (group: { name: string; description: string }): Promise<{ groupName: string; prompts: string[] }> => {
+  const generateForGroup = async (group: { name: string; description: string }, index: number): Promise<{ groupName: string; prompts: string[] }> => {
     try {
+      // Add small staggered delay based on index within batch to spread requests
+      if (index > 0) {
+        const staggerDelay = 500 + Math.floor(Math.random() * 500); // 500-1000ms stagger
+        await new Promise(resolve => setTimeout(resolve, staggerDelay));
+      }
+      
       console.log(`Generating prompts for group: ${group.name}`);
       
       let prompts = await generateResearchPrompts(
@@ -1931,13 +1960,15 @@ export async function generatePromptsForGroups(
     const batch = groups.slice(i, i + PROMPT_GENERATION_CONCURRENCY);
     console.log(`Processing batch ${batchNum}/${totalBatches}: ${batch.map(g => g.name).join(', ')}`);
     
-    const batchResults = await Promise.all(batch.map(generateForGroup));
+    // Pass index within batch for staggering
+    const batchResults = await Promise.all(batch.map((group, idx) => generateForGroup(group, idx)));
     results.push(...batchResults);
     
-    // Add delay between batches to avoid rate limiting (skip delay after last batch)
+    // Add jittered delay between batches to avoid rate limiting (skip delay after last batch)
     if (i + PROMPT_GENERATION_CONCURRENCY < groups.length) {
-      console.log(`Waiting ${BATCH_DELAY_MS}ms before next batch to avoid rate limits...`);
-      await delay(BATCH_DELAY_MS);
+      const actualDelay = MIN_BATCH_DELAY_MS + Math.floor(Math.random() * (MAX_BATCH_DELAY_MS - MIN_BATCH_DELAY_MS));
+      console.log(`[RATE_LIMIT_SAFE] Waiting ${actualDelay}ms before next batch (jittered)...`);
+      await delayWithJitter(MIN_BATCH_DELAY_MS, MAX_BATCH_DELAY_MS);
     }
   }
   
