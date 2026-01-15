@@ -2,7 +2,9 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { generateServiceGroups, generateServiceGroupsMultiCategory, generatePromptsForGroups, runPromptCheck, synthesizeSentimentNarratives, generateBrandSentimentPrompts, type SynthesizedNarratives, type MultiCategoryServiceGroupsResult, getPromptGenerationStats, testOpenAIConnectivity } from "./ai-services";
-import { monitoringClientRequestSchema } from "@shared/schema";
+import { monitoringClientRequestSchema, promptFallbackLogs } from "@shared/schema";
+import { db } from "./db";
+import { desc } from "drizzle-orm";
 import { z } from "zod";
 import { randomUUID } from "crypto";
 import { 
@@ -159,6 +161,38 @@ export async function registerRoutes(
       serverTime: new Date().toISOString(),
       environment: process.env.NODE_ENV || "development"
     });
+  });
+
+  // Fallback logs from database (admin only) - persistent history of prompt generation failures
+  app.get("/api/diagnostics/fallback-logs", async (req, res) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || authHeader !== `Bearer ${process.env.ADMIN_PASSWORD}`) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    
+    try {
+      const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+      const logs = await db.select()
+        .from(promptFallbackLogs)
+        .orderBy(desc(promptFallbackLogs.createdAt))
+        .limit(limit);
+      
+      // Aggregate stats from the logs
+      const reasonCounts: Record<string, number> = {};
+      for (const log of logs) {
+        reasonCounts[log.reason] = (reasonCounts[log.reason] || 0) + 1;
+      }
+      
+      res.json({
+        logs,
+        totalCount: logs.length,
+        reasonCounts,
+        serverTime: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error fetching fallback logs:", error);
+      res.status(500).json({ error: "Failed to fetch fallback logs" });
+    }
   });
 
   // ============================================
