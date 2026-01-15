@@ -823,32 +823,37 @@ export async function registerRoutes(
             isBrandSentiment
           });
           
-          // Store result with analytics
-          await storage.createCheckResult({
-            sessionId: session.id,
-            clientId: client.id,
-            groupId: prompt.groupId,
-            promptId: prompt.id,
-            promptText: prompt.text,
-            chatgptFound: result.chatgpt.found,
-            chatgptResponse: result.chatgpt.response,
-            chatgptCited: result.chatgpt.cited,
-            googleAIFound: result.googleAI.found,
-            googleAIResponse: result.googleAI.response,
-            googleAICited: result.googleAI.cited,
-            competitors: JSON.stringify(result.competitors),
-            // Analytics fields
-            chatgptSentiment: chatgptAnalytics.sentiment,
-            googleAISentiment: googleAIAnalytics.sentiment,
-            chatgptSentimentScore,
-            googleAISentimentScore,
-            chatgptRank: chatgptAnalytics.rank,
-            googleAIRank: googleAIAnalytics.rank,
-            chatgptCitations: chatgptCitationsToStore,
-            googleAICitations: googleAICitationsToStore,
-            chatgptSnippet: chatgptAnalytics.snippet,
-            googleAISnippet: googleAIAnalytics.snippet,
-          });
+          // Store result with analytics (with error handling)
+          try {
+            await storage.createCheckResult({
+              sessionId: session.id,
+              clientId: client.id,
+              groupId: prompt.groupId,
+              promptId: prompt.id,
+              promptText: prompt.text,
+              chatgptFound: result.chatgpt.found,
+              chatgptResponse: result.chatgpt.response,
+              chatgptCited: result.chatgpt.cited,
+              googleAIFound: result.googleAI.found,
+              googleAIResponse: result.googleAI.response,
+              googleAICited: result.googleAI.cited,
+              competitors: JSON.stringify(result.competitors),
+              // Analytics fields
+              chatgptSentiment: chatgptAnalytics.sentiment,
+              googleAISentiment: googleAIAnalytics.sentiment,
+              chatgptSentimentScore,
+              googleAISentimentScore,
+              chatgptRank: chatgptAnalytics.rank,
+              googleAIRank: googleAIAnalytics.rank,
+              chatgptCitations: chatgptCitationsToStore,
+              googleAICitations: googleAICitationsToStore,
+              chatgptSnippet: chatgptAnalytics.snippet,
+              googleAISnippet: googleAIAnalytics.snippet,
+            });
+          } catch (storeError) {
+            console.error(`[STORAGE ERROR] Scan: Failed to store result for prompt ${originalIndex + 1}:`, storeError);
+            // Continue processing - storage failure shouldn't crash the scan
+          }
           
           // Only count service prompts for visibility scoring (exclude brand sentiment prompts)
           if (!isBrandSentiment) {
@@ -890,9 +895,16 @@ export async function registerRoutes(
           }
           
           // Update checkpoint after each prompt to enable resume
-          await storage.updateCheckSession(session.id, {
-            lastCompletedPromptIndex: completedCount,
-          } as any);
+          try {
+            await storage.updateCheckSession(session.id, {
+              lastCompletedPromptIndex: completedCount,
+              status: 'running', // Ensure status stays 'running' during scan
+            });
+            console.log(`[Checkpoint] Session ${session.id}: Saved checkpoint at prompt ${completedCount}/${totalPrompts}`);
+          } catch (checkpointError) {
+            console.error(`[Checkpoint] Failed to save checkpoint for session ${session.id}:`, checkpointError);
+            // Continue processing - checkpoint failure shouldn't stop the scan
+          }
         }
       }
       
@@ -1408,31 +1420,36 @@ export async function registerRoutes(
             isBrandSentiment
           });
           
-          // Store result
-          await storage.createCheckResult({
-            sessionId: session.id,
-            clientId,
-            groupId: prompt.groupId,
-            promptId: prompt.id,
-            promptText: prompt.promptText,
-            chatgptFound: result.chatgpt.found,
-            chatgptResponse: result.chatgpt.response,
-            chatgptCited: result.chatgpt.cited,
-            googleAIFound: result.googleAI.found,
-            googleAIResponse: result.googleAI.response,
-            googleAICited: result.googleAI.cited,
-            competitors: JSON.stringify(result.competitors),
-            chatgptSentiment: chatgptAnalytics.sentiment,
-            googleAISentiment: googleAIAnalytics.sentiment,
-            chatgptSentimentScore,
-            googleAISentimentScore,
-            chatgptRank: chatgptAnalytics.rank,
-            googleAIRank: googleAIAnalytics.rank,
-            chatgptCitations: chatgptCitationsToStore,
-            googleAICitations: googleAICitationsToStore,
-            chatgptSnippet: chatgptAnalytics.snippet,
-            googleAISnippet: googleAIAnalytics.snippet,
-          });
+          // Store result with error handling
+          try {
+            await storage.createCheckResult({
+              sessionId: session.id,
+              clientId,
+              groupId: prompt.groupId,
+              promptId: prompt.id,
+              promptText: prompt.promptText,
+              chatgptFound: result.chatgpt.found,
+              chatgptResponse: result.chatgpt.response,
+              chatgptCited: result.chatgpt.cited,
+              googleAIFound: result.googleAI.found,
+              googleAIResponse: result.googleAI.response,
+              googleAICited: result.googleAI.cited,
+              competitors: JSON.stringify(result.competitors),
+              chatgptSentiment: chatgptAnalytics.sentiment,
+              googleAISentiment: googleAIAnalytics.sentiment,
+              chatgptSentimentScore,
+              googleAISentimentScore,
+              chatgptRank: chatgptAnalytics.rank,
+              googleAIRank: googleAIAnalytics.rank,
+              chatgptCitations: chatgptCitationsToStore,
+              googleAICitations: googleAICitationsToStore,
+              chatgptSnippet: chatgptAnalytics.snippet,
+              googleAISnippet: googleAIAnalytics.snippet,
+            });
+          } catch (storeError) {
+            console.error(`[STORAGE ERROR] Failed to store result for prompt ${originalIndex + 1}:`, storeError);
+            // Continue processing - storage failure for one result shouldn't crash the scan
+          }
           
           // Only count service prompts for visibility scoring (exclude brand sentiment prompts)
           if (!isBrandSentiment) {
@@ -1473,9 +1490,15 @@ export async function registerRoutes(
           }
           
           // Update checkpoint after each prompt to enable resume
-          await storage.updateCheckSession(session.id, {
-            lastCompletedPromptIndex: completedCount,
-          } as any);
+          try {
+            await storage.updateCheckSession(session.id, {
+              lastCompletedPromptIndex: completedCount,
+              status: 'running',
+            });
+            console.log(`[Checkpoint] Rescan session ${session.id}: Saved checkpoint at prompt ${completedCount}/${totalPrompts}`);
+          } catch (checkpointError) {
+            console.error(`[Checkpoint] Failed to save rescan checkpoint for session ${session.id}:`, checkpointError);
+          }
         }
       }
       
@@ -1874,36 +1897,47 @@ export async function registerRoutes(
             ? result.googleAI.citations 
             : googleAIAnalytics.citations;
           
-          // Store result
-          await storage.createCheckResult({
-            sessionId,
-            clientId: client.id,
-            groupId: prompt.groupId,
-            promptId: prompt.id,
-            promptText: prompt.promptText,
-            chatgptFound: result.chatgpt.found,
-            chatgptResponse: result.chatgpt.response,
-            chatgptCited: result.chatgpt.cited,
-            googleAIFound: result.googleAI.found,
-            googleAIResponse: result.googleAI.response,
-            googleAICited: result.googleAI.cited,
-            competitors: JSON.stringify(result.competitors),
-            chatgptSentiment: chatgptAnalytics.sentiment,
-            googleAISentiment: googleAIAnalytics.sentiment,
-            chatgptSentimentScore,
-            googleAISentimentScore,
-            chatgptRank: chatgptAnalytics.rank,
-            googleAIRank: googleAIAnalytics.rank,
-            chatgptCitations: chatgptCitationsToStore,
-            googleAICitations: googleAICitationsToStore,
-            chatgptSnippet: chatgptAnalytics.snippet,
-            googleAISnippet: googleAIAnalytics.snippet,
-          });
+          // Store result with error handling
+          try {
+            await storage.createCheckResult({
+              sessionId,
+              clientId: client.id,
+              groupId: prompt.groupId,
+              promptId: prompt.id,
+              promptText: prompt.promptText,
+              chatgptFound: result.chatgpt.found,
+              chatgptResponse: result.chatgpt.response,
+              chatgptCited: result.chatgpt.cited,
+              googleAIFound: result.googleAI.found,
+              googleAIResponse: result.googleAI.response,
+              googleAICited: result.googleAI.cited,
+              competitors: JSON.stringify(result.competitors),
+              chatgptSentiment: chatgptAnalytics.sentiment,
+              googleAISentiment: googleAIAnalytics.sentiment,
+              chatgptSentimentScore,
+              googleAISentimentScore,
+              chatgptRank: chatgptAnalytics.rank,
+              googleAIRank: googleAIAnalytics.rank,
+              chatgptCitations: chatgptCitationsToStore,
+              googleAICitations: googleAICitationsToStore,
+              chatgptSnippet: chatgptAnalytics.snippet,
+              googleAISnippet: googleAIAnalytics.snippet,
+            });
+          } catch (storeError) {
+            console.error(`[STORAGE ERROR] Resume: Failed to store result for prompt ${originalIndex + 1}:`, storeError);
+            // Continue processing - storage failure shouldn't crash the scan
+          }
           
           // Update checkpoint
-          await storage.updateCheckSession(sessionId, {
-            lastCompletedPromptIndex: currentCompleted,
-          } as any);
+          try {
+            await storage.updateCheckSession(sessionId, {
+              lastCompletedPromptIndex: currentCompleted,
+              status: 'running',
+            });
+            console.log(`[Checkpoint] Resume session ${sessionId}: Saved checkpoint at prompt ${currentCompleted}/${totalPromptsInSession}`);
+          } catch (checkpointError) {
+            console.error(`[Checkpoint] Failed to save resume checkpoint for session ${sessionId}:`, checkpointError);
+          }
           
           sendEvent("prompt_complete", {
             groupName,
