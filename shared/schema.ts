@@ -375,6 +375,30 @@ export type InsertCheckCompetitorMetric = z.infer<typeof insertCheckCompetitorMe
 export type CheckCompetitorMetric = typeof checkCompetitorMetrics.$inferSelect;
 
 // ============================================
+// PROMPT FALLBACK LOGS - Track AI prompt generation failures
+// ============================================
+
+export const promptFallbackLogs = pgTable("prompt_fallback_logs", {
+  id: serial("id").primaryKey(),
+  reason: text("reason").notNull(), // API_KEY_MISSING, API_AUTH_ERROR, API_RATE_LIMIT, etc.
+  errorMessage: text("error_message"),
+  errorDetails: jsonb("error_details"), // Additional context (status code, etc.)
+  businessName: text("business_name"),
+  industry: text("industry"),
+  promptCount: integer("prompt_count"), // How many prompts fell back
+  environment: text("environment"), // development, production
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertPromptFallbackLogSchema = createInsertSchema(promptFallbackLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertPromptFallbackLog = z.infer<typeof insertPromptFallbackLogSchema>;
+export type PromptFallbackLog = typeof promptFallbackLogs.$inferSelect;
+
+// ============================================
 // Frontend Request Schemas
 // ============================================
 
