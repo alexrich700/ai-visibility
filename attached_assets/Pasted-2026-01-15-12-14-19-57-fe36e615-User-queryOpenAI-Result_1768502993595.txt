@@ -1,0 +1,132 @@
+2026-01-15 12:14:19.57
+fe36e615
+User
+[queryOpenAI] Result - found: false, response length: 515, citations: 0
+2026-01-15 12:14:19.57
+fe36e615
+User
+[CHATGPT] Response preview (first 300 chars): I can do that — quick clarification before I look up live ratings: 1) Do you want ratings from specific review platforms? (Common choices: Google, Yelp, Angi/HomeAdvisor, BBB — I can include all of these.) 2) Do you mean Minneapolis, MN (you typed "Minnespolis") and the city limits only, or the T
+2026-01-15 12:14:19.57
+fe36e615
+User
+[CHATGPT DETECTION] Business: "MSP Plumbing Heating Air" | URL: "https://mspplumbingheatingair.com/" | Aliases: 0 | Search terms: ["msp plumbing heating air","mspplumbingheatingair","mspplumbingheatingair","mspplumbingheatingair.com"] | Found: false
+2026-01-15 12:14:19.57
+fe36e615
+User
+[CHATGPT] Extracted 0 citations
+2026-01-15 12:14:47.93
+fe36e615
+User
+[NO MATCH] AI cited these domains: prontoheat.com, midlandhtg.com, welterheating.com, tcomfort.com, gtshvac.com
+2026-01-15 12:14:47.93
+fe36e615
+User
+[CHATGPT] Extracted 16 citations
+2026-01-15 12:14:47.93
+fe36e615
+User
+[CHATGPT DETECTION] Business: "MSP Plumbing Heating Air" | URL: "https://mspplumbingheatingair.com/" | Aliases: 0 | Search terms: ["msp plumbing heating air","mspplumbingheatingair","mspplumbingheatingair","mspplumbingheatingair.com"] | Found: false
+2026-01-15 12:14:47.93
+fe36e615
+User
+[CHATGPT] Response preview (first 300 chars): Below are eight highly‑used HVAC providers that serve Minneapolis, MN. For each I list a quick summary, primary pros and cons, and the main service area(s). I included each company’s website and a citation for the source used. 1) Pronto Heating & Air Conditioning — https://prontoheat.com - Pros: St
+2026-01-15 12:14:47.94
+fe36e615
+User
+[queryOpenAI] Result - found: false, response length: 6547, citations: 16
+2026-01-15 12:15:19.34
+fe36e615
+User
+[NO MATCH] AI cited these domains: soderlin.com, standardheating.com, advantageheatingusa.com, hvac911.com, chamberofcommerce.com
+2026-01-15 12:15:19.34
+fe36e615
+User
+[CHATGPT] Response preview (first 300 chars): Here are Minneapolis-area HVAC contractors you can call today (contact details pulled from company sites and local directories; current as of January 15, 2026): 1) Soderlin Plumbing, Heating & Air Conditioning — Phone: (612) 409-7388; Mobile: (612) 721-4080. Serves the Twin Cities metro. ([soderlin
+2026-01-15 12:15:19.34
+fe36e615
+User
+[CHATGPT DETECTION] Business: "MSP Plumbing Heating Air" | URL: "https://mspplumbingheatingair.com/" | Aliases: 0 | Search terms: ["msp plumbing heating air","mspplumbingheatingair","mspplumbingheatingair","mspplumbingheatingair.com"] | Found: false
+2026-01-15 12:15:19.34
+fe36e615
+User
+[queryOpenAI] Result - found: false, response length: 3578, citations: 10
+2026-01-15 12:15:19.34
+fe36e615
+User
+[CHATGPT] Extracted 10 citations
+2026-01-15 12:15:24.95
+fe36e615
+User
+[CHATGPT DETECTION] Business: "MSP Plumbing Heating Air" | URL: "https://mspplumbingheatingair.com/" | Aliases: 0 | Search terms: ["msp plumbing heating air","mspplumbingheatingair","mspplumbingheatingair","mspplumbingheatingair.com"] | Found: false
+2026-01-15 12:15:24.95
+fe36e615
+User
+[CHATGPT] Extracted 14 citations
+2026-01-15 12:15:24.95
+fe36e615
+User
+[CHATGPT] Response preview (first 300 chars): Below are highly rated HVAC companies that serve Minneapolis, with the average review score and number of reviews reported by the cited sources (numbers were checked on Jan 15, 2026). Ratings and review counts vary by platform, so I’ve shown the source I used for each entry. - Standard Heating & Ai
+2026-01-15 12:15:24.95
+fe36e615
+User
+[queryOpenAI] Result - found: false, response length: 3102, citations: 14
+2026-01-15 12:15:24.95
+fe36e615
+User
+[NO MATCH] AI cited these domains: standardheating.com, reviews.birdeye.com, aquariushomeservices.com, bestpickreports.com, staffordhomeservice.com
+2026-01-15 12:15:25.21
+fe36e615
+User
+[Checkpoint] Session 8: Saved checkpoint at prompt 5/84
+2026-01-15 12:15:25.27
+fe36e615
+User
+[Checkpoint] Session 8: Saved checkpoint at prompt 6/84
+2026-01-15 12:15:25.34
+fe36e615
+User
+[Checkpoint] Session 8: Saved checkpoint at prompt 7/84
+2026-01-15 12:15:25.41
+fe36e615
+User
+[Checkpoint] Session 8: Saved checkpoint at prompt 8/84
+2026-01-15 12:15:25.41
+fe36e615
+User
+[queryOpenAI] Calling ChatGPT with location: "Minnespolis, MN", aliases: 0
+2026-01-15 12:15:25.41
+fe36e615
+User
+[runPromptCheck] Checking visibility for "MSP Plumbing Heating Air" with location: "Minnespolis, MN", aliases: 0
+2026-01-15 12:15:25.42
+fe36e615
+User
+[runPromptCheck] Checking visibility for "MSP Plumbing Heating Air" with location: "Minnespolis, MN", aliases: 0
+2026-01-15 12:15:25.42
+fe36e615
+User
+[queryOpenAI] Calling ChatGPT with location: "Minnespolis, MN", aliases: 0
+2026-01-15 12:15:25.42
+fe36e615
+User
+[runPromptCheck] Checking visibility for "MSP Plumbing Heating Air" with location: "Minnespolis, MN", aliases: 0
+2026-01-15 12:15:25.42
+fe36e615
+User
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+2026-01-15 12:15:25.42
+fe36e615
+User
+[queryOpenAI] Calling ChatGPT with location: "Minnespolis, MN", aliases: 0
+2026-01-15 12:15:25.42
+fe36e615
+User
+[queryGoogleAI] Calling Gemini...
+2026-01-15 12:15:25.42
+fe36e615
+User
+[queryGoogleAI] Calling Gemini...
+2026-01-15 12:15:25.42
+fe36e615
+User
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
