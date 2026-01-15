@@ -38,7 +38,9 @@ The tool integrates with:
 AI queries are processed with bounded concurrency (8 simultaneous prompts) and parallel API calls to optimize performance and cost.
 
 ### Core Features
--   **High-Level Category & Service Groups**: Identifies an umbrella category and 10 specific service groups for each client, generating 5 prompts per group for comprehensive analysis.
+-   **Multi-City Support**: Businesses can configure multiple target cities (e.g., Minneapolis, St. Paul, Rochester). Each city can be scanned separately, with dashboard filtering to view per-city or aggregate results.
+-   **Multi-Category Support**: Supports businesses offering multiple primary services (e.g., Plumbing + HVAC). The system intelligently merges overlapping service groups to generate ~12-15 unique groups instead of 20+ duplicates.
+-   **High-Level Category & Service Groups**: Identifies an umbrella category and 10 specific service groups per primary category, generating 5 prompts per group for comprehensive analysis.
 -   **Citation Detection**: Prioritizes exact domain matches in AI responses, then business name mentions, and brand aliases.
 -   **Brand Aliases**: Allows clients to configure alternative business names for more accurate mention detection.
 -   **Brand Sentiment Prompts**: Includes specific prompts to gather AI-driven feedback on brand perception, customer experience, trust factors, and pain points, separate from visibility scoring.
