@@ -581,6 +581,9 @@ async function queryChatGPT(prompt: string, businessName: string, url?: string, 
       };
     }
     
+    // Add rate limit delay before API call to spread requests evenly (as OpenAI recommends)
+    await rateLimitDelay();
+    
     // Use Responses API with web_search tool for real-time grounded search results
     // The Responses API uses 'input' and 'instructions' instead of 'messages'
     const response = await openai.responses.create({
@@ -941,6 +944,9 @@ Start with: "We analyzed ${businessName} across 20 high-intent AI prompts on Cha
 Key findings: overall score ${overallScore}/100, ChatGPT ${chatgptScore}%, Google AI ${googleAIScore}%, sentiment ${sentimentOverall}.
 Describe what this means for AI visibility. Be professional.`;
     
+    // Add rate limit delay before API call
+    await rateLimitDelay();
+    
     const response = await retryWithBackoff(() =>
       openai.chat.completions.create({
         model: "gpt-5-mini",
@@ -1125,6 +1131,10 @@ ${homepageContent}`;
   
   try {
     console.log(`Generating ${promptCount} research prompts with GPT-5.2 for "${targetService}"...`);
+    
+    // Add rate limit delay before API call to spread requests evenly (as OpenAI recommends)
+    await rateLimitDelay();
+    
     const response = await retryWithBackoff(() => 
       openai.chat.completions.create({
         model: "gpt-5-mini",
@@ -1228,6 +1238,10 @@ Example formats:
   
   try {
     console.log("Generating sentiment prompts with GPT-5.2...");
+    
+    // Add rate limit delay before API call
+    await rateLimitDelay();
+    
     const response = await retryWithBackoff(() =>
       openai.chat.completions.create({
         model: "gpt-5-mini",
@@ -1608,6 +1622,9 @@ CRITICAL REQUIREMENTS:
 4. Do NOT use generic terms like "Core Services" or "Specialty Services" - use actual service names like "Drain Cleaning", "AC Repair", "Roof Leak Repair", etc.`;
 
   async function attemptGeneration(isRetry: boolean = false): Promise<ServiceGroupsResult> {
+    // Add rate limit delay before API call
+    await rateLimitDelay();
+    
     const response = await retryWithBackoff(() =>
       openai.chat.completions.create({
         model: "gpt-5-mini",
@@ -1799,6 +1816,9 @@ CRITICAL REQUIREMENTS:
 5. Do NOT use generic terms like "Core Services" or "Specialty Services"`;
 
   try {
+    // Add rate limit delay before API call
+    await rateLimitDelay();
+    
     const response = await retryWithBackoff(() =>
       openai.chat.completions.create({
         model: "gpt-5-mini",
@@ -2159,6 +2179,9 @@ Return ONLY valid JSON:
   ]
 }`;
 
+    // Add rate limit delay before API call
+    await rateLimitDelay();
+    
     const response = await retryWithBackoff(() =>
       openai.chat.completions.create({
         model: "gpt-5-mini",
