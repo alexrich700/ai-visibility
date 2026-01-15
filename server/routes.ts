@@ -71,6 +71,32 @@ interface PendingRescanConfig {
 }
 const pendingRescanConfigs = new Map<string, PendingRescanConfig>();
 
+// Retry helper with exponential backoff for API calls
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelayMs: number = 10000
+): Promise<T> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      
+      if (attempt < maxRetries) {
+        // Exponential backoff: 10s, 20s, 30s
+        const delayMs = baseDelayMs * (attempt + 1);
+        console.log(`Retry attempt ${attempt + 1}/${maxRetries} after ${delayMs/1000}s delay...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+  
+  throw lastError;
+}
+
 // Clean up stale configs older than 5 minutes
 setInterval(() => {
   const now = Date.now();
@@ -454,10 +480,10 @@ export async function registerRoutes(
         citedCount: 0,
       });
       
-      // Run visibility checks with bounded concurrency (8 prompts at a time)
+      // Run visibility checks with bounded concurrency (4 prompts at a time)
       // Each prompt still runs ChatGPT and Gemini in parallel internally
-      // Increased from 4 to 8 to offset GPT-5-mini's slower response time
-      const CONCURRENT_PROMPTS = 8;
+      // Reduced from 8 to 4 to avoid rate limiting; retry logic handles transient failures
+      const CONCURRENT_PROMPTS = 4;
       let foundCount = 0;  // Service prompts only
       let citedCount = 0;  // Service prompts only
       let chatgptFoundCount = 0;  // Service prompts only
@@ -564,23 +590,25 @@ export async function registerRoutes(
             if (!isClientConnected) return null;
             
             try {
-              const result = await runPromptCheck(
-                item.prompt.text,
-                client.businessName,
-                client.domain,
-                location,
-                client.brandAliases || undefined
+              const result = await retryWithBackoff(() => 
+                runPromptCheck(
+                  item.prompt.text,
+                  client.businessName,
+                  client.domain,
+                  location,
+                  client.brandAliases || undefined
+                )
               );
               
               return { ...item, result };
             } catch (error) {
-              console.error(`Error checking prompt "${item.prompt.text.slice(0, 50)}...":`, error);
+              console.error(`Error checking prompt "${item.prompt.text.slice(0, 50)}..." after retries:`, error);
               // Return a failed result instead of crashing the batch
               return { 
                 ...item, 
                 result: {
-                  chatgpt: { found: false, response: "Error: API call failed", cited: false, citations: [] },
-                  googleAI: { found: false, response: "Error: API call failed", cited: false, citations: [] },
+                  chatgpt: { found: false, response: "Error: API call failed after retries", cited: false, citations: [] },
+                  googleAI: { found: false, response: "Error: API call failed after retries", cited: false, citations: [] },
                   competitors: []
                 }
               };
@@ -980,7 +1008,7 @@ export async function registerRoutes(
       
       // Run visibility checks with bounded concurrency (8 prompts at a time)
       // Increased from 4 to 8 to offset GPT-5-mini's slower response time
-      const CONCURRENT_PROMPTS = 8;
+      const CONCURRENT_PROMPTS = 4;
       let foundCount = 0;
       let citedCount = 0;
       let chatgptFoundCount = 0;
@@ -1078,23 +1106,25 @@ export async function registerRoutes(
             if (!isClientConnected) return null;
             
             try {
-              const result = await runPromptCheck(
-                item.prompt.promptText,
-                client.businessName,
-                client.domain,
-                location,
-                client.brandAliases || undefined
+              const result = await retryWithBackoff(() =>
+                runPromptCheck(
+                  item.prompt.promptText,
+                  client.businessName,
+                  client.domain,
+                  location,
+                  client.brandAliases || undefined
+                )
               );
               
               return { ...item, result };
             } catch (error) {
-              console.error(`Error checking prompt "${item.prompt.promptText.slice(0, 50)}...":`, error);
+              console.error(`Error checking prompt "${item.prompt.promptText.slice(0, 50)}..." after retries:`, error);
               // Return a failed result instead of crashing the batch
               return { 
                 ...item, 
                 result: {
-                  chatgpt: { found: false, response: "Error: API call failed", cited: false, citations: [] },
-                  googleAI: { found: false, response: "Error: API call failed", cited: false, citations: [] },
+                  chatgpt: { found: false, response: "Error: API call failed after retries", cited: false, citations: [] },
+                  googleAI: { found: false, response: "Error: API call failed after retries", cited: false, citations: [] },
                   competitors: []
                 }
               };
