@@ -10,6 +10,32 @@ import {
 // Configuration constants for prompt generation
 export const PROMPTS_PER_GROUP = 5; // Number of prompts to generate per service group
 
+// Retry helper with exponential backoff for API calls
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelayMs: number = 10000
+): Promise<T> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      
+      if (attempt < maxRetries) {
+        // Exponential backoff: 10s, 20s, 30s
+        const delayMs = baseDelayMs * (attempt + 1);
+        console.log(`Retry attempt ${attempt + 1}/${maxRetries} after ${delayMs/1000}s delay...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+  
+  throw lastError;
+}
+
 // ============================================
 // BRAND SENTIMENT PROMPT TEMPLATES
 // These prompts ask AI directly about a specific business to get sentiment feedback
@@ -662,14 +688,16 @@ Start with: "We analyzed ${businessName} across 20 high-intent AI prompts on Cha
 Key findings: overall score ${overallScore}/100, ChatGPT ${chatgptScore}%, Google AI ${googleAIScore}%, sentiment ${sentimentOverall}.
 Describe what this means for AI visibility. Be professional.`;
     
-    const response = await openai.chat.completions.create({
-      model: "gpt-5-mini",
-      messages: [
-        { role: "system", content: "You write professional, matter-of-fact executive summaries for AI visibility audit reports. Be concise and data-driven." },
-        { role: "user", content: userPrompt }
-      ],
-      max_completion_tokens: 512,
-    });
+    const response = await retryWithBackoff(() =>
+      openai.chat.completions.create({
+        model: "gpt-5-mini",
+        messages: [
+          { role: "system", content: "You write professional, matter-of-fact executive summaries for AI visibility audit reports. Be concise and data-driven." },
+          { role: "user", content: userPrompt }
+        ],
+        max_completion_tokens: 512,
+      })
+    );
     return response.choices[0]?.message?.content || `We analyzed ${businessName} across 20 high-intent AI prompts on ChatGPT and Google AI. The results indicate a visibility score of ${overallScore}/100 with ${sentimentOverall} brand sentiment.`;
   } catch (error) {
     console.error("Executive summary generation error:", error);
@@ -829,14 +857,16 @@ ${homepageContent}`;
   
   try {
     console.log(`Generating ${promptCount} research prompts with GPT-5.2 for "${targetService}"...`);
-    const response = await openai.chat.completions.create({
-      model: "gpt-5-mini",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-      max_completion_tokens: 1024,
-    });
+    const response = await retryWithBackoff(() => 
+      openai.chat.completions.create({
+        model: "gpt-5-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        max_completion_tokens: 1024,
+      })
+    );
     
     const text = response.choices[0]?.message?.content || "";
     console.log("OpenAI research prompts response:", text.slice(0, 200));
@@ -902,14 +932,16 @@ Example formats:
   
   try {
     console.log("Generating sentiment prompts with GPT-5.2...");
-    const response = await openai.chat.completions.create({
-      model: "gpt-5-mini",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-      max_completion_tokens: 512,
-    });
+    const response = await retryWithBackoff(() =>
+      openai.chat.completions.create({
+        model: "gpt-5-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        max_completion_tokens: 512,
+      })
+    );
     
     const text = response.choices[0]?.message?.content || "";
     console.log("GPT-4o sentiment prompts response:", text.slice(0, 200));
@@ -1280,19 +1312,21 @@ CRITICAL REQUIREMENTS:
 4. Do NOT use generic terms like "Core Services" or "Specialty Services" - use actual service names like "Drain Cleaning", "AC Repair", "Roof Leak Repair", etc.`;
 
   async function attemptGeneration(isRetry: boolean = false): Promise<ServiceGroupsResult> {
-    const response = await openai.chat.completions.create({
-      model: "gpt-5-mini",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { 
-          role: "user", 
-          content: isRetry 
-            ? userPrompt + "\n\nYour previous response contained generic terms. Please provide SPECIFIC service names only."
-            : userPrompt
-        }
-      ],
-      response_format: { type: "json_object" }
-    });
+    const response = await retryWithBackoff(() =>
+      openai.chat.completions.create({
+        model: "gpt-5-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { 
+            role: "user", 
+            content: isRetry 
+              ? userPrompt + "\n\nYour previous response contained generic terms. Please provide SPECIFIC service names only."
+              : userPrompt
+          }
+        ],
+        response_format: { type: "json_object" }
+      })
+    );
 
     const content = response.choices[0]?.message?.content || "{}";
     const parsed = JSON.parse(content);
@@ -1600,18 +1634,20 @@ Return ONLY valid JSON:
   ]
 }`;
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-5-mini",
-      messages: [
-        {
-          role: "system",
-          content: "You are a brand visibility analyst. Create SPECIFIC, ACTIONABLE insights from AI response data. Each insight MUST reference the exact prompt that triggered it. Never write generic statements. Always respond with valid JSON only."
-        },
-        { role: "user", content: prompt }
-      ],
-      temperature: 0.3,
-      max_completion_tokens: 2000,
-    });
+    const response = await retryWithBackoff(() =>
+      openai.chat.completions.create({
+        model: "gpt-5-mini",
+        messages: [
+          {
+            role: "system",
+            content: "You are a brand visibility analyst. Create SPECIFIC, ACTIONABLE insights from AI response data. Each insight MUST reference the exact prompt that triggered it. Never write generic statements. Always respond with valid JSON only."
+          },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.3,
+        max_completion_tokens: 2000,
+      })
+    );
     
     const content = response.choices[0]?.message?.content?.trim() || "";
     
