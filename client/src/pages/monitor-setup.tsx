@@ -41,10 +41,53 @@ export default function MonitorSetup() {
   // Business info state
   const [businessName, setBusinessName] = useState("");
   const [domain, setDomain] = useState("");
-  const [industry, setIndustry] = useState("");
+  const [industry, setIndustry] = useState(""); // Legacy single industry (for display)
+  const [primaryCategories, setPrimaryCategories] = useState<string[]>([]); // Multiple service categories
+  const [newCategoryInput, setNewCategoryInput] = useState(""); // Input for adding categories
   const [scope, setScope] = useState<"local" | "national">("local");
-  const [city, setCity] = useState("");
+  const [city, setCity] = useState(""); // Legacy single city (for backward compat)
+  const [cities, setCities] = useState<string[]>([]); // Multiple cities for multi-location
+  const [newCityInput, setNewCityInput] = useState(""); // Input for adding cities
   const [checkFrequencyDays, setCheckFrequencyDays] = useState(14);
+  
+  // Helper functions for multi-select tag inputs
+  const addCategory = () => {
+    const trimmed = newCategoryInput.trim();
+    if (trimmed && !primaryCategories.includes(trimmed)) {
+      setPrimaryCategories([...primaryCategories, trimmed]);
+      // Also set industry for legacy compatibility
+      if (primaryCategories.length === 0) {
+        setIndustry(trimmed);
+      } else {
+        setIndustry(primaryCategories[0]);
+      }
+    }
+    setNewCategoryInput("");
+  };
+  
+  const removeCategory = (category: string) => {
+    const updated = primaryCategories.filter(c => c !== category);
+    setPrimaryCategories(updated);
+    setIndustry(updated[0] || "");
+  };
+  
+  const addCity = () => {
+    const trimmed = newCityInput.trim();
+    if (trimmed && !cities.includes(trimmed)) {
+      setCities([...cities, trimmed]);
+      // Set first city as legacy city
+      if (cities.length === 0) {
+        setCity(trimmed);
+      }
+    }
+    setNewCityInput("");
+  };
+  
+  const removeCity = (cityToRemove: string) => {
+    const updated = cities.filter(c => c !== cityToRemove);
+    setCities(updated);
+    setCity(updated[0] || "");
+  };
   
   // Groups state
   const [groups, setGroups] = useState<GroupItem[]>([]);
@@ -83,8 +126,20 @@ export default function MonitorSetup() {
   // Generate groups mutation
   const generateGroupsMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/monitoring/generate-groups", { businessName, industry, scope, city });
-      return await response.json() as { groups: { name: string; description: string; isHighLevelCategory?: boolean }[] };
+      // Use primaryCategories if available, otherwise fall back to industry
+      const categoriesToUse = primaryCategories.length > 0 ? primaryCategories : (industry ? [industry] : []);
+      const response = await apiRequest("POST", "/api/monitoring/generate-groups", { 
+        businessName, 
+        industry: categoriesToUse[0] || industry, // Legacy support
+        primaryCategories: categoriesToUse.length > 1 ? categoriesToUse : undefined,
+        scope, 
+        city: cities.length > 0 ? cities[0] : city // Use first city for group generation
+      });
+      return await response.json() as { 
+        groups: { name: string; description: string; isHighLevelCategory?: boolean }[];
+        isMultiCategory?: boolean;
+        highLevelCategories?: { name: string; description: string }[];
+      };
     },
     onSuccess: (data) => {
       const newGroups = data.groups.map((g, i) => ({
@@ -174,6 +229,8 @@ export default function MonitorSetup() {
     
     try {
       // Step 1: Prepare the scan (POST with data)
+      // For initial setup, use first city as targetCity if multiple cities
+      const targetCity = scope === "local" ? (cities.length > 0 ? cities[0] : city) : undefined;
       const prepareResponse = await fetch("/api/monitoring/scan-prepare", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -181,9 +238,11 @@ export default function MonitorSetup() {
           client: {
             businessName,
             domain,
-            industry,
+            industry: primaryCategories.length > 0 ? primaryCategories[0] : industry,
             scope,
-            city: scope === "local" ? city : undefined,
+            city: targetCity, // Legacy single city
+            cities: scope === "local" && cities.length > 0 ? cities : undefined, // Multiple cities
+            primaryCategories: primaryCategories.length > 0 ? primaryCategories : undefined, // Multiple categories
             checkFrequencyDays,
           },
           groups: activeGroups.map(g => ({
@@ -195,6 +254,7 @@ export default function MonitorSetup() {
             groupName: activeGroups.find(g => g.id === p.groupId)?.name,
             text: p.text,
           })),
+          targetCity, // Which city this initial scan is for
         }),
       });
 
@@ -318,18 +378,28 @@ export default function MonitorSetup() {
 
   const handleNextStep = () => {
     if (currentStep === "business") {
-      if (!businessName || !domain || !industry) {
+      if (!businessName || !domain) {
         toast({
           title: "Missing required fields",
-          description: "Please fill in all required fields",
+          description: "Please fill in business name and domain",
           variant: "destructive",
         });
         return;
       }
-      if (scope === "local" && !city) {
+      // Check for categories (either primaryCategories or legacy industry)
+      if (primaryCategories.length === 0 && !industry) {
+        toast({
+          title: "Service categories required",
+          description: "Please add at least one service category",
+          variant: "destructive",
+        });
+        return;
+      }
+      // Check for cities in local scope
+      if (scope === "local" && cities.length === 0 && !city) {
         toast({
           title: "City required",
-          description: "Please enter a city for local scope",
+          description: "Please enter at least one city for local scope",
           variant: "destructive",
         });
         return;
@@ -531,19 +601,59 @@ export default function MonitorSetup() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="industry" className="text-xs uppercase font-bold tracking-wider text-gray-500">
-                  Industry / Business Type *
+                <Label htmlFor="primaryCategories" className="text-xs uppercase font-bold tracking-wider text-gray-500">
+                  Service Categories * <span className="font-normal text-gray-400">(Add multiple for multi-service businesses)</span>
                 </Label>
-                <div className="relative group">
-                  <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-[#5599f9] transition-colors" />
-                  <Input
-                    id="industry"
-                    value={industry}
-                    onChange={(e) => setIndustry(e.target.value)}
-                    placeholder="HVAC, Plumbing, Electrical, etc."
-                    className="pl-12 bg-gray-50 border-gray-200 focus:border-[#5599f9] focus:ring-[#5599f9]"
-                    data-testid="input-industry"
-                  />
+                <div className="space-y-2">
+                  {/* Display added categories as tags */}
+                  {primaryCategories.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {primaryCategories.map((category) => (
+                        <Badge 
+                          key={category} 
+                          variant="secondary" 
+                          className="bg-[#5599f9] text-white hover:bg-[#4488e8] px-3 py-1"
+                        >
+                          {category}
+                          <button 
+                            onClick={() => removeCategory(category)}
+                            className="ml-2 hover:text-red-200"
+                            data-testid={`button-remove-category-${category}`}
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                  {/* Input for adding new categories */}
+                  <div className="flex gap-2">
+                    <div className="relative group flex-1">
+                      <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-[#5599f9] transition-colors" />
+                      <Input
+                        id="primaryCategories"
+                        value={newCategoryInput}
+                        onChange={(e) => setNewCategoryInput(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addCategory())}
+                        placeholder={primaryCategories.length > 0 ? "Add another category..." : "Plumbing, HVAC, Electrical, etc."}
+                        className="pl-12 bg-gray-50 border-gray-200 focus:border-[#5599f9] focus:ring-[#5599f9]"
+                        data-testid="input-primary-categories"
+                      />
+                    </div>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="icon"
+                      onClick={addCategory}
+                      disabled={!newCategoryInput.trim()}
+                      data-testid="button-add-category"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-gray-400">
+                    Examples: Plumbing, HVAC, Electrical. For multi-service businesses like "MSP Right" that do plumbing AND HVAC, add both.
+                  </p>
                 </div>
               </div>
 
@@ -583,19 +693,60 @@ export default function MonitorSetup() {
 
               {scope === "local" && (
                 <div className="space-y-2">
-                  <Label htmlFor="city" className="text-xs uppercase font-bold tracking-wider text-gray-500">
-                    City / Region *
+                  <Label htmlFor="cities" className="text-xs uppercase font-bold tracking-wider text-gray-500">
+                    Cities / Regions * <span className="font-normal text-gray-400">(Add multiple for multi-location businesses)</span>
                   </Label>
-                  <div className="relative group">
-                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-[#5599f9] transition-colors" />
-                    <Input
-                      id="city"
-                      value={city}
-                      onChange={(e) => setCity(e.target.value)}
-                      placeholder="San Francisco, CA"
-                      className="pl-12 bg-gray-50 border-gray-200 focus:border-[#5599f9] focus:ring-[#5599f9]"
-                      data-testid="input-city"
-                    />
+                  <div className="space-y-2">
+                    {/* Display added cities as tags */}
+                    {cities.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {cities.map((cityItem) => (
+                          <Badge 
+                            key={cityItem} 
+                            variant="secondary" 
+                            className="bg-green-500 text-white hover:bg-green-600 px-3 py-1"
+                          >
+                            <MapPin className="w-3 h-3 mr-1" />
+                            {cityItem}
+                            <button 
+                              onClick={() => removeCity(cityItem)}
+                              className="ml-2 hover:text-red-200"
+                              data-testid={`button-remove-city-${cityItem}`}
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                    {/* Input for adding new cities */}
+                    <div className="flex gap-2">
+                      <div className="relative group flex-1">
+                        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-[#5599f9] transition-colors" />
+                        <Input
+                          id="cities"
+                          value={newCityInput}
+                          onChange={(e) => setNewCityInput(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addCity())}
+                          placeholder={cities.length > 0 ? "Add another city..." : "Minneapolis, MN"}
+                          className="pl-12 bg-gray-50 border-gray-200 focus:border-[#5599f9] focus:ring-[#5599f9]"
+                          data-testid="input-cities"
+                        />
+                      </div>
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        size="icon"
+                        onClick={addCity}
+                        disabled={!newCityInput.trim()}
+                        data-testid="button-add-city"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <p className="text-xs text-gray-400">
+                      For businesses serving multiple cities (like "MSP Right" in Minneapolis, St. Paul, Rochester), add each city separately.
+                    </p>
                   </div>
                 </div>
               )}

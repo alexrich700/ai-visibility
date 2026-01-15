@@ -177,6 +177,7 @@ export default function MonitorDashboard() {
   const [selectedGroup, setSelectedGroup] = useState<string>("all");
   const [timeRange, setTimeRange] = useState<string>("30");
   const [trendView, setTrendView] = useState<"overall" | "groups" | "competitors">("overall");
+  const [selectedViewCity, setSelectedViewCity] = useState<string>(""); // Filter dashboard view by city
   const [selectedResult, setSelectedResult] = useState<CheckResult | null>(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportStartDate, setExportStartDate] = useState(() => {
@@ -193,6 +194,7 @@ export default function MonitorDashboard() {
   const [scanProgress, setScanProgress] = useState(0);
   const [scanStatus, setScanStatus] = useState("");
   const [scanSubStatus, setScanSubStatus] = useState("");
+  const [selectedScanCity, setSelectedScanCity] = useState<string>(""); // Selected city for next scan
   const eventSourceRef = useRef<EventSource | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -217,10 +219,11 @@ export default function MonitorDashboard() {
     setScanSubStatus("");
     
     try {
-      // Step 1: Prepare the rescan
+      // Step 1: Prepare the rescan, passing target city if selected
       const prepareResponse = await fetch(`/api/monitoring/rescan-prepare/${clientId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetCity: selectedScanCity || undefined }),
       });
       
       if (!prepareResponse.ok) {
@@ -384,9 +387,28 @@ export default function MonitorDashboard() {
 
   const { client, groups, sessions, latestResults, resultsByGroup, analytics, trendData } = data;
 
-  // Calculate scores
-  const latestSession = sessions[0];
-  const previousSession = sessions[1];
+  // Filter sessions by selected city if multi-city client and city is selected
+  const filteredSessions = selectedViewCity 
+    ? sessions.filter(s => (s as any).city === selectedViewCity)
+    : sessions;
+
+  // Calculate scores - use filtered sessions
+  const latestSession = filteredSessions[0];
+  const previousSession = filteredSessions[1];
+  
+  // Filter latestResults to only include results from the selected city's session
+  // This ensures all scorecard metrics are based on the filtered session
+  const cityFilteredResults = selectedViewCity && latestSession
+    ? latestResults.filter(r => r.sessionId === latestSession.id)
+    : latestResults;
+  
+  // Filter resultsByGroup similarly for city filtering
+  const cityFilteredResultsByGroup = selectedViewCity && latestSession
+    ? resultsByGroup.map(g => ({
+        ...g,
+        results: g.results.filter(r => r.sessionId === latestSession.id)
+      })).filter(g => g.results.length > 0)
+    : resultsByGroup;
   
   const overallScore = latestSession?.overallScore ?? 0;
   const chatgptScore = latestSession?.chatgptScore ?? 0;
@@ -396,16 +418,16 @@ export default function MonitorDashboard() {
     ? overallScore - previousSession.overallScore 
     : 0;
 
-  // Calculate visibility metrics
+  // Calculate visibility metrics from city-filtered results
   // Each prompt is checked across 2 platforms, so total exposures = prompts × 2
-  const promptCount = latestResults.length;
+  const promptCount = cityFilteredResults.length;
   const totalExposures = promptCount * 2;
   
   // Per-platform visibility metrics
-  const chatgptFoundCount = latestResults.filter(r => r.chatgptFound).length;
-  const googleAIFoundCount = latestResults.filter(r => r.googleAIFound).length;
-  const chatgptCitedCount = latestResults.filter(r => r.chatgptCited).length;
-  const googleAICitedCount = latestResults.filter(r => r.googleAICited).length;
+  const chatgptFoundCount = cityFilteredResults.filter(r => r.chatgptFound).length;
+  const googleAIFoundCount = cityFilteredResults.filter(r => r.googleAIFound).length;
+  const chatgptCitedCount = cityFilteredResults.filter(r => r.chatgptCited).length;
+  const googleAICitedCount = cityFilteredResults.filter(r => r.googleAICited).length;
   
   // Overall counts are sum of both platforms
   const foundCount = chatgptFoundCount + googleAIFoundCount;
@@ -419,20 +441,21 @@ export default function MonitorDashboard() {
   const chatgptVisibility = promptCount > 0 ? Math.round((chatgptFoundCount / promptCount) * 100) : 0;
   const googleAIVisibility = promptCount > 0 ? Math.round((googleAIFoundCount / promptCount) * 100) : 0;
   
-  // Calculate average rank across all results
-  const chatgptRanks = latestResults.filter(r => r.chatgptRank != null).map(r => r.chatgptRank as number);
-  const googleAIRanks = latestResults.filter(r => r.googleAIRank != null).map(r => r.googleAIRank as number);
+  // Calculate average rank across city-filtered results
+  const chatgptRanks = cityFilteredResults.filter(r => r.chatgptRank != null).map(r => r.chatgptRank as number);
+  const googleAIRanks = cityFilteredResults.filter(r => r.googleAIRank != null).map(r => r.googleAIRank as number);
   const allRanks = [...chatgptRanks, ...googleAIRanks];
   const avgRank = allRanks.length > 0 
     ? Math.round((allRanks.reduce((a, b) => a + b, 0) / allRanks.length) * 10) / 10
     : null;
 
-  // Prepare chart data
-  const sessionChartData = sessions.slice().reverse().map((session) => ({
+  // Prepare chart data - use filtered sessions
+  const sessionChartData = filteredSessions.slice().reverse().map((session) => ({
     date: format(new Date(session.createdAt), "MMM d"),
     overall: session.overallScore,
     chatgpt: session.chatgptScore,
     googleAI: session.googleAIScore,
+    city: (session as any).city || null, // Include city info for reference
   }));
 
   // Prepare group trend chart data (merge all groups into a single dataset)
@@ -503,7 +526,7 @@ export default function MonitorDashboard() {
     "#ec4899", "#14b8a6", "#f97316", "#6366f1", "#84cc16"
   ];
 
-  const groupBarData = resultsByGroup.map((g) => {
+  const groupBarData = cityFilteredResultsByGroup.map((g) => {
     const groupFoundCount = g.results.filter(r => r.chatgptFound || r.googleAIFound).length;
     const groupTotal = g.results.length;
     return {
@@ -514,10 +537,10 @@ export default function MonitorDashboard() {
     };
   });
 
-  // Filter results by selected group
+  // Filter results by selected group (applied on top of city filtering)
   const filteredResults = selectedGroup === "all"
-    ? latestResults
-    : latestResults.filter(r => r.groupId === parseInt(selectedGroup));
+    ? cityFilteredResults
+    : cityFilteredResults.filter(r => r.groupId === parseInt(selectedGroup));
 
   return (
     <div className="min-h-screen bg-gray-50 selection:bg-[#5599f9] selection:text-white">
@@ -549,6 +572,22 @@ export default function MonitorDashboard() {
               <Download className="w-4 h-4" />
               Export
             </Button>
+            {/* City selector for multi-city businesses */}
+            {client.cities && client.cities.length > 1 && (
+              <Select value={selectedScanCity} onValueChange={setSelectedScanCity}>
+                <SelectTrigger className="w-[160px] h-9" data-testid="select-scan-city">
+                  <SelectValue placeholder="All cities" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All cities</SelectItem>
+                  {client.cities.map((cityName: string) => (
+                    <SelectItem key={cityName} value={cityName}>
+                      {cityName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -558,7 +597,7 @@ export default function MonitorDashboard() {
               data-testid="button-refresh"
             >
               <RefreshCw className={`w-4 h-4 ${isScanning ? "animate-spin" : ""}`} />
-              {isScanning ? "Scanning..." : "Run New Scan"}
+              {isScanning ? "Scanning..." : (selectedScanCity ? `Scan ${selectedScanCity}` : "Run New Scan")}
             </Button>
             <Button
               variant="outline"
@@ -602,6 +641,47 @@ export default function MonitorDashboard() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-8 space-y-8">
+        {/* Multi-city info banner */}
+        {client.cities && client.cities.length > 1 && (
+          <Card className="bg-gradient-to-r from-[#5599f9]/5 to-[#ffb41c]/5 border-[#5599f9]/20">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Target className="w-5 h-5 text-[#5599f9]" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">
+                      Multi-location business: Tracking visibility across {client.cities.length} cities
+                    </p>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {client.cities.map((cityName: string) => (
+                        <Badge key={cityName} variant="outline" className="text-xs">
+                          {cityName}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-500">View data for:</span>
+                  <Select value={selectedViewCity} onValueChange={setSelectedViewCity}>
+                    <SelectTrigger className="w-[200px]" data-testid="select-view-city">
+                      <SelectValue placeholder="All cities (latest scan)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">All cities (latest overall scan)</SelectItem>
+                      {client.cities.map((cityName: string) => (
+                        <SelectItem key={cityName} value={cityName}>
+                          {cityName} only
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Scorecard Row */}
         <div className="grid md:grid-cols-4 gap-4">
           {/* Average Rank */}
@@ -1306,7 +1386,7 @@ export default function MonitorDashboard() {
           <CardContent>
             <div className="divide-y divide-gray-100">
               {filteredResults.slice(0, displayLimit).map((result) => {
-                const groupName = resultsByGroup.find(g => g.groupId === result.groupId)?.groupName;
+                const groupName = cityFilteredResultsByGroup.find(g => g.groupId === result.groupId)?.groupName || resultsByGroup.find(g => g.groupId === result.groupId)?.groupName;
                 const isVisible = result.chatgptFound || result.googleAIFound;
                 const isCited = result.chatgptCited || result.googleAICited;
                 

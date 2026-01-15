@@ -1397,6 +1397,211 @@ function getDefaultGroups(industry: string): { name: string; description: string
   ];
 }
 
+// Multi-category service group result - includes multiple high-level categories
+export interface MultiCategoryServiceGroupsResult {
+  highLevelCategories: { name: string; description: string }[];
+  groups: { name: string; description: string }[];
+}
+
+/**
+ * Generate service groups for a business with multiple primary service categories.
+ * This function intelligently merges and deduplicates service groups across categories.
+ * 
+ * For a business offering both Plumbing and HVAC services:
+ * - Returns 2 high-level categories: "Plumber" and "HVAC Contractor"
+ * - Returns 12-15 deduplicated service groups covering both (not 20)
+ * - Shared services (like "Water Heater Repair") appear only once
+ */
+export async function generateServiceGroupsMultiCategory(
+  businessName: string,
+  primaryCategories: string[],
+  scope: string,
+  city?: string
+): Promise<MultiCategoryServiceGroupsResult> {
+  const locationContext = scope === "local" && city ? ` in ${city}` : "";
+  
+  // If only one category, delegate to the single-category function
+  if (primaryCategories.length === 1) {
+    const result = await generateServiceGroups(businessName, primaryCategories[0], scope, city);
+    return {
+      highLevelCategories: [result.highLevelCategory],
+      groups: result.groups
+    };
+  }
+  
+  const categoriesList = primaryCategories.join(", ");
+  
+  const systemPrompt = `You are an expert marketing strategist specializing in multi-service business categorization for AI visibility tracking.
+
+# YOUR TASK
+A business offers MULTIPLE primary service types. You must:
+1. Identify the high-level category (umbrella term) for EACH primary service type provided
+2. Generate 12-15 deduplicated service groups that intelligently cover ALL categories
+3. Identify and merge overlapping services that apply to multiple categories
+
+# HIGH-LEVEL CATEGORY GUIDELINES
+- Create ONE high-level category per primary service type provided
+- Each should be 1-3 words, the broadest search term for that service type
+- Examples: "Plumber", "HVAC Contractor", "Electrician", "Marketing Agency"
+
+# SERVICE GROUP GUIDELINES - CRITICAL
+- Generate 12-15 TOTAL service groups (NOT 10 per category - we're merging!)
+- Identify overlapping services (e.g., "Water Heater Repair" applies to both Plumbing and HVAC)
+- Include only ONE entry for shared services - DO NOT DUPLICATE
+- Distribute groups fairly across categories (e.g., 5-6 plumbing-specific, 5-6 HVAC-specific, 2-3 shared)
+- Each group name should be 1-4 words, matching natural search language
+- NEVER use generic terms like "Core Services", "Specialty Services", etc.
+
+# EXAMPLES OF OVERLAPPING SERVICES TO MERGE
+For Plumbing + HVAC businesses:
+- "Water Heater Repair" - appears ONCE (applies to both)
+- "Water Heater Installation" - appears ONCE (applies to both)
+- "Emergency Services" / "24/7 Emergency" - appears ONCE (applies to both)
+
+For Plumbing + Electrical businesses:
+- "New Construction" - appears ONCE (applies to both)
+- "Remodeling Services" - appears ONCE (applies to both)
+
+# OUTPUT FORMAT
+Return a JSON object with:
+- "highLevelCategories": array of objects with "name" and "description" fields (one per primary category)
+- "groups": array of 12-15 objects with "name" and "description" fields (deduplicated across categories)
+
+# EXAMPLE OUTPUT for "Plumbing" + "HVAC" business:
+{
+  "highLevelCategories": [
+    {"name": "Plumber", "description": "Professional plumbing services"},
+    {"name": "HVAC Contractor", "description": "Heating, ventilation, and air conditioning services"}
+  ],
+  "groups": [
+    {"name": "Drain Cleaning", "description": "Clogged drain and sewer line cleaning"},
+    {"name": "Plumbing Leak Repair", "description": "Pipe leak detection and repair"},
+    {"name": "Toilet Repair", "description": "Toilet installation and repair"},
+    {"name": "Faucet Repair", "description": "Faucet installation and repair"},
+    {"name": "Sewer Line Repair", "description": "Sewer line inspection and repair"},
+    {"name": "AC Repair", "description": "Air conditioning repairs and troubleshooting"},
+    {"name": "AC Installation", "description": "New AC system installations"},
+    {"name": "Heater Repair", "description": "Furnace and heating system repairs"},
+    {"name": "Furnace Installation", "description": "New furnace and heating installations"},
+    {"name": "HVAC Maintenance", "description": "Preventive heating and cooling maintenance"},
+    {"name": "Duct Cleaning", "description": "Air duct cleaning and air quality services"},
+    {"name": "Water Heater Repair", "description": "Water heater troubleshooting and repairs (plumbing and HVAC)"},
+    {"name": "Water Heater Installation", "description": "New water heater installations"},
+    {"name": "Emergency Plumber", "description": "24/7 emergency plumbing and HVAC services"}
+  ]
+}`;
+
+  const userPrompt = `Generate high-level categories and 12-15 deduplicated service groups for "${businessName}"${locationContext}.
+
+Primary service categories: ${categoriesList}
+
+CRITICAL REQUIREMENTS:
+1. Create ONE high-level category per primary service type (${primaryCategories.length} total)
+2. Generate 12-15 TOTAL service groups covering ALL categories (not 10 per category!)
+3. Identify overlapping services and include them ONLY ONCE
+4. Each group name must be specific and searchable (e.g., "Drain Cleaning", "AC Repair")
+5. Do NOT use generic terms like "Core Services" or "Specialty Services"`;
+
+  try {
+    const response = await retryWithBackoff(() =>
+      openai.chat.completions.create({
+        model: "gpt-5-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        response_format: { type: "json_object" }
+      })
+    );
+
+    const content = response.choices[0]?.message?.content || "{}";
+    const parsed = JSON.parse(content);
+    
+    // Extract high-level categories
+    const highLevelCategories = Array.isArray(parsed.highLevelCategories) 
+      ? parsed.highLevelCategories 
+      : primaryCategories.map(cat => ({ name: cat, description: `${cat} services` }));
+    
+    // Extract and validate groups
+    let groups = Array.isArray(parsed.groups) ? parsed.groups : [];
+    
+    // Filter out generic group names
+    groups = groups.filter((g: { name: string }) => !isGenericGroupName(g.name));
+    
+    // If not enough valid groups, fall back to generating for each category separately
+    if (groups.length < 8) {
+      console.log("Multi-category generation produced insufficient groups, falling back to category-by-category generation...");
+      return await generateServiceGroupsFallback(businessName, primaryCategories, scope, city);
+    }
+    
+    console.log(`Generated ${groups.length} deduplicated service groups for ${primaryCategories.length} categories`);
+    return { highLevelCategories, groups };
+    
+  } catch (error) {
+    console.error("Error generating multi-category service groups:", error);
+    return await generateServiceGroupsFallback(businessName, primaryCategories, scope, city);
+  }
+}
+
+/**
+ * Fallback: Generate service groups for each category separately and merge with deduplication
+ */
+async function generateServiceGroupsFallback(
+  businessName: string,
+  primaryCategories: string[],
+  scope: string,
+  city?: string
+): Promise<MultiCategoryServiceGroupsResult> {
+  const highLevelCategories: { name: string; description: string }[] = [];
+  const allGroups: { name: string; description: string; normalized: string }[] = [];
+  
+  // Generate groups for each category
+  for (const category of primaryCategories) {
+    try {
+      const result = await generateServiceGroups(businessName, category, scope, city);
+      highLevelCategories.push(result.highLevelCategory);
+      
+      // Add groups with normalized names for deduplication
+      for (const group of result.groups) {
+        const normalized = normalizeGroupName(group.name);
+        allGroups.push({ ...group, normalized });
+      }
+    } catch (error) {
+      console.error(`Failed to generate groups for category ${category}:`, error);
+      highLevelCategories.push({ name: category, description: `${category} services` });
+    }
+  }
+  
+  // Deduplicate groups by normalized name
+  const seenNames = new Set<string>();
+  const uniqueGroups: { name: string; description: string }[] = [];
+  
+  for (const group of allGroups) {
+    if (!seenNames.has(group.normalized)) {
+      seenNames.add(group.normalized);
+      uniqueGroups.push({ name: group.name, description: group.description });
+    }
+  }
+  
+  // Limit to 15 groups maximum
+  const finalGroups = uniqueGroups.slice(0, 15);
+  
+  console.log(`Fallback: Generated ${finalGroups.length} deduplicated groups from ${primaryCategories.length} categories`);
+  return { highLevelCategories, groups: finalGroups };
+}
+
+/**
+ * Normalize a group name for deduplication comparison
+ * e.g., "Water Heater Repair" and "water heater repairs" would match
+ */
+function normalizeGroupName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/s$/i, '') // Remove trailing 's' for singular/plural matching
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 // Generate prompts for each group using PARALLEL execution with bounded concurrency
 // This ensures prompt generation completes within production timeout limits
 const PROMPT_GENERATION_CONCURRENCY = 5;

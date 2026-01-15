@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { generateServiceGroups, generatePromptsForGroups, runPromptCheck, synthesizeSentimentNarratives, generateBrandSentimentPrompts, type SynthesizedNarratives } from "./ai-services";
+import { generateServiceGroups, generateServiceGroupsMultiCategory, generatePromptsForGroups, runPromptCheck, synthesizeSentimentNarratives, generateBrandSentimentPrompts, type SynthesizedNarratives, type MultiCategoryServiceGroupsResult } from "./ai-services";
 import { monitoringClientRequestSchema } from "@shared/schema";
 import { z } from "zod";
 import { randomUUID } from "crypto";
@@ -31,6 +31,7 @@ interface PendingScanConfig {
   client: z.infer<typeof monitoringClientRequestSchema>;
   groups: { name: string; description: string; isHighLevelCategory: boolean }[];
   prompts: { groupName: string; text: string }[];
+  targetCity?: string; // Which city this scan is for (multi-city support)
   createdAt: number;
 }
 const pendingScanConfigs = new Map<string, PendingScanConfig>();
@@ -130,31 +131,62 @@ export async function registerRoutes(
   // ============================================
 
   // Generate service groups using AI
+  // Supports both single-category (legacy) and multi-category requests
   app.post("/api/monitoring/generate-groups", async (req, res) => {
     try {
-      const { businessName, industry, scope, city } = req.body;
+      const { businessName, industry, scope, city, primaryCategories } = req.body;
       
-      if (!businessName || !industry) {
-        return res.status(400).json({ error: "Business name and industry are required" });
+      if (!businessName) {
+        return res.status(400).json({ error: "Business name is required" });
+      }
+      
+      // Determine categories to use - either explicit primaryCategories array or legacy industry field
+      const categories: string[] = primaryCategories && primaryCategories.length > 0 
+        ? primaryCategories 
+        : industry ? [industry] : [];
+      
+      if (categories.length === 0) {
+        return res.status(400).json({ error: "At least one category (industry or primaryCategories) is required" });
       }
 
-      const result = await generateServiceGroups(businessName, industry, scope, city);
-      
-      // Return high-level category as the first group, followed by specific groups
-      // This gives 11 total groups: 1 umbrella + 10 specific
-      const allGroups = [
-        { 
-          name: result.highLevelCategory.name, 
-          description: result.highLevelCategory.description,
-          isHighLevelCategory: true 
-        },
-        ...result.groups.map(g => ({ ...g, isHighLevelCategory: false }))
-      ];
-      
-      res.json({ 
-        groups: allGroups,
-        highLevelCategory: result.highLevelCategory 
-      });
+      // Use multi-category function if multiple categories, otherwise single category
+      if (categories.length > 1) {
+        const result = await generateServiceGroupsMultiCategory(businessName, categories, scope, city);
+        
+        // Return high-level categories as initial groups, followed by specific groups
+        const allGroups = [
+          ...result.highLevelCategories.map(cat => ({ 
+            name: cat.name, 
+            description: cat.description,
+            isHighLevelCategory: true 
+          })),
+          ...result.groups.map(g => ({ ...g, isHighLevelCategory: false }))
+        ];
+        
+        res.json({ 
+          groups: allGroups,
+          highLevelCategories: result.highLevelCategories,
+          isMultiCategory: true
+        });
+      } else {
+        const result = await generateServiceGroups(businessName, categories[0], scope, city);
+        
+        // Return high-level category as the first group, followed by specific groups
+        const allGroups = [
+          { 
+            name: result.highLevelCategory.name, 
+            description: result.highLevelCategory.description,
+            isHighLevelCategory: true 
+          },
+          ...result.groups.map(g => ({ ...g, isHighLevelCategory: false }))
+        ];
+        
+        res.json({ 
+          groups: allGroups,
+          highLevelCategory: result.highLevelCategory,
+          isMultiCategory: false
+        });
+      }
     } catch (error) {
       console.error("Generate groups error:", error);
       res.status(500).json({ error: "Failed to generate groups" });
@@ -317,7 +349,7 @@ export async function registerRoutes(
   // This allows the frontend to then connect via EventSource (GET) for proper SSE
   app.post("/api/monitoring/scan-prepare", async (req, res) => {
     try {
-      const { client: clientData, groups, prompts } = req.body;
+      const { client: clientData, groups, prompts, targetCity } = req.body;
       
       // Validate client data upfront
       const validatedClient = monitoringClientRequestSchema.parse(clientData);
@@ -326,10 +358,12 @@ export async function registerRoutes(
       const prepareId = randomUUID();
       
       // Store config temporarily (will be consumed by SSE endpoint)
+      // targetCity determines which city this scan is for (for multi-city clients)
       pendingScanConfigs.set(prepareId, {
         client: validatedClient,
         groups: groups || [],
         prompts: prompts || [],
+        targetCity: targetCity || validatedClient.city || undefined,
         createdAt: Date.now(),
       });
       
@@ -380,7 +414,10 @@ export async function registerRoutes(
     let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 
     try {
-      const { client: validatedClient, groups, prompts } = config;
+      const { client: validatedClient, groups, prompts, targetCity } = config;
+      
+      // Determine the city for this scan - use targetCity if provided, else fall back to client's city
+      const scanCity = targetCity || validatedClient.city || undefined;
       
       // Send immediate heartbeat to confirm stream is active
       sendEvent("heartbeat", { message: "Stream connected" });
@@ -452,11 +489,11 @@ export async function registerRoutes(
         }
       }
       
-      // Generate and create brand sentiment prompts
+      // Generate and create brand sentiment prompts (use scanCity for location context)
       const brandSentimentPrompts = generateBrandSentimentPrompts(
         client.businessName,
         client.industry,
-        client.city || undefined
+        scanCity || client.city || undefined
       );
       promptsByGroup[brandSentimentGroupName] = [];
       for (const promptText of brandSentimentPrompts) {
@@ -478,9 +515,10 @@ export async function registerRoutes(
       // Calculate service-only prompt count for visibility scoring (exclude brand sentiment)
       const servicePromptCount = totalPrompts - (promptsByGroup[brandSentimentGroupName]?.length || 0);
       
-      // Create check session
+      // Create check session with city for multi-city tracking
       const session = await storage.createCheckSession({
         clientId: client.id,
+        city: scanCity || null, // Track which city this scan was for
         overallScore: 0,
         chatgptScore: 0,
         googleAIScore: 0,
@@ -527,7 +565,8 @@ export async function registerRoutes(
         competitors: string[];
       }> = {};
       
-      const location = client.city || undefined;
+      // Use scanCity (targetCity) for location context in AI queries
+      const location = scanCity || client.city || undefined;
       
       // Flatten all prompts with their group names and original indices for batch processing
       const allPromptsWithGroups: { 
@@ -895,9 +934,11 @@ export async function registerRoutes(
 
   // Rescan endpoint for existing clients - creates new session with fresh data
   // Step 1: Prepare rescan (returns prepareId)
+  // Accepts optional targetCity in request body for multi-city rescans
   app.post("/api/monitoring/rescan-prepare/:clientId", async (req, res) => {
     try {
       const clientId = parseInt(req.params.clientId);
+      const { targetCity } = req.body || {};
       
       const client = await storage.getMonitoringClientById(clientId);
       if (!client) {
@@ -924,15 +965,17 @@ export async function registerRoutes(
       const prepareId = randomUUID();
       
       // Store config temporarily with existing client data (only active groups/prompts)
+      // Include targetCity for multi-city support
       pendingRescanConfigs.set(prepareId, {
         clientId,
+        targetCity: targetCity || undefined,
         client,
         groups: activeGroups,
         prompts,
         createdAt: Date.now(),
       });
       
-      res.json({ prepareId, totalPrompts: prompts.length });
+      res.json({ prepareId, totalPrompts: prompts.length, targetCity: targetCity || null });
     } catch (error) {
       console.error("Rescan prepare error:", error);
       res.status(400).json({ 
@@ -978,7 +1021,10 @@ export async function registerRoutes(
     let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 
     try {
-      const { clientId, client, groups, prompts } = config;
+      const { clientId, targetCity, client, groups, prompts } = config;
+      
+      // Determine the city for this scan - use targetCity if provided, else fall back to client's city
+      const scanCity = targetCity || client.city || undefined;
       
       // Send immediate heartbeat to confirm stream is active
       sendEvent("heartbeat", { message: "Rescan stream connected" });
@@ -1002,9 +1048,10 @@ export async function registerRoutes(
         return;
       }
       
-      // Create new check session
+      // Create new check session with city for multi-city tracking
       const session = await storage.createCheckSession({
         clientId,
+        city: scanCity || null, // Track which city this scan was for
         overallScore: 0,
         chatgptScore: 0,
         googleAIScore: 0,
@@ -1015,8 +1062,8 @@ export async function registerRoutes(
       
       sendEvent("status", { message: "Running AI visibility checks...", progress: 10 });
       
-      // Run visibility checks with bounded concurrency (8 prompts at a time)
-      // Increased from 4 to 8 to offset GPT-5-mini's slower response time
+      // Run visibility checks with bounded concurrency (4 prompts at a time)
+      // Reduced from 8 to 4 to avoid rate limiting; retry logic handles transient failures
       const CONCURRENT_PROMPTS = 4;
       let foundCount = 0;
       let citedCount = 0;
@@ -1052,7 +1099,8 @@ export async function registerRoutes(
         competitors: string[];
       }> = {};
       
-      const location = client.city || undefined;
+      // Use scanCity (targetCity) for location context in AI queries
+      const location = scanCity || client.city || undefined;
       
       // Map prompts with their group names
       const promptsWithGroups = prompts.map((prompt, index) => {
