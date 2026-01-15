@@ -90,12 +90,20 @@ async function retryWithBackoff<T>(
       return await fn();
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
+      const errorType = lastError.message.includes("rate") || lastError.message.includes("429") 
+        ? "RATE_LIMIT" 
+        : lastError.message.includes("timeout") 
+          ? "TIMEOUT" 
+          : "API_ERROR";
       
       if (attempt < maxRetries) {
         // Exponential backoff: 10s, 20s, 30s
         const delayMs = baseDelayMs * (attempt + 1);
-        console.log(`Retry attempt ${attempt + 1}/${maxRetries} after ${delayMs/1000}s delay...`);
+        console.log(`[RETRY] Attempt ${attempt + 1}/${maxRetries} failed (${errorType}): ${lastError.message}`);
+        console.log(`[RETRY] Waiting ${delayMs/1000}s before next attempt...`);
         await new Promise(resolve => setTimeout(resolve, delayMs));
+      } else {
+        console.log(`[RETRY] All ${maxRetries} retries exhausted. Final error: ${lastError.message}`);
       }
     }
   }
@@ -719,13 +727,18 @@ export async function registerRoutes(
               
               return { ...item, result };
             } catch (error) {
-              console.error(`Error checking prompt "${item.prompt.text.slice(0, 50)}..." after retries:`, error);
+              const errMsg = error instanceof Error ? error.message : String(error);
+              const errStack = error instanceof Error ? error.stack : "";
+              console.error(`[PROMPT ERROR] Prompt ${item.originalIndex + 1}: "${item.prompt.text.slice(0, 50)}..."`);
+              console.error(`[PROMPT ERROR] Group: ${item.groupName}`);
+              console.error(`[PROMPT ERROR] Error: ${errMsg}`);
+              console.error(`[PROMPT ERROR] Stack: ${errStack}`);
               // Return a failed result instead of crashing the batch
               return { 
                 ...item, 
                 result: {
-                  chatgpt: { found: false, response: "Error: API call failed after retries", cited: false, citations: [] },
-                  googleAI: { found: false, response: "Error: API call failed after retries", cited: false, citations: [] },
+                  chatgpt: { found: false, response: `Error: ${errMsg}`, cited: false, citations: [] },
+                  googleAI: { found: false, response: `Error: ${errMsg}`, cited: false, citations: [] },
                   competitors: []
                 }
               };
@@ -992,10 +1005,17 @@ export async function registerRoutes(
       
       res.end();
     } catch (error) {
-      console.error("Scan stream error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+      const errorStack = error instanceof Error ? error.stack : String(error);
+      console.error("=== SCAN STREAM ERROR ===");
+      console.error("Error message:", errorMessage);
+      console.error("Error stack:", errorStack);
+      console.error("Scan context: prepareId =", prepareId);
+      console.error("=========================");
       if (heartbeatInterval) clearInterval(heartbeatInterval);
       sendEvent("error", { 
-        message: error instanceof Error ? error.message : "Unknown error occurred",
+        message: errorMessage,
+        details: errorStack,
       });
       res.end();
     }
@@ -1244,13 +1264,18 @@ export async function registerRoutes(
               
               return { ...item, result };
             } catch (error) {
-              console.error(`Error checking prompt "${item.prompt.promptText.slice(0, 50)}..." after retries:`, error);
+              const errMsg = error instanceof Error ? error.message : String(error);
+              const errStack = error instanceof Error ? error.stack : "";
+              console.error(`[RESCAN PROMPT ERROR] Prompt ${item.originalIndex + 1}: "${item.prompt.promptText.slice(0, 50)}..."`);
+              console.error(`[RESCAN PROMPT ERROR] Group: ${item.groupName}`);
+              console.error(`[RESCAN PROMPT ERROR] Error: ${errMsg}`);
+              console.error(`[RESCAN PROMPT ERROR] Stack: ${errStack}`);
               // Return a failed result instead of crashing the batch
               return { 
                 ...item, 
                 result: {
-                  chatgpt: { found: false, response: "Error: API call failed after retries", cited: false, citations: [] },
-                  googleAI: { found: false, response: "Error: API call failed after retries", cited: false, citations: [] },
+                  chatgpt: { found: false, response: `Error: ${errMsg}`, cited: false, citations: [] },
+                  googleAI: { found: false, response: `Error: ${errMsg}`, cited: false, citations: [] },
                   competitors: []
                 }
               };
@@ -1506,10 +1531,17 @@ export async function registerRoutes(
       
       res.end();
     } catch (error) {
-      console.error("Rescan stream error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+      const errorStack = error instanceof Error ? error.stack : String(error);
+      console.error("=== RESCAN STREAM ERROR ===");
+      console.error("Error message:", errorMessage);
+      console.error("Error stack:", errorStack);
+      console.error("Rescan context: prepareId =", prepareId);
+      console.error("===========================");
       if (heartbeatInterval) clearInterval(heartbeatInterval);
       sendEvent("error", { 
-        message: error instanceof Error ? error.message : "Unknown error occurred",
+        message: errorMessage,
+        details: errorStack,
       });
       res.end();
     }

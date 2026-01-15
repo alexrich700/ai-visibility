@@ -177,7 +177,7 @@ export default function MonitorDashboard() {
   const [selectedGroup, setSelectedGroup] = useState<string>("all");
   const [timeRange, setTimeRange] = useState<string>("30");
   const [trendView, setTrendView] = useState<"overall" | "groups" | "competitors">("overall");
-  const [selectedViewCity, setSelectedViewCity] = useState<string>(""); // Filter dashboard view by city
+  const [selectedViewCity, setSelectedViewCity] = useState<string>("all"); // Filter dashboard view by city
   const [selectedResult, setSelectedResult] = useState<CheckResult | null>(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportStartDate, setExportStartDate] = useState(() => {
@@ -194,7 +194,7 @@ export default function MonitorDashboard() {
   const [scanProgress, setScanProgress] = useState(0);
   const [scanStatus, setScanStatus] = useState("");
   const [scanSubStatus, setScanSubStatus] = useState("");
-  const [selectedScanCity, setSelectedScanCity] = useState<string>(""); // Selected city for next scan
+  const [selectedScanCity, setSelectedScanCity] = useState<string>("all"); // Selected city for next scan
   const eventSourceRef = useRef<EventSource | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -223,7 +223,7 @@ export default function MonitorDashboard() {
       const prepareResponse = await fetch(`/api/monitoring/rescan-prepare/${clientId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetCity: selectedScanCity || undefined }),
+        body: JSON.stringify({ targetCity: selectedScanCity === "all" ? undefined : selectedScanCity }),
       });
       
       if (!prepareResponse.ok) {
@@ -388,7 +388,7 @@ export default function MonitorDashboard() {
   const { client, groups, sessions, latestResults, resultsByGroup, analytics, trendData } = data;
 
   // Filter sessions by selected city if multi-city client and city is selected
-  const filteredSessions = selectedViewCity 
+  const filteredSessions = selectedViewCity && selectedViewCity !== "all"
     ? sessions.filter(s => (s as any).city === selectedViewCity)
     : sessions;
 
@@ -398,12 +398,12 @@ export default function MonitorDashboard() {
   
   // Filter latestResults to only include results from the selected city's session
   // This ensures all scorecard metrics are based on the filtered session
-  const cityFilteredResults = selectedViewCity && latestSession
+  const cityFilteredResults = selectedViewCity && selectedViewCity !== "all" && latestSession
     ? latestResults.filter(r => r.sessionId === latestSession.id)
     : latestResults;
   
   // Filter resultsByGroup similarly for city filtering
-  const cityFilteredResultsByGroup = selectedViewCity && latestSession
+  const cityFilteredResultsByGroup = selectedViewCity && selectedViewCity !== "all" && latestSession
     ? resultsByGroup.map(g => ({
         ...g,
         results: g.results.filter(r => r.sessionId === latestSession.id)
@@ -579,7 +579,7 @@ export default function MonitorDashboard() {
                   <SelectValue placeholder="All cities" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All cities</SelectItem>
+                  <SelectItem value="all">All cities</SelectItem>
                   {client.cities.map((cityName: string) => (
                     <SelectItem key={cityName} value={cityName}>
                       {cityName}
@@ -597,7 +597,7 @@ export default function MonitorDashboard() {
               data-testid="button-refresh"
             >
               <RefreshCw className={`w-4 h-4 ${isScanning ? "animate-spin" : ""}`} />
-              {isScanning ? "Scanning..." : (selectedScanCity ? `Scan ${selectedScanCity}` : "Run New Scan")}
+              {isScanning ? "Scanning..." : (selectedScanCity && selectedScanCity !== "all" ? `Scan ${selectedScanCity}` : "Run New Scan")}
             </Button>
             <Button
               variant="outline"
@@ -668,7 +668,7 @@ export default function MonitorDashboard() {
                       <SelectValue placeholder="All cities (latest scan)" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All cities (latest overall scan)</SelectItem>
+                      <SelectItem value="all">All cities (latest overall scan)</SelectItem>
                       {client.cities.map((cityName: string) => (
                         <SelectItem key={cityName} value={cityName}>
                           {cityName} only
