@@ -1160,20 +1160,27 @@ export async function generateServiceGroups(
   const locationContext = scope === "local" && city ? ` in ${city}` : "";
   
   const systemPrompt = `You are an expert marketing strategist specializing in service/product categorization for AI visibility tracking. Your task is to:
-1. Identify ONE high-level category (umbrella term) that best describes the business type
+1. Identify ONE high-level category (umbrella term) that best describes the PRIMARY business type
 2. Generate exactly 10 distinct service/product groups that represent specific offerings
+
+# CRITICAL: SINGLE-FOCUS CATEGORIES ONLY
+- The high-level category must be ONE SPECIFIC service type - NEVER combine multiple services
+- If the business lists multiple services (e.g., "plumbing, heating, and cooling"), pick the FIRST or PRIMARY one
+- DO NOT use combined terms like "HVAC & Plumbing" or "Heating and Cooling" - pick just ONE
+- Examples of CORRECT single-focus categories: "Plumber", "HVAC Contractor", "AC Repair Company", "Electrician"
+- Examples of WRONG combined categories: "HVAC & Plumbing", "Heating and Cooling", "Plumbing and Electrical"
 
 # High-Level Category Guidelines
 - This is the broadest, most common search term for this type of business
-- 1-3 words maximum
+- 1-3 words maximum, focusing on ONE service type
 - What someone would search if they just needed "any" provider of this type
 - Examples: "HVAC Contractor", "Plumber", "Marketing Agency", "Personal Injury Lawyer", "Handyman", "Electrician", "Dentist"
 
 # Service Group Guidelines
 - Generate granular, search-intent-focused groups (how real customers would search)
-- Each group should represent a distinct, searchable service or product category
-- Include variations customers actually use (e.g., "heater repair" not just "HVAC repair")
-- Groups should cover the full spectrum of typical offerings for this industry
+- Each group should represent ONE distinct, searchable service - NOT combined services
+- Include variations customers actually use (e.g., "Heater Repair" not just "HVAC Repair")
+- Each group name should be a SINGLE specific service, not multiple services combined
 - Names should be 1-4 words, matching natural search language
 
 # CRITICAL: DO NOT USE THESE GENERIC TERMS
@@ -1191,24 +1198,24 @@ Instead, use SPECIFIC, SEARCHABLE service names like:
 
 # Output Format
 Return a JSON object with:
-- "highLevelCategory": object with "name" and "description" fields
-- "groups": array of exactly 10 objects, each with "name" and "description" fields
+- "highLevelCategory": object with "name" and "description" fields (SINGLE service type only)
+- "groups": array of exactly 10 objects, each with "name" and "description" fields (each focused on ONE service)
 
 # Examples
 
-For a "plumbing, heating, and cooling" business:
+For a "plumbing, heating, and cooling" business (pick PRIMARY service - plumbing):
 {
-  "highLevelCategory": {"name": "HVAC & Plumbing Contractor", "description": "Heating, cooling, and plumbing services"},
+  "highLevelCategory": {"name": "Plumber", "description": "Professional plumbing services"},
   "groups": [
-    {"name": "AC Repair", "description": "Air conditioning system repairs and troubleshooting"},
-    {"name": "AC Installation", "description": "New air conditioning system installations"},
-    {"name": "Heater Repair", "description": "Furnace and heating system repairs"},
-    {"name": "Furnace Installation", "description": "New furnace and heating system installations"},
     {"name": "Drain Cleaning", "description": "Clogged drain and sewer line cleaning"},
     {"name": "Water Heater Repair", "description": "Water heater troubleshooting and repairs"},
+    {"name": "Water Heater Installation", "description": "New water heater installations"},
     {"name": "Plumbing Leak Repair", "description": "Pipe leak detection and repair services"},
     {"name": "Toilet Repair", "description": "Toilet installation and repair services"},
-    {"name": "Duct Cleaning", "description": "Air duct cleaning and indoor air quality services"},
+    {"name": "Faucet Repair", "description": "Faucet installation and repair"},
+    {"name": "Sewer Line Repair", "description": "Sewer line inspection and repair"},
+    {"name": "Garbage Disposal Repair", "description": "Garbage disposal installation and repair"},
+    {"name": "Sump Pump Installation", "description": "Sump pump installation and repair"},
     {"name": "Emergency Plumber", "description": "24/7 emergency plumbing services"}
   ]
 }
@@ -1266,7 +1273,11 @@ For a personal injury law firm:
 
   const userPrompt = `Generate the high-level category and exactly 10 service/product groups for "${businessName}", a ${industry} business${locationContext}.
 
-IMPORTANT: Each group name must be a SPECIFIC, SEARCHABLE service that real customers would type into an AI assistant. Do NOT use generic terms like "Core Services" or "Specialty Services" - use actual service names like "Drain Cleaning", "AC Repair", "Roof Leak Repair", etc.`;
+CRITICAL REQUIREMENTS:
+1. The high-level category must be ONE SINGLE service type (e.g., "Plumber" or "HVAC Contractor") - NEVER combine services like "HVAC & Plumbing"
+2. If multiple services are listed in the industry, pick the FIRST/PRIMARY one only
+3. Each group name must be a SPECIFIC, SEARCHABLE service that real customers would type into an AI assistant
+4. Do NOT use generic terms like "Core Services" or "Specialty Services" - use actual service names like "Drain Cleaning", "AC Repair", "Roof Leak Repair", etc.`;
 
   async function attemptGeneration(isRetry: boolean = false): Promise<ServiceGroupsResult> {
     const response = await openai.chat.completions.create({
