@@ -344,6 +344,9 @@ export async function registerRoutes(
       res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`);
     };
 
+    // Heartbeat interval to keep SSE connection alive (declared here so catch can clean up)
+    let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+
     try {
       const { client: validatedClient, groups, prompts } = config;
       
@@ -526,11 +529,19 @@ export async function registerRoutes(
         };
       }
       
+      // Setup heartbeat interval to keep SSE connection alive (every 15 seconds)
+      heartbeatInterval = setInterval(() => {
+        if (isClientConnected) {
+          sendEvent("heartbeat", { timestamp: Date.now(), completedCount, totalPrompts });
+        }
+      }, 15000);
+      
       // Process prompts in concurrent batches
       for (let i = 0; i < allPromptsWithGroups.length; i += CONCURRENT_PROMPTS) {
         // Exit early if client disconnected
         if (!isClientConnected) {
           console.log("Scan cancelled - client disconnected");
+          clearInterval(heartbeatInterval);
           return;
         }
         
@@ -547,26 +558,40 @@ export async function registerRoutes(
           });
         }
         
-        // Run all prompts in this batch concurrently
+        // Run all prompts in this batch concurrently with per-prompt error handling
         const batchResults = await Promise.all(
           batch.map(async (item) => {
             if (!isClientConnected) return null;
             
-            const result = await runPromptCheck(
-              item.prompt.text,
-              client.businessName,
-              client.domain,
-              location,
-              client.brandAliases || undefined
-            );
-            
-            return { ...item, result };
+            try {
+              const result = await runPromptCheck(
+                item.prompt.text,
+                client.businessName,
+                client.domain,
+                location,
+                client.brandAliases || undefined
+              );
+              
+              return { ...item, result };
+            } catch (error) {
+              console.error(`Error checking prompt "${item.prompt.text.slice(0, 50)}...":`, error);
+              // Return a failed result instead of crashing the batch
+              return { 
+                ...item, 
+                result: {
+                  chatgpt: { found: false, response: "Error: API call failed", cited: false, citations: [] },
+                  googleAI: { found: false, response: "Error: API call failed", cited: false, citations: [] },
+                  competitors: []
+                }
+              };
+            }
           })
         );
         
         // Exit early if client disconnected during batch
         if (!isClientConnected) {
           console.log("Scan cancelled - client disconnected during batch");
+          clearInterval(heartbeatInterval);
           return;
         }
         
@@ -692,8 +717,12 @@ export async function registerRoutes(
       // Exit early if client disconnected
       if (!isClientConnected) {
         console.log("Scan cancelled - client disconnected");
+        clearInterval(heartbeatInterval);
         return;
       }
+      
+      // Clear heartbeat now that processing is complete
+      clearInterval(heartbeatInterval);
       
       // Calculate final scores (using service prompt count, excluding brand sentiment)
       const overallScore = servicePromptCount > 0 ? Math.round((foundCount / servicePromptCount) * 100) : 0;
@@ -819,6 +848,7 @@ export async function registerRoutes(
       res.end();
     } catch (error) {
       console.error("Scan stream error:", error);
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
       sendEvent("error", { 
         message: error instanceof Error ? error.message : "Unknown error occurred",
       });
@@ -906,6 +936,9 @@ export async function registerRoutes(
       if (!isClientConnected) return;
       res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`);
     };
+
+    // Heartbeat interval to keep SSE connection alive (declared here so catch can clean up)
+    let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 
     try {
       const { clientId, client, groups, prompts } = config;
@@ -1011,10 +1044,18 @@ export async function registerRoutes(
         };
       }
       
+      // Setup heartbeat interval to keep SSE connection alive (every 15 seconds)
+      heartbeatInterval = setInterval(() => {
+        if (isClientConnected) {
+          sendEvent("heartbeat", { timestamp: Date.now(), completedCount, totalPrompts });
+        }
+      }, 15000);
+      
       // Process prompts in concurrent batches
       for (let i = 0; i < promptsWithGroups.length; i += CONCURRENT_PROMPTS) {
         if (!isClientConnected) {
           console.log("Rescan cancelled - client disconnected");
+          clearInterval(heartbeatInterval);
           return;
         }
         
@@ -1031,25 +1072,39 @@ export async function registerRoutes(
           });
         }
         
-        // Run all prompts in this batch concurrently
+        // Run all prompts in this batch concurrently with per-prompt error handling
         const batchResults = await Promise.all(
           batch.map(async (item) => {
             if (!isClientConnected) return null;
             
-            const result = await runPromptCheck(
-              item.prompt.promptText,
-              client.businessName,
-              client.domain,
-              location,
-              client.brandAliases || undefined
-            );
-            
-            return { ...item, result };
+            try {
+              const result = await runPromptCheck(
+                item.prompt.promptText,
+                client.businessName,
+                client.domain,
+                location,
+                client.brandAliases || undefined
+              );
+              
+              return { ...item, result };
+            } catch (error) {
+              console.error(`Error checking prompt "${item.prompt.promptText.slice(0, 50)}...":`, error);
+              // Return a failed result instead of crashing the batch
+              return { 
+                ...item, 
+                result: {
+                  chatgpt: { found: false, response: "Error: API call failed", cited: false, citations: [] },
+                  googleAI: { found: false, response: "Error: API call failed", cited: false, citations: [] },
+                  competitors: []
+                }
+              };
+            }
           })
         );
         
         if (!isClientConnected) {
           console.log("Rescan cancelled - client disconnected during batch");
+          clearInterval(heartbeatInterval);
           return;
         }
         
@@ -1165,8 +1220,12 @@ export async function registerRoutes(
       
       if (!isClientConnected) {
         console.log("Rescan cancelled - client disconnected");
+        clearInterval(heartbeatInterval);
         return;
       }
+      
+      // Clear heartbeat now that processing is complete
+      clearInterval(heartbeatInterval);
       
       // Calculate final scores (using service prompt count, excluding brand sentiment)
       const overallScore = servicePromptCount > 0 ? Math.round((foundCount / servicePromptCount) * 100) : 0;
@@ -1292,6 +1351,7 @@ export async function registerRoutes(
       res.end();
     } catch (error) {
       console.error("Rescan stream error:", error);
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
       sendEvent("error", { 
         message: error instanceof Error ? error.message : "Unknown error occurred",
       });
