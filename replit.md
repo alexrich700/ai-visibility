@@ -59,11 +59,15 @@ AI queries are processed with bounded concurrency (8 simultaneous prompts) and p
 
 ### Analytics Dashboard
 The monitoring dashboard provides:
--   **Share of Voice**: Compares brand vs. competitor mention frequency.
--   **Citation Sources**: Tracks and displays top domains cited by AI platforms.
+-   **City-Filtered Analytics**: All dashboard metrics are dynamically recalculated based on selected city filter:
+    - "All Cities" aggregates latest session per city (scores averaged, competitors combined top 5)
+    - Specific city selection shows only that city's session data
+    - Frontend computes analytics from city-filtered results using helper functions: `computeCompetitorVisibility`, `computeShareOfVoice`, `computeTopCitations`, `computeSentimentMetrics`
+-   **Share of Voice**: Compares brand vs. competitor mention frequency (from service results only).
+-   **Citation Sources**: Tracks and displays top domains cited by AI platforms (from service results only).
 -   **Prominence Tracking**: Measures average mention rank and "first place" recommendations.
--   **Sentiment Analysis**: Provides a numerical 0-100 sentiment score and AI-synthesized narratives (strengths and improvements) based on brand mentions.
--   **Competitor Visibility**: Identifies and tracks top 5 competitors, filtering out city names.
+-   **Sentiment Analysis**: Provides a numerical 0-100 sentiment score and AI-synthesized narratives (strengths and improvements) based on brand sentiment prompts.
+-   **Competitor Visibility**: Identifies and tracks top 5 competitors, filtering out city names (from service results only).
 -   **Response Viewer**: Allows detailed viewing of AI responses with brand highlighting.
 -   **Historical Trending**: Stores session-level metrics for trend analysis, including overall visibility, group-specific visibility, and competitor visibility over time, presented in tabbed charts.
 -   **Platform Visibility**: Shows per-platform visibility percentages for ChatGPT and Google AI.
