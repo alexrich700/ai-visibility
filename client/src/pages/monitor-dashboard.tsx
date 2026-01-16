@@ -466,7 +466,9 @@ export default function MonitorDashboard() {
       const totalCities = citiesToScan.length;
       let totalScore = 0;
       
-      // Scan each city sequentially
+      // Scan each city sequentially with individual error handling
+      const cityResults: { city: string | undefined; success: boolean; score: number }[] = [];
+      
       for (let i = 0; i < citiesToScan.length; i++) {
         const targetCity = citiesToScan[i];
         const cityIndex = i + 1;
@@ -476,16 +478,42 @@ export default function MonitorDashboard() {
           setScanStatus(`Scanning ${targetCity} (${cityIndex}/${totalCities})`);
         }
         
-        const result = await runSingleCityRescan(targetCity, cityIndex, totalCities);
-        totalScore += result.overallScore;
+        try {
+          const result = await runSingleCityRescan(targetCity, cityIndex, totalCities);
+          totalScore += result.overallScore;
+          cityResults.push({ city: targetCity, success: true, score: result.overallScore });
+        } catch (cityError) {
+          // Log error but continue to next city
+          console.error(`Scan failed for city ${targetCity}:`, cityError);
+          cityResults.push({ city: targetCity, success: false, score: 0 });
+          // Brief pause before next city to avoid rapid reconnection
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
       }
       
-      // All cities scanned successfully
+      // Check if any cities failed
+      const failedCities = cityResults.filter(r => !r.success);
+      const successCities = cityResults.filter(r => r.success);
+      
+      if (failedCities.length > 0 && failedCities.length < totalCities) {
+        // Some cities failed, some succeeded - show partial success message
+        toast({
+          title: "Partial Scan Complete",
+          description: `${successCities.length}/${totalCities} cities scanned successfully. Failed: ${failedCities.map(c => c.city || 'National').join(', ')}`,
+          variant: "default",
+        });
+      } else if (failedCities.length === totalCities) {
+        // All cities failed - throw error to trigger the catch block
+        throw new Error("All city scans failed. Please check your connection and try again.");
+      }
+      
+      // All cities scanned (or at least some succeeded)
       setScanProgress(100);
-      setScanStatus("Scan Complete!");
-      const avgScore = Math.round(totalScore / totalCities);
-      setScanSubStatus(totalCities > 1 
-        ? `Scanned ${totalCities} cities. Average Score: ${avgScore}%`
+      setScanStatus(failedCities.length > 0 ? "Scan Partially Complete" : "Scan Complete!");
+      // Calculate average score only from successful cities
+      const avgScore = successCities.length > 0 ? Math.round(totalScore / successCities.length) : 0;
+      setScanSubStatus(successCities.length > 1 
+        ? `Scanned ${successCities.length} cities. Average Score: ${avgScore}%`
         : `Overall Score: ${avgScore}%`
       );
       isScanningRef.current = false;
