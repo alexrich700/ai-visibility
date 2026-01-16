@@ -1823,6 +1823,27 @@ export async function registerRoutes(
         activeGroups.filter(g => (g as any).promptCategory === 'brand_sentiment').map(g => g.id)
       );
       
+      // Calculate service prompt count for running score calculation (excluding brand sentiment)
+      const servicePromptCount = allPrompts.filter(p => 
+        p.isActive && activeGroupIds.has(p.groupId) && !brandSentimentGroupIds.has(p.groupId)
+      ).length;
+      
+      // Initialize running counts from previously completed results (existingResults already fetched above)
+      let runningFoundCount = 0;
+      let runningCitedCount = 0;
+      let runningChatgptFoundCount = 0;
+      let runningGoogleAIFoundCount = 0;
+      
+      for (const res of existingResults) {
+        const isBrandSentiment = brandSentimentGroupIds.has(res.groupId);
+        if (!isBrandSentiment) {
+          if (res.chatgptFound || res.googleAIFound) runningFoundCount++;
+          if (res.chatgptCited || res.googleAICited) runningCitedCount++;
+          if (res.chatgptFound) runningChatgptFoundCount++;
+          if (res.googleAIFound) runningGoogleAIFoundCount++;
+        }
+      }
+      
       // Run remaining prompts with bounded concurrency
       const CONCURRENT_PROMPTS = 4;
       let currentCompleted = completedCount;
@@ -1952,13 +1973,33 @@ export async function registerRoutes(
             // Continue processing - storage failure shouldn't crash the scan
           }
           
-          // Update checkpoint
+          // Update running counts (exclude brand sentiment prompts from visibility scoring)
+          const isBrandSentiment = brandSentimentGroupIds.has(prompt.groupId);
+          if (!isBrandSentiment) {
+            if (result.chatgpt.found || result.googleAI.found) runningFoundCount++;
+            if (result.chatgpt.cited || result.googleAI.cited) runningCitedCount++;
+            if (result.chatgpt.found) runningChatgptFoundCount++;
+            if (result.googleAI.found) runningGoogleAIFoundCount++;
+          }
+          
+          // Update checkpoint with running scores
+          // Also save running scores so partial scans show accurate data
           try {
+            const runningOverallScore = servicePromptCount > 0 ? Math.round((runningFoundCount / servicePromptCount) * 100) : 0;
+            const runningChatgptScore = servicePromptCount > 0 ? Math.round((runningChatgptFoundCount / servicePromptCount) * 100) : 0;
+            const runningGoogleAIScore = servicePromptCount > 0 ? Math.round((runningGoogleAIFoundCount / servicePromptCount) * 100) : 0;
+            
             await storage.updateCheckSession(sessionId, {
               lastCompletedPromptIndex: currentCompleted,
               status: 'running',
+              // Save running counts and scores for accurate partial data
+              foundCount: runningFoundCount,
+              citedCount: runningCitedCount,
+              overallScore: runningOverallScore,
+              chatgptScore: runningChatgptScore,
+              googleAIScore: runningGoogleAIScore,
             });
-            console.log(`[Checkpoint] Resume session ${sessionId}: Saved checkpoint at prompt ${currentCompleted}/${totalPromptsInSession}`);
+            console.log(`[Checkpoint] Resume session ${sessionId}: Saved checkpoint at prompt ${currentCompleted}/${totalPromptsInSession} (score: ${runningOverallScore}%)`);
           } catch (checkpointError) {
             console.error(`[Checkpoint] Failed to save resume checkpoint for session ${sessionId}:`, checkpointError);
           }
@@ -1976,50 +2017,31 @@ export async function registerRoutes(
       
       if (heartbeatInterval) clearInterval(heartbeatInterval);
       
-      // All remaining prompts completed - recalculate session scores
+      // All remaining prompts completed - calculate final scores from running counts
       sendEvent("status", { message: "Calculating final scores...", progress: 97 });
       
-      // Get all results for this session (including previously completed)
-      const allResults = await storage.getCheckResultsBySessionId(sessionId);
-      
-      // Calculate scores (excluding brand sentiment prompts)
-      let foundCount = 0;
-      let citedCount = 0;
-      let chatgptFoundCount = 0;
-      let googleAIFoundCount = 0;
-      
-      for (const result of allResults) {
-        const isBrandSentiment = brandSentimentGroupIds.has(result.groupId);
-        if (!isBrandSentiment) {
-          if (result.chatgptFound || result.googleAIFound) foundCount++;
-          if (result.chatgptCited || result.googleAICited) citedCount++;
-          if (result.chatgptFound) chatgptFoundCount++;
-          if (result.googleAIFound) googleAIFoundCount++;
-        }
-      }
-      
-      const servicePromptCount = allResults.filter(r => !brandSentimentGroupIds.has(r.groupId)).length;
-      const overallScore = servicePromptCount > 0 ? Math.round((foundCount / servicePromptCount) * 100) : 0;
-      const chatgptScore = servicePromptCount > 0 ? Math.round((chatgptFoundCount / servicePromptCount) * 100) : 0;
-      const googleAIScore = servicePromptCount > 0 ? Math.round((googleAIFoundCount / servicePromptCount) * 100) : 0;
+      // Use running counts (already accumulated from existing + new results)
+      const finalOverallScore = servicePromptCount > 0 ? Math.round((runningFoundCount / servicePromptCount) * 100) : 0;
+      const finalChatgptScore = servicePromptCount > 0 ? Math.round((runningChatgptFoundCount / servicePromptCount) * 100) : 0;
+      const finalGoogleAIScore = servicePromptCount > 0 ? Math.round((runningGoogleAIFoundCount / servicePromptCount) * 100) : 0;
       
       // Update session with final scores
       await storage.updateCheckSession(sessionId, {
         status: 'complete',
-        overallScore,
-        chatgptScore,
-        googleAIScore,
-        foundCount,
-        citedCount,
+        overallScore: finalOverallScore,
+        chatgptScore: finalChatgptScore,
+        googleAIScore: finalGoogleAIScore,
+        foundCount: runningFoundCount,
+        citedCount: runningCitedCount,
         lastCompletedPromptIndex: totalPromptsInSession,
       } as any);
       
       sendEvent("complete", { 
         clientId: client.id, 
         sessionId,
-        overallScore,
-        chatgptScore,
-        googleAIScore,
+        overallScore: finalOverallScore,
+        chatgptScore: finalChatgptScore,
+        googleAIScore: finalGoogleAIScore,
         progress: 100,
       });
       
