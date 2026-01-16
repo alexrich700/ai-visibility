@@ -170,6 +170,191 @@ function MetricInfo({ tooltip, id }: { tooltip: string; id: string }) {
   );
 }
 
+// Helper functions to recalculate analytics from city-filtered results
+function computeCompetitorVisibility(results: CheckResult[], businessName: string): CompetitorVisibility[] {
+  const competitorCounts: Record<string, number> = {};
+  const totalPrompts = results.length;
+  
+  results.forEach(result => {
+    if (result.competitors) {
+      try {
+        const competitors = JSON.parse(result.competitors);
+        if (Array.isArray(competitors)) {
+          competitors.forEach((comp: string) => {
+            const normalizedComp = comp.trim();
+            if (normalizedComp && normalizedComp.toLowerCase() !== businessName.toLowerCase()) {
+              competitorCounts[normalizedComp] = (competitorCounts[normalizedComp] || 0) + 1;
+            }
+          });
+        }
+      } catch (e) {
+        // Invalid JSON, skip
+      }
+    }
+  });
+  
+  return Object.entries(competitorCounts)
+    .map(([name, mentionCount]) => ({
+      name,
+      mentionCount,
+      visibilityPercent: totalPrompts > 0 ? Math.round((mentionCount / totalPrompts) * 1000) / 10 : 0
+    }))
+    .sort((a, b) => b.visibilityPercent - a.visibilityPercent)
+    .slice(0, 5);
+}
+
+function computeShareOfVoice(results: CheckResult[], businessName: string): ShareOfVoiceItem[] {
+  const totalPrompts = results.length;
+  if (totalPrompts === 0) return [];
+  
+  // Count brand mentions
+  const brandMentions = results.filter(r => r.chatgptFound || r.googleAIFound).length;
+  
+  // Count competitor mentions
+  const competitorCounts: Record<string, number> = {};
+  results.forEach(result => {
+    if (result.competitors) {
+      try {
+        const competitors = JSON.parse(result.competitors);
+        if (Array.isArray(competitors)) {
+          competitors.forEach((comp: string) => {
+            const normalizedComp = comp.trim();
+            if (normalizedComp && normalizedComp.toLowerCase() !== businessName.toLowerCase()) {
+              competitorCounts[normalizedComp] = (competitorCounts[normalizedComp] || 0) + 1;
+            }
+          });
+        }
+      } catch (e) {
+        // Invalid JSON, skip
+      }
+    }
+  });
+  
+  // Calculate total mentions
+  const competitorTotalMentions = Object.values(competitorCounts).reduce((sum, c) => sum + c, 0);
+  const totalMentions = brandMentions + competitorTotalMentions;
+  
+  if (totalMentions === 0) return [];
+  
+  // Build share of voice array
+  const shareOfVoice: ShareOfVoiceItem[] = [
+    {
+      name: businessName,
+      mentionCount: brandMentions,
+      percentage: Math.round((brandMentions / totalMentions) * 100)
+    }
+  ];
+  
+  // Add top competitors
+  Object.entries(competitorCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .forEach(([name, count]) => {
+      shareOfVoice.push({
+        name,
+        mentionCount: count,
+        percentage: Math.round((count / totalMentions) * 100)
+      });
+    });
+  
+  return shareOfVoice;
+}
+
+function computeTopCitations(results: CheckResult[]): Citation[] {
+  const citationCounts: Record<string, number> = {};
+  
+  results.forEach(result => {
+    // Process ChatGPT citations
+    if (result.chatgptCitations) {
+      try {
+        const citations = result.chatgptCitations as { url?: string; domain?: string }[];
+        if (Array.isArray(citations)) {
+          citations.forEach((cit) => {
+            const domain = cit.domain || (cit.url ? new URL(cit.url).hostname : null);
+            if (domain) {
+              citationCounts[domain] = (citationCounts[domain] || 0) + 1;
+            }
+          });
+        }
+      } catch (e) {
+        // Invalid JSON, skip
+      }
+    }
+    
+    // Process Google AI citations
+    if (result.googleAICitations) {
+      try {
+        const citations = result.googleAICitations as { url?: string; domain?: string }[];
+        if (Array.isArray(citations)) {
+          citations.forEach((cit) => {
+            const domain = cit.domain || (cit.url ? new URL(cit.url).hostname : null);
+            if (domain) {
+              citationCounts[domain] = (citationCounts[domain] || 0) + 1;
+            }
+          });
+        }
+      } catch (e) {
+        // Invalid JSON, skip
+      }
+    }
+  });
+  
+  return Object.entries(citationCounts)
+    .map(([domain, count]) => ({ domain, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
+}
+
+function computeSentimentMetrics(results: CheckResult[]): {
+  sentimentScore: number | null;
+  sentimentBreakdown: { positive: number; neutral: number; negative: number };
+  firstPlaceCount: number;
+} {
+  let positiveCount = 0;
+  let neutralCount = 0;
+  let negativeCount = 0;
+  let sentimentScoreSum = 0;
+  let sentimentScoreCount = 0;
+  let firstPlaceCount = 0;
+  
+  results.forEach(result => {
+    // Count sentiment categories
+    if (result.chatgptSentiment === 'positive') positiveCount++;
+    else if (result.chatgptSentiment === 'neutral') neutralCount++;
+    else if (result.chatgptSentiment === 'negative') negativeCount++;
+    
+    if (result.googleAISentiment === 'positive') positiveCount++;
+    else if (result.googleAISentiment === 'neutral') neutralCount++;
+    else if (result.googleAISentiment === 'negative') negativeCount++;
+    
+    // Sum sentiment scores
+    if (result.chatgptSentimentScore != null) {
+      sentimentScoreSum += result.chatgptSentimentScore;
+      sentimentScoreCount++;
+    }
+    if (result.googleAISentimentScore != null) {
+      sentimentScoreSum += result.googleAISentimentScore;
+      sentimentScoreCount++;
+    }
+    
+    // Count first place rankings
+    if (result.chatgptRank === 1) firstPlaceCount++;
+    if (result.googleAIRank === 1) firstPlaceCount++;
+  });
+  
+  const totalSentiments = positiveCount + neutralCount + negativeCount;
+  
+  return {
+    sentimentScore: sentimentScoreCount > 0 ? Math.round(sentimentScoreSum / sentimentScoreCount) : null,
+    sentimentBreakdown: {
+      positive: totalSentiments > 0 ? Math.round((positiveCount / totalSentiments) * 100) : 0,
+      neutral: totalSentiments > 0 ? Math.round((neutralCount / totalSentiments) * 100) : 0,
+      negative: totalSentiments > 0 ? Math.round((negativeCount / totalSentiments) * 100) : 0
+    },
+    firstPlaceCount
+  };
+}
+
 export default function MonitorDashboard() {
   const [, params] = useRoute("/monitor/dashboard/:id");
   const [, setLocation] = useLocation();
@@ -665,6 +850,30 @@ export default function MonitorDashboard() {
   const latestSession = filteredSessions[0];
   const previousSession = filteredSessions[1];
   
+  // For "All Cities" mode, aggregate scores from latest session per city
+  // Get unique cities and their latest sessions for aggregation
+  // Sort sessions by createdAt desc first to ensure we get the latest per city
+  const sortedSessions = [...sessions].sort((a, b) => 
+    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+  const latestSessionPerCity = isSpecificCitySelected ? null : (() => {
+    const citySessionMap = new Map<string | null, typeof sessions[0]>();
+    for (const session of sortedSessions) {
+      const city = (session as any).city || null;
+      if (!citySessionMap.has(city)) {
+        citySessionMap.set(city, session);
+      }
+    }
+    return Array.from(citySessionMap.values());
+  })();
+  
+  // Calculate aggregated scores for "All Cities" mode
+  const aggregatedScores = latestSessionPerCity && latestSessionPerCity.length > 0 ? {
+    overallScore: Math.round(latestSessionPerCity.reduce((sum, s) => sum + (s.overallScore || 0), 0) / latestSessionPerCity.length),
+    chatgptScore: Math.round(latestSessionPerCity.reduce((sum, s) => sum + (s.chatgptScore || 0), 0) / latestSessionPerCity.length),
+    googleAIScore: Math.round(latestSessionPerCity.reduce((sum, s) => sum + (s.googleAIScore || 0), 0) / latestSessionPerCity.length),
+  } : null;
+  
   // Filter latestResults to only include results from the selected city's session
   // IMPORTANT: When a specific city is selected but has no sessions, return empty array (not all results)
   const cityFilteredResults = isSpecificCitySelected
@@ -698,12 +907,13 @@ export default function MonitorDashboard() {
   const brandSentimentResults = cityFilteredResults.filter(r => brandSentimentGroupIds.has(r.groupId));
   const brandSentimentGroups = cityFilteredResultsByGroup.filter(g => g.promptCategory === 'brand_sentiment');
   
-  const overallScore = latestSession?.overallScore ?? 0;
-  const chatgptScore = latestSession?.chatgptScore ?? 0;
-  const googleAIScore = latestSession?.googleAIScore ?? 0;
+  // Use aggregated scores for "All Cities" mode, otherwise use single session scores
+  const overallScore = aggregatedScores?.overallScore ?? latestSession?.overallScore ?? 0;
+  const chatgptScore = aggregatedScores?.chatgptScore ?? latestSession?.chatgptScore ?? 0;
+  const googleAIScore = aggregatedScores?.googleAIScore ?? latestSession?.googleAIScore ?? 0;
   
   const scoreDelta = previousSession 
-    ? overallScore - previousSession.overallScore 
+    ? (latestSession?.overallScore ?? 0) - previousSession.overallScore 
     : 0;
 
   // Calculate visibility metrics from service results only (excluding brand sentiment)
@@ -736,6 +946,14 @@ export default function MonitorDashboard() {
   const avgRank = allRanks.length > 0 
     ? Math.round((allRanks.reduce((a, b) => a + b, 0) / allRanks.length) * 10) / 10
     : null;
+  
+  // Recalculate analytics from city-filtered results instead of using API analytics
+  // Use serviceResultsOnly for competitor/share-of-voice/citations (excluding brand sentiment)
+  const computedCompetitorVisibility = computeCompetitorVisibility(serviceResultsOnly, client.businessName);
+  const computedShareOfVoice = computeShareOfVoice(serviceResultsOnly, client.businessName);
+  const computedTopCitations = computeTopCitations(serviceResultsOnly);
+  // Use brandSentimentResults for sentiment metrics
+  const computedSentimentMetrics = computeSentimentMetrics(brandSentimentResults);
 
   // Prepare chart data - use filtered sessions
   const sessionChartData = filteredSessions.slice().reverse().map((session) => ({
@@ -1295,211 +1513,203 @@ export default function MonitorDashboard() {
         </div>
 
         {/* Analytics Row */}
-        {analytics && (
-          <div className="grid md:grid-cols-4 gap-4">
-            {/* Share of Voice */}
-            <Card className="shadow-2xl shadow-blue-900/5">
-              <CardHeader className="pb-2">
-                <div className="flex items-center gap-2">
-                  <Users className="w-4 h-4 text-[#5599f9]" />
-                  <CardTitle className="text-sm font-bold tracking-tight flex items-center">
-                    Share of Voice
-                    <MetricInfo tooltip={METRIC_TOOLTIPS.shareOfVoice} id="share-of-voice" />
-                  </CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                {analytics.shareOfVoice.length > 0 ? (
-                  <div className="space-y-2">
-                    {analytics.shareOfVoice
-                      .slice(0, 5)
-                      .map((item) => {
-                        const isClient = item.name.toLowerCase() === client.businessName.toLowerCase();
-                        return (
-                          <div key={item.name} className="space-y-1">
-                            <div className="flex items-center justify-between text-sm">
-                              <span className={`truncate max-w-[120px] ${isClient ? "font-bold text-[#5599f9]" : "text-gray-700"}`}>
-                                {isClient ? "You" : item.name}
-                              </span>
-                              <span className={`${isClient ? "font-bold text-[#5599f9]" : "text-gray-500"}`}>
-                                {item.percentage}%
-                              </span>
-                            </div>
-                            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                              <div 
-                                className={`h-full rounded-full ${isClient ? "bg-[#5599f9]" : "bg-gray-300"}`}
-                                style={{ width: `${Math.min(item.percentage, 100)}%` }}
-                              />
-                            </div>
+        <div className="grid md:grid-cols-4 gap-4">
+          {/* Share of Voice */}
+          <Card className="shadow-2xl shadow-blue-900/5">
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-[#5599f9]" />
+                <CardTitle className="text-sm font-bold tracking-tight flex items-center">
+                  Share of Voice
+                  <MetricInfo tooltip={METRIC_TOOLTIPS.shareOfVoice} id="share-of-voice" />
+                </CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {computedShareOfVoice.length > 0 ? (
+                <div className="space-y-2">
+                  {computedShareOfVoice
+                    .slice(0, 5)
+                    .map((item) => {
+                      const isClient = item.name.toLowerCase() === client.businessName.toLowerCase();
+                      return (
+                        <div key={item.name} className="space-y-1">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className={`truncate max-w-[120px] ${isClient ? "font-bold text-[#5599f9]" : "text-gray-700"}`}>
+                              {isClient ? "You" : item.name}
+                            </span>
+                            <span className={`${isClient ? "font-bold text-[#5599f9]" : "text-gray-500"}`}>
+                              {item.percentage}%
+                            </span>
                           </div>
-                        );
-                      })}
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-500">No competitor data yet</p>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Top Citations */}
-            <Card className="shadow-2xl shadow-blue-900/5">
-              <CardHeader className="pb-2">
-                <div className="flex items-center gap-2">
-                  <Link2 className="w-4 h-4 text-[#ffb41c]" />
-                  <CardTitle className="text-sm font-bold tracking-tight flex items-center">
-                    Top Citations
-                    <MetricInfo tooltip={METRIC_TOOLTIPS.topCitations} id="top-citations" />
-                  </CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                {analytics.topCitations.length > 0 ? (
-                  <div className="space-y-2">
-                    {analytics.topCitations.slice(0, 5).map((citation: { domain: string; count: number }, index: number) => (
-                      <div key={index} className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <span className="text-xs text-gray-400 flex-shrink-0">{index + 1}.</span>
-                          <a 
-                            href={`https://${citation.domain}`} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-sm text-[#5599f9] hover:underline truncate"
-                            data-testid={`link-citation-${index}`}
-                          >
-                            {citation.domain}
-                          </a>
+                          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div 
+                              className={`h-full rounded-full ${isClient ? "bg-[#5599f9]" : "bg-gray-300"}`}
+                              style={{ width: `${Math.min(item.percentage, 100)}%` }}
+                            />
+                          </div>
                         </div>
-                        <Badge variant="secondary" className="text-xs flex-shrink-0">
-                          {citation.count}
-                        </Badge>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-500">No citations found</p>
-                )}
-              </CardContent>
-            </Card>
+                      );
+                    })}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500">No competitor data yet</p>
+              )}
+            </CardContent>
+          </Card>
 
-            {/* Prominence */}
-            <Card className="shadow-2xl shadow-blue-900/5">
-              <CardHeader className="pb-2">
-                <div className="flex items-center gap-2">
-                  <Award className="w-4 h-4 text-green-500" />
-                  <CardTitle className="text-sm font-bold tracking-tight flex items-center">
-                    Prominence
-                    <MetricInfo tooltip={METRIC_TOOLTIPS.prominence} id="prominence" />
-                  </CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0 space-y-3">
-                <div>
-                  <p className="text-xs text-gray-500 uppercase tracking-wider">Average Position</p>
-                  <div className="flex items-baseline gap-1 mt-1">
-                    <span className="text-2xl font-bold text-gray-900">
-                      {analytics.avgChatgptRank || analytics.avgGoogleAIRank 
-                        ? Math.round(
-                            ((analytics.avgChatgptRank || 0) + (analytics.avgGoogleAIRank || 0)) / 
-                            ((analytics.avgChatgptRank ? 1 : 0) + (analytics.avgGoogleAIRank ? 1 : 0))
-                          )
-                        : "-"}
-                    </span>
-                    {(analytics.avgChatgptRank || analytics.avgGoogleAIRank) && (
-                      <span className="text-sm text-gray-500">avg rank</span>
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 uppercase tracking-wider">First Choice</p>
-                  <div className="flex items-baseline gap-1 mt-1">
-                    <span className="text-2xl font-bold text-[#ffb41c]">{analytics.firstPlaceCount}</span>
-                    <span className="text-sm text-gray-500">times ranked #1</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Sentiment Score */}
-            <Card className="shadow-2xl shadow-blue-900/5">
-              <CardHeader className="pb-2">
-                <div className="flex items-center gap-2">
-                  <ThumbsUp className="w-4 h-4 text-green-500" />
-                  <CardTitle className="text-sm font-bold tracking-tight flex items-center">
-                    Sentiment Score
-                    <MetricInfo tooltip={METRIC_TOOLTIPS.sentimentScore} id="sentiment-score" />
-                  </CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                {analytics.sentimentScore !== null ? (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-4">
-                      <div className={`text-4xl font-bold ${
-                        analytics.sentimentScore >= 70 ? 'text-green-500' : 
-                        analytics.sentimentScore >= 40 ? 'text-[#ffb41c]' : 
-                        'text-red-500'
-                      }`}>
-                        {analytics.sentimentScore}
+          {/* Top Citations */}
+          <Card className="shadow-2xl shadow-blue-900/5">
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <Link2 className="w-4 h-4 text-[#ffb41c]" />
+                <CardTitle className="text-sm font-bold tracking-tight flex items-center">
+                  Top Citations
+                  <MetricInfo tooltip={METRIC_TOOLTIPS.topCitations} id="top-citations" />
+                </CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {computedTopCitations.length > 0 ? (
+                <div className="space-y-2">
+                  {computedTopCitations.slice(0, 5).map((citation, index) => (
+                    <div key={index} className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <span className="text-xs text-gray-400 flex-shrink-0">{index + 1}.</span>
+                        <a 
+                          href={`https://${citation.domain}`} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-sm text-[#5599f9] hover:underline truncate"
+                          data-testid={`link-citation-${index}`}
+                        >
+                          {citation.domain}
+                        </a>
                       </div>
-                      <div className="flex-1">
-                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                          <div 
-                            className={`h-full rounded-full transition-all ${
-                              analytics.sentimentScore >= 70 ? 'bg-green-500' : 
-                              analytics.sentimentScore >= 40 ? 'bg-[#ffb41c]' : 
-                              'bg-red-500'
-                            }`}
-                            style={{ width: `${analytics.sentimentScore}%` }}
-                          />
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {analytics.sentimentScore >= 70 ? 'Positive perception' : 
-                           analytics.sentimentScore >= 40 ? 'Mixed perception' : 
-                           'Needs improvement'}
-                        </p>
-                      </div>
+                      <Badge variant="secondary" className="text-xs flex-shrink-0">
+                        {citation.count}
+                      </Badge>
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-gray-500">
-                      <div className="flex items-center gap-1">
-                        <ThumbsUp className="w-3 h-3 text-green-500" />
-                        <span>{analytics.sentimentBreakdown.positive}%</span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500">No citations found</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Prominence */}
+          <Card className="shadow-2xl shadow-blue-900/5">
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <Award className="w-4 h-4 text-green-500" />
+                <CardTitle className="text-sm font-bold tracking-tight flex items-center">
+                  Prominence
+                  <MetricInfo tooltip={METRIC_TOOLTIPS.prominence} id="prominence" />
+                </CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0 space-y-3">
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wider">Average Position</p>
+                <div className="flex items-baseline gap-1 mt-1">
+                  <span className="text-2xl font-bold text-gray-900">
+                    {avgRank !== null ? avgRank : "-"}
+                  </span>
+                  {avgRank !== null && (
+                    <span className="text-sm text-gray-500">avg rank</span>
+                  )}
+                </div>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wider">First Choice</p>
+                <div className="flex items-baseline gap-1 mt-1">
+                  <span className="text-2xl font-bold text-[#ffb41c]">{computedSentimentMetrics.firstPlaceCount}</span>
+                  <span className="text-sm text-gray-500">times ranked #1</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Sentiment Score */}
+          <Card className="shadow-2xl shadow-blue-900/5">
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <ThumbsUp className="w-4 h-4 text-green-500" />
+                <CardTitle className="text-sm font-bold tracking-tight flex items-center">
+                  Sentiment Score
+                  <MetricInfo tooltip={METRIC_TOOLTIPS.sentimentScore} id="sentiment-score" />
+                </CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {computedSentimentMetrics.sentimentScore !== null ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-4">
+                    <div className={`text-4xl font-bold ${
+                      computedSentimentMetrics.sentimentScore >= 70 ? 'text-green-500' : 
+                      computedSentimentMetrics.sentimentScore >= 40 ? 'text-[#ffb41c]' : 
+                      'text-red-500'
+                    }`}>
+                      {computedSentimentMetrics.sentimentScore}
+                    </div>
+                    <div className="flex-1">
+                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full rounded-full transition-all ${
+                            computedSentimentMetrics.sentimentScore >= 70 ? 'bg-green-500' : 
+                            computedSentimentMetrics.sentimentScore >= 40 ? 'bg-[#ffb41c]' : 
+                            'bg-red-500'
+                          }`}
+                          style={{ width: `${computedSentimentMetrics.sentimentScore}%` }}
+                        />
                       </div>
-                      <div className="flex items-center gap-1">
-                        <Meh className="w-3 h-3 text-gray-400" />
-                        <span>{analytics.sentimentBreakdown.neutral}%</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <ThumbsDown className="w-3 h-3 text-red-500" />
-                        <span>{analytics.sentimentBreakdown.negative}%</span>
-                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {computedSentimentMetrics.sentimentScore >= 70 ? 'Positive perception' : 
+                         computedSentimentMetrics.sentimentScore >= 40 ? 'Mixed perception' : 
+                         'Needs improvement'}
+                      </p>
                     </div>
                   </div>
-                ) : (
-                  <p className="text-sm text-gray-500">No sentiment data yet</p>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        )}
+                  <div className="flex items-center gap-3 text-xs text-gray-500">
+                    <div className="flex items-center gap-1">
+                      <ThumbsUp className="w-3 h-3 text-green-500" />
+                      <span>{computedSentimentMetrics.sentimentBreakdown.positive}%</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Meh className="w-3 h-3 text-gray-400" />
+                      <span>{computedSentimentMetrics.sentimentBreakdown.neutral}%</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <ThumbsDown className="w-3 h-3 text-red-500" />
+                      <span>{computedSentimentMetrics.sentimentBreakdown.negative}%</span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500">No sentiment data yet</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Competitor Visibility + Sentiment Statements Row */}
-        {analytics && (
-          <div className="grid md:grid-cols-2 gap-4">
-            {/* Competitor Visibility */}
-            <Card className="shadow-2xl shadow-blue-900/5">
-              <CardHeader className="pb-2">
-                <div className="flex items-center gap-2">
-                  <Building2 className="w-4 h-4 text-[#5599f9]" />
-                  <CardTitle className="text-sm font-bold tracking-tight flex items-center">
-                    Competitor Visibility
-                    <MetricInfo tooltip={METRIC_TOOLTIPS.competitorVisibility} id="competitor-visibility" />
-                  </CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                {analytics.competitorVisibility && analytics.competitorVisibility.length > 0 ? (
-                  <div className="space-y-3">
-                    {analytics.competitorVisibility.map((competitor, index) => (
+        <div className="grid md:grid-cols-2 gap-4">
+          {/* Competitor Visibility */}
+          <Card className="shadow-2xl shadow-blue-900/5">
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-[#5599f9]" />
+                <CardTitle className="text-sm font-bold tracking-tight flex items-center">
+                  Competitor Visibility
+                  <MetricInfo tooltip={METRIC_TOOLTIPS.competitorVisibility} id="competitor-visibility" />
+                </CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {computedCompetitorVisibility.length > 0 ? (
+                <div className="space-y-3">
+                  {computedCompetitorVisibility.map((competitor, index) => (
                       <div key={index} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
                         <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
                           <span className="text-xs font-bold text-gray-600">{index + 1}</span>
@@ -1523,7 +1733,6 @@ export default function MonitorDashboard() {
             </Card>
 
           </div>
-        )}
 
         {/* Key Sentiment Drivers - Two Column Layout (SEMRush Style) */}
         {analytics && (analytics.sentimentNarratives?.strengths?.length || analytics.sentimentNarratives?.improvements?.length) ? (

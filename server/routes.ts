@@ -2086,10 +2086,25 @@ export async function registerRoutes(
       const groups = await storage.getGroupsByClientId(clientId);
       const sessions = await storage.getCheckSessionsByClientId(clientId);
       
-      // Get results from the latest session (if any)
+      // For multi-city clients, get results from the latest session per city
+      // This allows "All Cities" view to aggregate data from all cities
       let latestResults: any[] = [];
       if (sessions.length > 0) {
-        latestResults = await storage.getCheckResultsBySessionId(sessions[0].id);
+        // Group sessions by city and get the latest session for each city
+        const latestSessionPerCity = new Map<string | null, typeof sessions[0]>();
+        for (const session of sessions) {
+          const city = (session as any).city || null;
+          if (!latestSessionPerCity.has(city)) {
+            latestSessionPerCity.set(city, session);
+          }
+        }
+        
+        // Fetch results from all latest city sessions
+        const latestCitySessions = Array.from(latestSessionPerCity.values());
+        for (const session of latestCitySessions) {
+          const sessionResults = await storage.getCheckResultsBySessionId(session.id);
+          latestResults.push(...sessionResults);
+        }
       }
       
       // Group results by group (include promptCategory for filtering brand sentiment)
