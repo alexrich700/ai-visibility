@@ -895,12 +895,24 @@ export async function registerRoutes(
           }
           
           // Update checkpoint after each prompt to enable resume
+          // Also save running scores so partial scans show accurate data
           try {
+            // Calculate running scores based on service prompts completed so far
+            const runningOverallScore = servicePromptCount > 0 ? Math.round((foundCount / servicePromptCount) * 100) : 0;
+            const runningChatgptScore = servicePromptCount > 0 ? Math.round((chatgptFoundCount / servicePromptCount) * 100) : 0;
+            const runningGoogleAIScore = servicePromptCount > 0 ? Math.round((googleAIFoundCount / servicePromptCount) * 100) : 0;
+            
             await storage.updateCheckSession(session.id, {
               lastCompletedPromptIndex: completedCount,
-              status: 'running', // Ensure status stays 'running' during scan
+              status: 'running',
+              // Save running counts and scores for accurate partial data
+              foundCount,
+              citedCount,
+              overallScore: runningOverallScore,
+              chatgptScore: runningChatgptScore,
+              googleAIScore: runningGoogleAIScore,
             });
-            console.log(`[Checkpoint] Session ${session.id}: Saved checkpoint at prompt ${completedCount}/${totalPrompts}`);
+            console.log(`[Checkpoint] Session ${session.id}: Saved checkpoint at prompt ${completedCount}/${totalPrompts} (score: ${runningOverallScore}%)`);
           } catch (checkpointError) {
             console.error(`[Checkpoint] Failed to save checkpoint for session ${session.id}:`, checkpointError);
             // Continue processing - checkpoint failure shouldn't stop the scan
@@ -1490,12 +1502,24 @@ export async function registerRoutes(
           }
           
           // Update checkpoint after each prompt to enable resume
+          // Also save running scores so partial scans show accurate data
           try {
+            // Calculate running scores based on service prompts completed so far
+            const runningOverallScore = servicePromptCount > 0 ? Math.round((foundCount / servicePromptCount) * 100) : 0;
+            const runningChatgptScore = servicePromptCount > 0 ? Math.round((chatgptFoundCount / servicePromptCount) * 100) : 0;
+            const runningGoogleAIScore = servicePromptCount > 0 ? Math.round((googleAIFoundCount / servicePromptCount) * 100) : 0;
+            
             await storage.updateCheckSession(session.id, {
               lastCompletedPromptIndex: completedCount,
               status: 'running',
+              // Save running counts and scores for accurate partial data
+              foundCount,
+              citedCount,
+              overallScore: runningOverallScore,
+              chatgptScore: runningChatgptScore,
+              googleAIScore: runningGoogleAIScore,
             });
-            console.log(`[Checkpoint] Rescan session ${session.id}: Saved checkpoint at prompt ${completedCount}/${totalPrompts}`);
+            console.log(`[Checkpoint] Rescan session ${session.id}: Saved checkpoint at prompt ${completedCount}/${totalPrompts} (score: ${runningOverallScore}%)`);
           } catch (checkpointError) {
             console.error(`[Checkpoint] Failed to save rescan checkpoint for session ${session.id}:`, checkpointError);
           }
