@@ -47,10 +47,15 @@ AI queries are processed with bounded concurrency (8 simultaneous prompts) and p
 -   **Real-time Progress Streaming**: Uses Server-Sent Events (SSE) for live updates during scans, including group progress, prompt status, and early termination on client disconnect.
 -   **Resilient Scan System**: Implements checkpoint/resume architecture for long-running scans:
     - Sessions created at scan start with 'running' status and track progress incrementally
-    - Checkpoint updated after each prompt completion (lastCompletedPromptIndex)
+    - Checkpoint updated after each prompt completion with running scores (foundCount, overallScore, chatgptScore, googleAIScore)
+    - Incremental score updates ensure partial/interrupted scans display accurate data, not 0%
     - Auto-reconnection on connection drops with exponential backoff (1s, 2s, 4s, 8s, 16s up to 5 attempts)
     - Resume endpoint (`/api/monitoring/resume-stream/:sessionId`) continues from last checkpoint
     - Partial results preserved even if scan fails to complete
+-   **Multi-City Resilience**: Individual city scans wrapped in try-catch blocks so failures don't block remaining cities:
+    - If one city fails, loop continues to scan remaining cities
+    - Partial success toast shown when some cities complete but others fail
+    - Average score calculated only from successful cities
 
 ### Analytics Dashboard
 The monitoring dashboard provides:
