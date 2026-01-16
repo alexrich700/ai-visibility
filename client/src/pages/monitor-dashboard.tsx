@@ -416,14 +416,10 @@ export default function MonitorDashboard() {
           eventSource.onerror = () => {
             eventSource.close();
             eventSourceRef.current = null;
-            
-            const sessionId = activeSessionIdRef.current;
-            if (sessionId && isScanningRef.current) {
-              // Try to resume this city's scan
-              attemptResume(sessionId, 0);
-            } else {
-              reject(new Error("Connection lost during scan"));
-            }
+            activeSessionIdRef.current = null;
+            // For multi-city scans, connection loss fails the current city
+            // User can retry the scan for remaining cities
+            reject(new Error("Connection lost during scan. Please try again."));
           };
         } catch (error) {
           reject(error);
@@ -452,9 +448,20 @@ export default function MonitorDashboard() {
     
     try {
       // Determine which cities to scan
-      const citiesToScan: (string | undefined)[] = selectedScanCity === "all" && data.client.cities && data.client.cities.length > 1
-        ? data.client.cities
-        : [selectedScanCity === "all" ? undefined : selectedScanCity];
+      // If "all" selected and client has multiple cities, scan all of them
+      // Otherwise scan the single selected city (or undefined for national/single-city clients)
+      let citiesToScan: (string | undefined)[];
+      if (selectedScanCity === "all") {
+        if (data.client.cities && data.client.cities.length > 0) {
+          citiesToScan = data.client.cities;
+        } else if (data.client.city) {
+          citiesToScan = [data.client.city];
+        } else {
+          citiesToScan = [undefined]; // National scope or no city configured
+        }
+      } else {
+        citiesToScan = [selectedScanCity];
+      }
       
       const totalCities = citiesToScan.length;
       let totalScore = 0;

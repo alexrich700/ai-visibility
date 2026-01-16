@@ -471,25 +471,19 @@ export default function MonitorSetup() {
             }
           };
           
-          eventSource.onerror = async () => {
-            console.error("EventSource error - attempting to reconnect...");
+          eventSource.onerror = () => {
+            console.error("EventSource error during city scan");
             eventSource.close();
             eventSourceRef.current = null;
+            activeSessionIdRef.current = null;
             
             if (!isMountedRef.current) {
               return;
             }
             
-            if (activeSessionIdRef.current) {
-              const reconnected = await attemptReconnect();
-              if (reconnected) {
-                return;
-              }
-            }
-            
-            if (!isReconnectingRef.current && isMountedRef.current) {
-              reject(new Error("Connection lost during scan"));
-            }
+            // For multi-city scans, connection loss fails gracefully
+            // User can resume the incomplete scan from the dashboard
+            reject(new Error("Connection lost during scan. Progress has been saved."));
           };
         } catch (error) {
           reject(error);
