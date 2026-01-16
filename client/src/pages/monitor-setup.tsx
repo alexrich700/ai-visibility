@@ -110,6 +110,11 @@ export default function MonitorSetup() {
   const [isScanning, setIsScanning] = useState(false);
   const [createdClientId, setCreatedClientId] = useState<number | null>(null);
   
+  // Multi-city scan tracking
+  const [currentScanCityIndex, setCurrentScanCityIndex] = useState(0);
+  const [totalScanCities, setTotalScanCities] = useState(0);
+  const [currentScanCity, setCurrentScanCity] = useState<string | null>(null);
+  
   // EventSource ref for cleanup on unmount
   const eventSourceRef = useRef<EventSource | null>(null);
   
@@ -344,103 +349,205 @@ export default function MonitorSetup() {
     },
   });
 
-  // Run scan with streaming progress updates using EventSource
-  const runScanWithStreaming = async () => {
-    setIsScanning(true);
-    const activeGroups = groups.filter(g => g.isActive);
-    
-    try {
-      // Step 1: Prepare the scan (POST with data)
-      // For initial setup, use first city as targetCity if multiple cities
-      const targetCity = scope === "local" ? (cities.length > 0 ? cities[0] : city) : undefined;
-      const prepareResponse = await fetch("/api/monitoring/scan-prepare", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          client: {
-            businessName,
-            domain,
-            industry: primaryCategories.length > 0 ? primaryCategories[0] : industry,
-            scope,
-            city: targetCity, // Legacy single city
-            cities: scope === "local" && cities.length > 0 ? cities : undefined, // Multiple cities
-            primaryCategories: primaryCategories.length > 0 ? primaryCategories : undefined, // Multiple categories
-            checkFrequencyDays,
-          },
-          groups: activeGroups.map(g => ({
-            name: g.name,
-            description: g.description,
-            isHighLevelCategory: g.isHighLevelCategory || false,
-          })),
-          prompts: prompts.filter(p => activeGroups.some(g => g.id === p.groupId)).map(p => ({
-            groupName: activeGroups.find(g => g.id === p.groupId)?.name,
-            text: p.text,
-          })),
-          targetCity, // Which city this initial scan is for
-        }),
-      });
-
-      if (!prepareResponse.ok) {
-        throw new Error("Failed to prepare scan");
-      }
-
-      const { prepareId } = await prepareResponse.json();
-
-      // Step 2: Connect to SSE stream using EventSource (GET request)
-      // Close any existing EventSource before creating a new one
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-      }
+  // Run a single city scan - returns Promise that resolves when complete
+  const runSingleCityScan = (targetCity: string | undefined, cityIndex: number, totalCities: number): Promise<{ clientId: number; overallScore: number }> => {
+    return new Promise((resolve, reject) => {
+      const activeGroups = groups.filter(g => g.isActive);
       
-      const eventSource = new EventSource(`/api/monitoring/scan-stream/${prepareId}`);
-      eventSourceRef.current = eventSource;
+      // Update city tracking
+      setCurrentScanCity(targetCity || null);
+      setCurrentScanCityIndex(cityIndex);
+      setTotalScanCities(totalCities);
       
-      eventSource.onmessage = (event) => {
+      const prepareScan = async () => {
         try {
-          const data = JSON.parse(event.data);
-          handleStreamEvent(data);
+          const prepareResponse = await fetch("/api/monitoring/scan-prepare", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              client: {
+                businessName,
+                domain,
+                industry: primaryCategories.length > 0 ? primaryCategories[0] : industry,
+                scope,
+                city: targetCity,
+                cities: scope === "local" && cities.length > 0 ? cities : undefined,
+                primaryCategories: primaryCategories.length > 0 ? primaryCategories : undefined,
+                checkFrequencyDays,
+              },
+              groups: activeGroups.map(g => ({
+                name: g.name,
+                description: g.description,
+                isHighLevelCategory: g.isHighLevelCategory || false,
+              })),
+              prompts: prompts.filter(p => activeGroups.some(g => g.id === p.groupId)).map(p => ({
+                groupName: activeGroups.find(g => g.id === p.groupId)?.name,
+                text: p.text,
+              })),
+              targetCity,
+            }),
+          });
+
+          if (!prepareResponse.ok) {
+            throw new Error("Failed to prepare scan");
+          }
+
+          const { prepareId } = await prepareResponse.json();
+
+          // Close any existing EventSource before creating a new one
+          if (eventSourceRef.current) {
+            eventSourceRef.current.close();
+          }
           
-          // Close EventSource when scan is complete or errored
-          if (data.type === "complete" || data.type === "error") {
+          const eventSource = new EventSource(`/api/monitoring/scan-stream/${prepareId}`);
+          eventSourceRef.current = eventSource;
+          
+          eventSource.onmessage = (event) => {
+            try {
+              const data = JSON.parse(event.data);
+              
+              // Handle stream events for this city
+              switch (data.type) {
+                case "heartbeat":
+                  break;
+                case "session_created":
+                  if (data.sessionId) {
+                    activeSessionIdRef.current = data.sessionId;
+                  }
+                  if (data.clientId) {
+                    activeClientIdRef.current = data.clientId;
+                    setCreatedClientId(data.clientId);
+                  }
+                  reconnectAttemptsRef.current = 0;
+                  break;
+                case "status":
+                  setScanStatus(data.message || "");
+                  setScanSubStatus("");
+                  if (data.progress !== undefined) {
+                    // Adjust progress to account for multiple cities
+                    const cityProgress = data.progress;
+                    const overallProgress = Math.round(((cityIndex - 1) / totalCities) * 100 + (cityProgress / totalCities));
+                    setScanProgress(overallProgress);
+                  }
+                  break;
+                case "testing":
+                  setCurrentGroupName(data.groupName || "");
+                  setCurrentPromptIndex(data.promptIndex || 0);
+                  setTotalPrompts(data.totalPrompts || 0);
+                  setScanStatus(`Testing ${data.groupName}`);
+                  setScanSubStatus(data.promptText || "");
+                  if (data.progress !== undefined) {
+                    const cityProgress = data.progress;
+                    const overallProgress = Math.round(((cityIndex - 1) / totalCities) * 100 + (cityProgress / totalCities));
+                    setScanProgress(overallProgress);
+                  }
+                  break;
+                case "prompt_complete":
+                  if (data.progress !== undefined) {
+                    const cityProgress = data.progress;
+                    const overallProgress = Math.round(((cityIndex - 1) / totalCities) * 100 + (cityProgress / totalCities));
+                    setScanProgress(overallProgress);
+                  }
+                  break;
+                case "group_complete":
+                  break;
+                case "complete":
+                  eventSource.close();
+                  eventSourceRef.current = null;
+                  activeSessionIdRef.current = null;
+                  reconnectAttemptsRef.current = 0;
+                  resolve({ clientId: data.clientId, overallScore: data.overallScore });
+                  break;
+                case "error":
+                  eventSource.close();
+                  eventSourceRef.current = null;
+                  activeSessionIdRef.current = null;
+                  reconnectAttemptsRef.current = 0;
+                  reject(new Error(data.message || "Scan error"));
+                  break;
+              }
+            } catch (e) {
+              console.error("Failed to parse SSE event:", e);
+            }
+          };
+          
+          eventSource.onerror = async () => {
+            console.error("EventSource error - attempting to reconnect...");
             eventSource.close();
             eventSourceRef.current = null;
-          }
-        } catch (e) {
-          console.error("Failed to parse SSE event:", e);
+            
+            if (!isMountedRef.current) {
+              return;
+            }
+            
+            if (activeSessionIdRef.current) {
+              const reconnected = await attemptReconnect();
+              if (reconnected) {
+                return;
+              }
+            }
+            
+            if (!isReconnectingRef.current && isMountedRef.current) {
+              reject(new Error("Connection lost during scan"));
+            }
+          };
+        } catch (error) {
+          reject(error);
         }
       };
       
-      eventSource.onerror = async () => {
-        console.error("EventSource error - attempting to reconnect...");
-        eventSource.close();
-        eventSourceRef.current = null;
+      prepareScan();
+    });
+  };
+  
+  // Run scan for all cities with streaming progress updates
+  const runScanWithStreaming = async () => {
+    setIsScanning(true);
+    setScanProgress(0);
+    
+    try {
+      // Determine which cities to scan
+      const citiesToScan = scope === "local" && cities.length > 0 
+        ? cities 
+        : [city || undefined]; // Single city or no city for national scope
+      
+      const totalCities = citiesToScan.length;
+      let lastClientId: number | null = null;
+      let totalScore = 0;
+      
+      // Scan each city sequentially
+      for (let i = 0; i < citiesToScan.length; i++) {
+        const targetCity = citiesToScan[i];
+        const cityIndex = i + 1;
         
-        // Check if component was unmounted
-        if (!isMountedRef.current) {
-          console.log("[SSE] Component unmounted, not attempting reconnect");
-          return;
+        // Update status to show which city we're scanning
+        if (totalCities > 1) {
+          setScanStatus(`Scanning ${targetCity} (${cityIndex}/${totalCities})`);
         }
         
-        // Attempt auto-reconnect if we have a session ID
-        if (activeSessionIdRef.current) {
-          const reconnected = await attemptReconnect();
-          if (reconnected) {
-            return; // Successfully initiated reconnection
-          }
+        const result = await runSingleCityScan(targetCity, cityIndex, totalCities);
+        lastClientId = result.clientId;
+        totalScore += result.overallScore;
+      }
+      
+      // All cities scanned successfully
+      setScanProgress(100);
+      setScanStatus("All Scans Complete!");
+      const avgScore = Math.round(totalScore / totalCities);
+      setScanSubStatus(totalCities > 1 
+        ? `Scanned ${totalCities} cities. Average Score: ${avgScore}%`
+        : `Overall Score: ${avgScore}%`
+      );
+      setIsScanning(false);
+      setCurrentScanCity(null);
+      
+      // Redirect to dashboard after a short delay
+      setTimeout(() => {
+        if (lastClientId) {
+          setLocation(`/monitor/dashboard/${lastClientId}`);
         }
-        
-        // Only show error if reconnection failed or wasn't possible
-        if (!isReconnectingRef.current && isMountedRef.current) {
-          toast({
-            title: "Connection lost",
-            description: "Lost connection to the scan. Your progress has been saved.",
-            variant: "destructive",
-          });
-          setScanStatus("Disconnected");
-          setScanSubStatus("Progress saved. Resume from dashboard.");
-          setIsScanning(false);
-        }
-      };
+      }, 2000);
+      
     } catch (error) {
       toast({
         title: "Error running scan",
@@ -450,6 +557,7 @@ export default function MonitorSetup() {
       setScanProgress(0);
       setScanStatus("Failed");
       setIsScanning(false);
+      setCurrentScanCity(null);
     }
   };
 
