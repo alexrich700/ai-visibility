@@ -1290,10 +1290,39 @@ export async function registerRoutes(
       // Use scanCity (targetCity) for location context in AI queries
       const location = scanCity || client.city || undefined;
       
+      // Get all configured cities for city name substitution
+      // When scanning for a different city, we need to replace city names in prompts
+      const allCities = client.cities || (client.city ? [client.city] : []);
+      
+      // Helper to escape regex special characters in city names (e.g., "St. Paul" has a period)
+      const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      
+      // Sort cities by length (longest first) to avoid substring collisions
+      // e.g., "New York" should be replaced before "York" to avoid "New New York"
+      const sortedCities = [...allCities].sort((a, b) => b.length - a.length);
+      
       // Map prompts with their group names
+      // Substitute city names in prompts if scanning for a different city than what was originally configured
       const promptsWithGroups = prompts.map((prompt, index) => {
         const group = groups.find(g => g.id === prompt.groupId);
-        return { prompt, groupName: group?.name || "Unknown", originalIndex: index + 1 };
+        let promptText = prompt.promptText;
+        
+        // If we have a target city different from the original prompts, substitute city names
+        // This handles multi-city clients where prompts were generated with the first city
+        if (scanCity) {
+          for (const originalCity of sortedCities) {
+            if (originalCity !== scanCity && promptText.includes(originalCity)) {
+              const escapedCity = escapeRegex(originalCity);
+              promptText = promptText.replace(new RegExp(escapedCity, 'gi'), scanCity);
+            }
+          }
+        }
+        
+        return { 
+          prompt: { ...prompt, promptText }, 
+          groupName: group?.name || "Unknown", 
+          originalIndex: index + 1 
+        };
       });
       
       // Track per-group completion
@@ -1856,10 +1885,37 @@ export async function registerRoutes(
         }
       }, 5000);
       
+      // Get all configured cities for city name substitution
+      const allCities = client.cities || (client.city ? [client.city] : []);
+      const scanCity = targetSession.city || undefined;
+      
+      // Helper to escape regex special characters in city names (e.g., "St. Paul" has a period)
+      const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      
+      // Sort cities by length (longest first) to avoid substring collisions
+      const sortedCities = [...allCities].sort((a, b) => b.length - a.length);
+      
       // Map prompts with group names
+      // Substitute city names in prompts if scanning for a different city than what was originally configured
       const promptsWithGroups = remainingPrompts.map((prompt, index) => {
         const group = groups.find(g => g.id === prompt.groupId);
-        return { prompt, groupName: group?.name || "Unknown", originalIndex: completedCount + index + 1 };
+        let promptText = prompt.promptText;
+        
+        // If we have a target city different from the original prompts, substitute city names
+        if (scanCity) {
+          for (const originalCity of sortedCities) {
+            if (originalCity !== scanCity && promptText.includes(originalCity)) {
+              const escapedCity = escapeRegex(originalCity);
+              promptText = promptText.replace(new RegExp(escapedCity, 'gi'), scanCity);
+            }
+          }
+        }
+        
+        return { 
+          prompt: { ...prompt, promptText }, 
+          groupName: group?.name || "Unknown", 
+          originalIndex: completedCount + index + 1 
+        };
       });
       
       // Process remaining prompts

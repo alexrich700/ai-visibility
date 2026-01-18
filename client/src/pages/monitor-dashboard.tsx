@@ -263,6 +263,16 @@ function computeShareOfVoice(results: CheckResult[], businessName: string): Shar
 function computeTopCitations(results: CheckResult[]): Citation[] {
   const citationCounts: Record<string, number> = {};
   
+  // Filter out internal Google redirect URLs and other non-meaningful domains
+  const excludedDomains = [
+    'vertexaisearch.cloud.google.com',
+    'grounding-api-redirect',
+  ];
+  
+  const isDomainExcluded = (domain: string): boolean => {
+    return excludedDomains.some(excluded => domain.includes(excluded));
+  };
+  
   results.forEach(result => {
     // Process ChatGPT citations
     if (result.chatgptCitations) {
@@ -271,7 +281,7 @@ function computeTopCitations(results: CheckResult[]): Citation[] {
         if (Array.isArray(citations)) {
           citations.forEach((cit) => {
             const domain = cit.domain || (cit.url ? new URL(cit.url).hostname : null);
-            if (domain) {
+            if (domain && !isDomainExcluded(domain)) {
               citationCounts[domain] = (citationCounts[domain] || 0) + 1;
             }
           });
@@ -288,7 +298,7 @@ function computeTopCitations(results: CheckResult[]): Citation[] {
         if (Array.isArray(citations)) {
           citations.forEach((cit) => {
             const domain = cit.domain || (cit.url ? new URL(cit.url).hostname : null);
-            if (domain) {
+            if (domain && !isDomainExcluded(domain)) {
               citationCounts[domain] = (citationCounts[domain] || 0) + 1;
             }
           });
@@ -1512,52 +1522,9 @@ export default function MonitorDashboard() {
           </Card>
         </div>
 
-        {/* Analytics Row */}
-        <div className="grid md:grid-cols-4 gap-4">
-          {/* Share of Voice */}
-          <Card className="shadow-2xl shadow-blue-900/5">
-            <CardHeader className="pb-2">
-              <div className="flex items-center gap-2">
-                <Users className="w-4 h-4 text-[#5599f9]" />
-                <CardTitle className="text-sm font-bold tracking-tight flex items-center">
-                  Share of Voice
-                  <MetricInfo tooltip={METRIC_TOOLTIPS.shareOfVoice} id="share-of-voice" />
-                </CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-0">
-              {computedShareOfVoice.length > 0 ? (
-                <div className="space-y-2">
-                  {computedShareOfVoice
-                    .slice(0, 5)
-                    .map((item) => {
-                      const isClient = item.name.toLowerCase() === client.businessName.toLowerCase();
-                      return (
-                        <div key={item.name} className="space-y-1">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className={`truncate max-w-[120px] ${isClient ? "font-bold text-[#5599f9]" : "text-gray-700"}`}>
-                              {isClient ? "You" : item.name}
-                            </span>
-                            <span className={`${isClient ? "font-bold text-[#5599f9]" : "text-gray-500"}`}>
-                              {item.percentage}%
-                            </span>
-                          </div>
-                          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                            <div 
-                              className={`h-full rounded-full ${isClient ? "bg-[#5599f9]" : "bg-gray-300"}`}
-                              style={{ width: `${Math.min(item.percentage, 100)}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-500">No competitor data yet</p>
-              )}
-            </CardContent>
-          </Card>
-
+        {/* Analytics Grid - 2x2 Layout */}
+        <div className="grid md:grid-cols-2 gap-4">
+          {/* Row 1: Top Citations & Prominence */}
           {/* Top Citations */}
           <Card className="shadow-2xl shadow-blue-900/5">
             <CardHeader className="pb-2">
@@ -1691,10 +1658,8 @@ export default function MonitorDashboard() {
               )}
             </CardContent>
           </Card>
-        </div>
 
-        {/* Competitor Visibility + Sentiment Statements Row */}
-        <div className="grid md:grid-cols-2 gap-4">
+          {/* Row 2: Sentiment Score & Competitor Visibility */}
           {/* Competitor Visibility */}
           <Card className="shadow-2xl shadow-blue-900/5">
             <CardHeader className="pb-2">
@@ -1731,8 +1696,7 @@ export default function MonitorDashboard() {
                 )}
               </CardContent>
             </Card>
-
-          </div>
+        </div>
 
         {/* Key Sentiment Drivers - Two Column Layout (SEMRush Style) */}
         {analytics && (analytics.sentimentNarratives?.strengths?.length || analytics.sentimentNarratives?.improvements?.length) ? (
