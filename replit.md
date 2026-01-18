@@ -58,13 +58,15 @@ AI queries are processed with bounded concurrency (8 simultaneous prompts) and p
     - Average score calculated only from successful cities
 
 ### Analytics Dashboard
-The monitoring dashboard provides:
+The monitoring dashboard provides a 2x2 analytics grid:
 -   **City-Filtered Analytics**: All dashboard metrics are dynamically recalculated based on selected city filter:
     - "All Cities" aggregates latest session per city (scores averaged, competitors combined top 5)
     - Specific city selection shows only that city's session data
-    - Frontend computes analytics from city-filtered results using helper functions: `computeCompetitorVisibility`, `computeShareOfVoice`, `computeTopCitations`, `computeSentimentMetrics`
--   **Share of Voice**: Compares brand vs. competitor mention frequency (from service results only).
--   **Citation Sources**: Tracks and displays top domains cited by AI platforms (from service results only).
+    - Frontend computes analytics from city-filtered results using helper functions: `computeCompetitorVisibility`, `computeTopCitations`, `computeSentimentMetrics`
+-   **2x2 Analytics Grid Layout**:
+    - Row 1: Top Citations | Prominence
+    - Row 2: Sentiment Score | Competitor Visibility
+-   **Top Citations**: Tracks and displays top domains cited by AI platforms (from service results only). Filters out Google internal redirect URLs (vertexaisearch.cloud.google.com, grounding-api-redirect).
 -   **Prominence Tracking**: Measures average mention rank and "first place" recommendations.
 -   **Sentiment Analysis**: Provides a numerical 0-100 sentiment score and AI-synthesized narratives (strengths and improvements) based on brand sentiment prompts.
 -   **Competitor Visibility**: Identifies and tracks top 5 competitors, filtering out city names (from service results only).
@@ -72,6 +74,7 @@ The monitoring dashboard provides:
 -   **Historical Trending**: Stores session-level metrics for trend analysis, including overall visibility, group-specific visibility, and competitor visibility over time, presented in tabbed charts.
 -   **Platform Visibility**: Shows per-platform visibility percentages for ChatGPT and Google AI.
 -   **Data Export**: Allows exporting comprehensive audit data (summaries, raw results, metadata) in a ZIP format with date range filtering.
+-   **Prompt City Substitution**: When rescanning for a different city, prompts dynamically replace city names using regex escaping and length-sorted replacement to avoid substring collisions (e.g., "St. Paul" or "New York" vs "York").
 
 ### Data Layer
 -   **ORM**: Drizzle ORM with PostgreSQL.
