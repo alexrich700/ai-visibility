@@ -671,7 +671,19 @@ export async function registerRoutes(
       // Use scanCity (targetCity) for location context in AI queries
       const location = scanCity || client.city || undefined;
       
+      // Get all configured cities for city name substitution
+      // When scanning for a different city, we need to replace city names in prompts
+      const allCities = validatedClient.cities || (validatedClient.city ? [validatedClient.city] : []);
+      
+      // Helper to escape regex special characters in city names (e.g., "St. Paul" has a period)
+      const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      
+      // Sort cities by length (longest first) to avoid substring collisions
+      // e.g., "New York" should be replaced before "York" to avoid "New New York"
+      const sortedCities = [...allCities].sort((a, b) => b.length - a.length);
+      
       // Flatten all prompts with their group names and original indices for batch processing
+      // Apply city substitution if scanning for a different city than what prompts were generated with
       const allPromptsWithGroups: { 
         prompt: { id: number; groupId: number; text: string }; 
         groupName: string; 
@@ -682,7 +694,23 @@ export async function registerRoutes(
         const groupPrompts = promptsByGroup[groupName] || [];
         for (const prompt of groupPrompts) {
           idx++;
-          allPromptsWithGroups.push({ prompt, groupName, originalIndex: idx });
+          
+          // Substitute city names in prompts if scanning for a different city
+          let promptText = prompt.text;
+          if (scanCity) {
+            for (const originalCity of sortedCities) {
+              if (originalCity !== scanCity && promptText.includes(originalCity)) {
+                const escapedCity = escapeRegex(originalCity);
+                promptText = promptText.replace(new RegExp(escapedCity, 'gi'), scanCity);
+              }
+            }
+          }
+          
+          allPromptsWithGroups.push({ 
+            prompt: { ...prompt, text: promptText }, 
+            groupName, 
+            originalIndex: idx 
+          });
         }
       }
       
