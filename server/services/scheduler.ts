@@ -13,8 +13,6 @@ import {
   aggregateSentiment,
   calculateAverageRank,
   countFirstPlace,
-  calculateSentimentScore,
-  calculateOverallSentimentScore,
   aggregateSentimentStatements,
   computeCompetitorVisibility,
   collectBrandSentimentFindings,
@@ -185,8 +183,9 @@ async function runScheduledScan(clientId: number): Promise<void> {
           client.businessName
         );
 
-        const chatgptSentimentScore = calculateSentimentScore(result.chatgpt.response, client.businessName);
-        const googleAISentimentScore = calculateSentimentScore(result.googleAI.response, client.businessName);
+        // Sentiment scores removed - using categorical sentiment only
+        const chatgptSentimentScore = null;
+        const googleAISentimentScore = null;
 
         if (!isBrandSentiment) {
           allChatgptCitations.push(...chatgptAnalysis.citations);
@@ -244,11 +243,8 @@ async function runScheduledScan(clientId: number): Promise<void> {
     const avgGoogleAIRank = calculateAverageRank(allGoogleAIRanks);
     const firstPlaceCount = countFirstPlace(allChatgptRanks) + countFirstPlace(allGoogleAIRanks);
 
-    const allSentimentScores = storedResults
-      .filter(r => !r.isBrandSentiment)
-      .flatMap(r => [r.chatgptSentimentScore, r.googleAISentimentScore])
-      .filter((s): s is number => s !== null);
-    const sentimentScore = calculateOverallSentimentScore(allSentimentScores);
+    // Sentiment score calculation removed - using categorical sentiment only
+    const sentimentScore = null;
     const competitorVisibility = computeCompetitorVisibility(competitorCounts, servicePromptCount);
 
     const sentimentStatements = aggregateSentimentStatements(

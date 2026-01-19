@@ -15,8 +15,6 @@ import {
   aggregateSentiment,
   calculateAverageRank,
   countFirstPlace,
-  calculateSentimentScore,
-  calculateOverallSentimentScore,
   aggregateSentimentStatements,
   computeCompetitorVisibility,
   collectBrandSentimentFindings,
@@ -822,9 +820,9 @@ export async function registerRoutes(
           const chatgptAnalytics = analyzeResponse(result.chatgpt.response, client.businessName);
           const googleAIAnalytics = analyzeResponse(result.googleAI.response, client.businessName);
           
-          // Calculate numerical sentiment scores
-          const chatgptSentimentScore = calculateSentimentScore(result.chatgpt.response, client.businessName);
-          const googleAISentimentScore = calculateSentimentScore(result.googleAI.response, client.businessName);
+          // Sentiment scores removed - using categorical sentiment only
+          const chatgptSentimentScore = null;
+          const googleAISentimentScore = null;
           
           // Use API-extracted citations (with title info) if available, fallback to text-extracted
           const chatgptCitationsToStore = result.chatgpt.citations.length > 0 
@@ -989,11 +987,8 @@ export async function registerRoutes(
       const sentimentBreakdown = aggregateSentiment([...allChatgptSentiments, ...allGoogleAISentiments]);
       const topCitations = aggregateCitations([...allChatgptCitations, ...allGoogleAICitations]);
       
-      // Calculate overall sentiment score (0-100)
-      const allSentimentScores = storedResults
-        .flatMap(r => [r.chatgptSentimentScore, r.googleAISentimentScore])
-        .filter((s): s is number => s !== null);
-      const sentimentScore = calculateOverallSentimentScore(allSentimentScores);
+      // Sentiment score calculation removed - using categorical sentiment only
+      const sentimentScore = null;
       
       // Compute competitor visibility (using service prompts only)
       const competitorVisibility = computeCompetitorVisibility(competitorCounts, servicePromptCount, 5);
@@ -1465,9 +1460,9 @@ export async function registerRoutes(
           const chatgptAnalytics = analyzeResponse(result.chatgpt.response, client.businessName);
           const googleAIAnalytics = analyzeResponse(result.googleAI.response, client.businessName);
           
-          // Calculate sentiment scores
-          const chatgptSentimentScore = calculateSentimentScore(result.chatgpt.response, client.businessName);
-          const googleAISentimentScore = calculateSentimentScore(result.googleAI.response, client.businessName);
+          // Sentiment scores removed - using categorical sentiment only
+          const chatgptSentimentScore = null;
+          const googleAISentimentScore = null;
           
           // Use API-extracted citations (with title info) if available, fallback to text-extracted
           const chatgptCitationsToStore = result.chatgpt.citations.length > 0 
@@ -1621,11 +1616,8 @@ export async function registerRoutes(
       const sentimentBreakdown = aggregateSentiment([...allChatgptSentiments, ...allGoogleAISentiments]);
       const topCitations = aggregateCitations([...allChatgptCitations, ...allGoogleAICitations]);
       
-      // Calculate overall sentiment score
-      const allSentimentScores = storedResults
-        .flatMap(r => [r.chatgptSentimentScore, r.googleAISentimentScore])
-        .filter((s): s is number => s !== null);
-      const sentimentScore = calculateOverallSentimentScore(allSentimentScores);
+      // Sentiment score calculation removed - using categorical sentiment only
+      const sentimentScore = null;
       
       // Compute competitor visibility (using service prompts only)
       const competitorVisibility = computeCompetitorVisibility(competitorCounts, servicePromptCount, 5);
@@ -2029,8 +2021,9 @@ export async function registerRoutes(
           // Analyze responses
           const chatgptAnalytics = analyzeResponse(result.chatgpt.response, client.businessName);
           const googleAIAnalytics = analyzeResponse(result.googleAI.response, client.businessName);
-          const chatgptSentimentScore = calculateSentimentScore(result.chatgpt.response, client.businessName);
-          const googleAISentimentScore = calculateSentimentScore(result.googleAI.response, client.businessName);
+          // Sentiment scores removed - using categorical sentiment only
+          const chatgptSentimentScore = null;
+          const googleAISentimentScore = null;
           
           const chatgptCitationsToStore = result.chatgpt.citations.length > 0 
             ? result.chatgpt.citations 
@@ -2449,24 +2442,13 @@ export async function registerRoutes(
       const totalPrompts = results.length;
       const foundCount = results.filter(r => r.chatgptFound || r.googleAIFound).length;
       
-      // Collect sentiment data for scoring
-      const allSentimentScores: (number | null)[] = [];
+      // Collect rank and citation data for export
       const allChatgptRanks: number[] = [];
       const allGoogleAIRanks: number[] = [];
       const allChatgptCitations: Citation[] = [];
       const allGoogleAICitations: Citation[] = [];
       
       for (const result of results) {
-        // Collect sentiments for scoring
-        if (result.chatgptResponse && (result.chatgptFound || result.chatgptCited)) {
-          const score = calculateSentimentScore(result.chatgptResponse, client.businessName);
-          if (score !== null) allSentimentScores.push(score);
-        }
-        if (result.googleAIResponse && (result.googleAIFound || result.googleAICited)) {
-          const score = calculateSentimentScore(result.googleAIResponse, client.businessName);
-          if (score !== null) allSentimentScores.push(score);
-        }
-        
         // Collect ranks
         if (result.chatgptRank && result.chatgptRank > 0) allChatgptRanks.push(result.chatgptRank);
         if (result.googleAIRank && result.googleAIRank > 0) allGoogleAIRanks.push(result.googleAIRank);
@@ -2498,7 +2480,8 @@ export async function registerRoutes(
       const competitorCounts = aggregateCompetitorMentions(results);
       const shareOfVoiceRaw = computeShareOfVoice(client.businessName, foundCount, competitorCounts, totalPrompts);
       const topCitationsRaw = aggregateCitations([allChatgptCitations, allGoogleAICitations]);
-      const sentimentScore = calculateOverallSentimentScore(allSentimentScores);
+      // Sentiment score calculation removed - using categorical sentiment only
+      const sentimentScore = null;
       const competitorVisibilityRaw = computeCompetitorVisibility(competitorCounts, totalPrompts, 5);
       
       // Transform share of voice to export format
