@@ -391,8 +391,11 @@ export async function registerRoutes(
         if (result.googleAI.found) googleAIFoundCount++;
       }
       
-      // Calculate final scores
-      const overallScore = totalPrompts > 0 ? Math.round((foundCount / totalPrompts) * 100) : 0;
+      // Calculate final scores using per-exposure method (each platform check counts separately)
+      // This matches the frontend visibilityRate calculation: (chatgptFound + googleAIFound) / (prompts × 2)
+      const totalExposures = totalPrompts * 2; // Each prompt checks 2 platforms
+      const totalFound = chatgptFoundCount + googleAIFoundCount;
+      const overallScore = totalExposures > 0 ? Math.round((totalFound / totalExposures) * 100) : 0;
       const chatgptScore = totalPrompts > 0 ? Math.round((chatgptFoundCount / totalPrompts) * 100) : 0;
       const googleAIScore = totalPrompts > 0 ? Math.round((googleAIFoundCount / totalPrompts) * 100) : 0;
       
@@ -925,8 +928,10 @@ export async function registerRoutes(
           // Update checkpoint after each prompt to enable resume
           // Also save running scores so partial scans show accurate data
           try {
-            // Calculate running scores based on service prompts completed so far
-            const runningOverallScore = servicePromptCount > 0 ? Math.round((foundCount / servicePromptCount) * 100) : 0;
+            // Calculate running scores using per-exposure method (each platform check counts separately)
+            const runningTotalExposures = servicePromptCount * 2;
+            const runningTotalFound = chatgptFoundCount + googleAIFoundCount;
+            const runningOverallScore = runningTotalExposures > 0 ? Math.round((runningTotalFound / runningTotalExposures) * 100) : 0;
             const runningChatgptScore = servicePromptCount > 0 ? Math.round((chatgptFoundCount / servicePromptCount) * 100) : 0;
             const runningGoogleAIScore = servicePromptCount > 0 ? Math.round((googleAIFoundCount / servicePromptCount) * 100) : 0;
             
@@ -965,8 +970,11 @@ export async function registerRoutes(
       // Clear heartbeat now that processing is complete
       clearInterval(heartbeatInterval);
       
-      // Calculate final scores (using service prompt count, excluding brand sentiment)
-      const overallScore = servicePromptCount > 0 ? Math.round((foundCount / servicePromptCount) * 100) : 0;
+      // Calculate final scores using per-exposure method (each platform check counts separately)
+      // This matches the frontend visibilityRate calculation: (chatgptFound + googleAIFound) / (prompts × 2)
+      const totalExposures = servicePromptCount * 2; // Each prompt checks 2 platforms
+      const totalFound = chatgptFoundCount + googleAIFoundCount;
+      const overallScore = totalExposures > 0 ? Math.round((totalFound / totalExposures) * 100) : 0;
       const chatgptScore = servicePromptCount > 0 ? Math.round((chatgptFoundCount / servicePromptCount) * 100) : 0;
       const googleAIScore = servicePromptCount > 0 ? Math.round((googleAIFoundCount / servicePromptCount) * 100) : 0;
       
@@ -1561,8 +1569,10 @@ export async function registerRoutes(
           // Update checkpoint after each prompt to enable resume
           // Also save running scores so partial scans show accurate data
           try {
-            // Calculate running scores based on service prompts completed so far
-            const runningOverallScore = servicePromptCount > 0 ? Math.round((foundCount / servicePromptCount) * 100) : 0;
+            // Calculate running scores using per-exposure method (each platform check counts separately)
+            const runningTotalExposures = servicePromptCount * 2;
+            const runningTotalFound = chatgptFoundCount + googleAIFoundCount;
+            const runningOverallScore = runningTotalExposures > 0 ? Math.round((runningTotalFound / runningTotalExposures) * 100) : 0;
             const runningChatgptScore = servicePromptCount > 0 ? Math.round((chatgptFoundCount / servicePromptCount) * 100) : 0;
             const runningGoogleAIScore = servicePromptCount > 0 ? Math.round((googleAIFoundCount / servicePromptCount) * 100) : 0;
             
@@ -1592,8 +1602,11 @@ export async function registerRoutes(
       // Clear heartbeat now that processing is complete
       clearInterval(heartbeatInterval);
       
-      // Calculate final scores (using service prompt count, excluding brand sentiment)
-      const overallScore = servicePromptCount > 0 ? Math.round((foundCount / servicePromptCount) * 100) : 0;
+      // Calculate final scores using per-exposure method (each platform check counts separately)
+      // This matches the frontend visibilityRate calculation: (chatgptFound + googleAIFound) / (prompts × 2)
+      const totalExposures = servicePromptCount * 2; // Each prompt checks 2 platforms
+      const totalFound = chatgptFoundCount + googleAIFoundCount;
+      const overallScore = totalExposures > 0 ? Math.round((totalFound / totalExposures) * 100) : 0;
       const chatgptScore = servicePromptCount > 0 ? Math.round((chatgptFoundCount / servicePromptCount) * 100) : 0;
       const googleAIScore = servicePromptCount > 0 ? Math.round((googleAIFoundCount / servicePromptCount) * 100) : 0;
       
@@ -2069,7 +2082,10 @@ export async function registerRoutes(
           // Update checkpoint with running scores
           // Also save running scores so partial scans show accurate data
           try {
-            const runningOverallScore = servicePromptCount > 0 ? Math.round((runningFoundCount / servicePromptCount) * 100) : 0;
+            // Calculate running scores using per-exposure method (each platform check counts separately)
+            const runningTotalExposures = servicePromptCount * 2;
+            const runningTotalFound = runningChatgptFoundCount + runningGoogleAIFoundCount;
+            const runningOverallScore = runningTotalExposures > 0 ? Math.round((runningTotalFound / runningTotalExposures) * 100) : 0;
             const runningChatgptScore = servicePromptCount > 0 ? Math.round((runningChatgptFoundCount / servicePromptCount) * 100) : 0;
             const runningGoogleAIScore = servicePromptCount > 0 ? Math.round((runningGoogleAIFoundCount / servicePromptCount) * 100) : 0;
             
@@ -2104,8 +2120,11 @@ export async function registerRoutes(
       // All remaining prompts completed - calculate final scores from running counts
       sendEvent("status", { message: "Calculating final scores...", progress: 97 });
       
-      // Use running counts (already accumulated from existing + new results)
-      const finalOverallScore = servicePromptCount > 0 ? Math.round((runningFoundCount / servicePromptCount) * 100) : 0;
+      // Calculate final scores using per-exposure method (each platform check counts separately)
+      // This matches the frontend visibilityRate calculation: (chatgptFound + googleAIFound) / (prompts × 2)
+      const totalExposures = servicePromptCount * 2; // Each prompt checks 2 platforms
+      const totalFound = runningChatgptFoundCount + runningGoogleAIFoundCount;
+      const finalOverallScore = totalExposures > 0 ? Math.round((totalFound / totalExposures) * 100) : 0;
       const finalChatgptScore = servicePromptCount > 0 ? Math.round((runningChatgptFoundCount / servicePromptCount) * 100) : 0;
       const finalGoogleAIScore = servicePromptCount > 0 ? Math.round((runningGoogleAIFoundCount / servicePromptCount) * 100) : 0;
       
