@@ -82,6 +82,16 @@ The monitoring dashboard provides a 3-column analytics grid:
 -   **Platform Visibility**: Shows per-platform visibility percentages for ChatGPT and Google AI.
 -   **Data Export**: Allows exporting comprehensive audit data (summaries, raw results, metadata) in a ZIP format with date range filtering.
 -   **Prompt City Substitution**: When rescanning for a different city, prompts dynamically replace city names using regex escaping and length-sorted replacement to avoid substring collisions (e.g., "St. Paul" or "New York" vs "York").
+-   **Shareable Audit Links**: Audits can be shared via secure public links:
+    - Share tokens are 32-character hex strings generated via `crypto.randomBytes(16)`
+    - POST `/api/audit/:id/share` generates/returns a share token for an audit
+    - GET `/api/audit/share/:token` retrieves audit data without authentication
+    - Route `/audit/share/:token` displays audit without requiring lead form submission
+    - Share button in floating action bar copies URL to clipboard with toast notification
+-   **Enhanced Negative Sentiment Display**: The Brand Sentiment section shows detailed negative feedback:
+    - Displays up to 3 negative signal snippets when negativeCount > 0
+    - Each snippet shows platform attribution (ChatGPT or Google AI)
+    - Response text is sanitized (markdown removed) and truncated to 180 characters
 
 ### Data Layer
 -   **ORM**: Drizzle ORM with PostgreSQL.
