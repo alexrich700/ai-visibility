@@ -62,6 +62,11 @@ export async function sendAuditNotification(data: AuditNotificationData): Promis
   try {
     const { client, fromEmail } = await getResendClient();
     
+    if (!fromEmail) {
+      console.error('Resend fromEmail not configured - cannot send notification');
+      return false;
+    }
+    
     const scoreColor = data.overallScore >= 70 ? '#22c55e' : data.overallScore >= 40 ? '#eab308' : '#ef4444';
     
     const html = `

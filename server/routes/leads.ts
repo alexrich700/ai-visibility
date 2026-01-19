@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { storage } from "../storage";
 import { leadSchema } from "@shared/schema";
+import { sendAuditNotification } from "../email";
 
 const router = Router();
 
@@ -17,6 +18,25 @@ router.post("/", async (req, res) => {
       auditScore: validatedData.auditScore,
       status: "new",
     });
+
+    // Send email notification with lead and audit info
+    if (validatedData.auditId) {
+      const audit = await storage.getAuditById(validatedData.auditId);
+      if (audit) {
+        sendAuditNotification({
+          businessName: audit.businessName,
+          keyword: audit.keyword,
+          city: audit.city,
+          overallScore: audit.overallScore,
+          chatgptScore: audit.chatgptScore,
+          googleAIScore: audit.googleAIScore,
+          auditId: audit.id,
+          leadName: validatedData.name,
+          leadEmail: validatedData.email,
+          leadPhone: validatedData.phone || undefined,
+        }).catch(err => console.error('Failed to send lead notification:', err));
+      }
+    }
 
     res.json(lead);
   } catch (error) {
