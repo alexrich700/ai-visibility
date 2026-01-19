@@ -33,9 +33,74 @@ import {
   Check,
 } from "lucide-react";
 import { format } from "date-fns";
-import type { AuditResults } from "@shared/schema";
+import type { AuditResults, SentimentResult } from "@shared/schema";
 import logoFull from "@assets/RMG-Logo-Black-1920w_(1)_1765741951083.webp";
 import logoIcon from "@assets/images_1765741951084.png";
+
+function NegativeFeedbackDetails({ results }: { results: SentimentResult[] }) {
+  const [expandedCards, setExpandedCards] = useState<Record<number, boolean>>({});
+
+  const negativeResults = results
+    .filter(result => 
+      result.chatgpt?.sentiment === "negative" || 
+      result.googleAI?.sentiment === "negative"
+    )
+    .slice(0, 3);
+
+  if (negativeResults.length === 0) return null;
+
+  const toggleExpand = (idx: number) => {
+    setExpandedCards(prev => ({ ...prev, [idx]: !prev[idx] }));
+  };
+
+  const cleanText = (text: string) => {
+    return text.replace(/\*\*/g, '').replace(/###?\s/g, '').replace(/\n+/g, ' ').trim();
+  };
+
+  return (
+    <div className="mt-4 pt-4 border-t border-gray-100">
+      <p className="text-xs font-bold uppercase tracking-wider text-red-600 mb-3">Negative Feedback Details</p>
+      <div className="space-y-3">
+        {negativeResults.map((result, idx) => {
+          const negativeResponse = result.chatgpt?.sentiment === "negative" 
+            ? result.chatgpt.response 
+            : result.googleAI?.response;
+          const platform = result.chatgpt?.sentiment === "negative" ? "ChatGPT" : "Google AI";
+          const fullText = negativeResponse ? cleanText(negativeResponse) : "No details available";
+          const isLongText = fullText.length > 180;
+          const isExpanded = expandedCards[idx] || false;
+          const displayText = isExpanded || !isLongText ? fullText : fullText.substring(0, 180) + "...";
+          
+          return (
+            <div key={idx} className="p-3 bg-red-50 rounded-lg border border-red-100" data-testid={`negative-signal-${idx}`}>
+              <div className="flex items-center gap-2 mb-1">
+                <AlertTriangle size={12} className="text-red-500" />
+                <span className="text-xs font-medium text-red-600">{platform}</span>
+              </div>
+              <p className={`text-xs text-gray-600 leading-relaxed ${isLongText ? 'print:hidden' : ''}`}>{displayText}</p>
+              {isLongText && (
+                <>
+                  <button 
+                    onClick={() => toggleExpand(idx)}
+                    className="text-xs text-red-600 hover:text-red-700 font-medium mt-2 flex items-center gap-1 print:hidden"
+                    data-testid={`negative-signal-toggle-${idx}`}
+                  >
+                    {isExpanded ? (
+                      <>Show less <ChevronUp size={12} /></>
+                    ) : (
+                      <>Read more <ChevronDown size={12} /></>
+                    )}
+                  </button>
+                  <p className="hidden print:block text-xs text-gray-600 leading-relaxed">{fullText}</p>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 interface AuditData {
   id: number;
@@ -853,36 +918,7 @@ export default function AuditView(props: AuditViewProps = {}) {
                       </div>
 
                       {auditResults.sentimentAnalysis.negativeCount > 0 && auditResults.sentimentAnalysis.results && (
-                        <div className="mt-4 pt-4 border-t border-gray-100">
-                          <p className="text-xs font-bold uppercase tracking-wider text-red-600 mb-3">Negative Feedback Details</p>
-                          <div className="space-y-3">
-                            {auditResults.sentimentAnalysis.results
-                              .filter(result => 
-                                result.chatgpt?.sentiment === "negative" || 
-                                result.googleAI?.sentiment === "negative"
-                              )
-                              .slice(0, 3)
-                              .map((result, idx) => {
-                                const negativeResponse = result.chatgpt?.sentiment === "negative" 
-                                  ? result.chatgpt.response 
-                                  : result.googleAI?.response;
-                                const platform = result.chatgpt?.sentiment === "negative" ? "ChatGPT" : "Google AI";
-                                const snippet = negativeResponse 
-                                  ? negativeResponse.replace(/\*\*/g, '').replace(/###?\s/g, '').replace(/\n+/g, ' ').trim().substring(0, 180) + (negativeResponse.length > 180 ? "..." : "")
-                                  : "No details available";
-                                
-                                return (
-                                  <div key={idx} className="p-3 bg-red-50 rounded-lg border border-red-100" data-testid={`negative-signal-${idx}`}>
-                                    <div className="flex items-center gap-2 mb-1">
-                                      <AlertTriangle size={12} className="text-red-500" />
-                                      <span className="text-xs font-medium text-red-600">{platform}</span>
-                                    </div>
-                                    <p className="text-xs text-gray-600 leading-relaxed">{snippet}</p>
-                                  </div>
-                                );
-                              })}
-                          </div>
-                        </div>
+                        <NegativeFeedbackDetails results={auditResults.sentimentAnalysis.results} />
                       )}
                     </div>
                   </div>
