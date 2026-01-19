@@ -54,7 +54,29 @@ function NegativeFeedbackDetails({ results }: { results: SentimentResult[] }) {
   };
 
   const cleanText = (text: string) => {
-    return text.replace(/\*\*/g, '').replace(/###?\s/g, '').replace(/\n+/g, ' ').trim();
+    // Remove URLs (http/https links and markdown-style links)
+    let cleaned = text
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // [text](url) -> text
+      .replace(/\(https?:\/\/[^)]+\)/g, '') // (https://...) -> remove
+      .replace(/https?:\/\/[^\s\])]+/g, '') // plain URLs -> remove
+      
+    // Clean up markdown formatting
+    cleaned = cleaned
+      .replace(/\*\*/g, '') // bold
+      .replace(/\*([^*]+)\*/g, '$1') // italic
+      .replace(/###?\s?/g, '') // headers
+      
+    // Normalize bullets at start of lines only (don't replace hyphens in words)
+    cleaned = cleaned.replace(/^[\s]*[-•]\s+/gm, '• ')
+      
+    // Clean up excessive whitespace while preserving paragraph structure
+    cleaned = cleaned
+      .replace(/[ \t]+/g, ' ') // multiple spaces/tabs to single space
+      .replace(/\n{3,}/g, '\n\n') // limit to max 2 newlines
+      .replace(/^\s+/gm, '') // remove leading whitespace on lines
+      .trim();
+      
+    return cleaned;
   };
 
   return (
@@ -67,22 +89,24 @@ function NegativeFeedbackDetails({ results }: { results: SentimentResult[] }) {
             : result.googleAI?.response;
           const platform = result.chatgpt?.sentiment === "negative" ? "ChatGPT" : "Google AI";
           const fullText = negativeResponse ? cleanText(negativeResponse) : "No details available";
-          const isLongText = fullText.length > 180;
+          const isLongText = fullText.length > 300;
           const isExpanded = expandedCards[idx] || false;
-          const displayText = isExpanded || !isLongText ? fullText : fullText.substring(0, 180) + "...";
+          const displayText = isExpanded || !isLongText ? fullText : fullText.substring(0, 300) + "...";
           
           return (
-            <div key={idx} className="p-3 bg-red-50 rounded-lg border border-red-100" data-testid={`negative-signal-${idx}`}>
-              <div className="flex items-center gap-2 mb-1">
-                <AlertTriangle size={12} className="text-red-500" />
-                <span className="text-xs font-medium text-red-600">{platform}</span>
+            <div key={idx} className="p-4 bg-red-50 rounded-lg border border-red-100" data-testid={`negative-signal-${idx}`}>
+              <div className="flex items-center gap-2 mb-2">
+                <AlertTriangle size={14} className="text-red-500" />
+                <span className="text-xs font-semibold text-red-600 uppercase tracking-wide">{platform}</span>
               </div>
-              <p className={`text-xs text-gray-600 leading-relaxed ${isLongText ? 'print:hidden' : ''}`}>{displayText}</p>
+              <div className={`text-sm text-gray-700 leading-relaxed whitespace-pre-line ${isLongText ? 'print:hidden' : ''}`}>
+                {displayText}
+              </div>
               {isLongText && (
                 <>
                   <button 
                     onClick={() => toggleExpand(idx)}
-                    className="text-xs text-red-600 hover:text-red-700 font-medium mt-2 flex items-center gap-1 print:hidden"
+                    className="text-xs text-red-600 hover:text-red-700 font-medium mt-3 flex items-center gap-1 print:hidden"
                     data-testid={`negative-signal-toggle-${idx}`}
                   >
                     {isExpanded ? (
@@ -91,7 +115,7 @@ function NegativeFeedbackDetails({ results }: { results: SentimentResult[] }) {
                       <>Read more <ChevronDown size={12} /></>
                     )}
                   </button>
-                  <p className="hidden print:block text-xs text-gray-600 leading-relaxed">{fullText}</p>
+                  <div className="hidden print:block text-sm text-gray-700 leading-relaxed whitespace-pre-line">{fullText}</div>
                 </>
               )}
             </div>
