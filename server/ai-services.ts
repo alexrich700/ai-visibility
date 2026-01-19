@@ -519,8 +519,55 @@ function checkForMentions(text: string, businessName: string, url?: string, bran
   return { found: false };
 }
 
+// Type for Gemini grounding metadata extracted from API response
+export interface GeminiGroundingMetadata {
+  webSearchQueries?: string[];
+  groundingSupports?: Array<{
+    segment?: { startIndex?: number; endIndex?: number; text?: string };
+    groundingChunkIndices?: number[];
+  }>;
+}
+
+// Helper to extract grounding metadata from Gemini response
+function extractGroundingMetadata(response: any): GeminiGroundingMetadata | null {
+  try {
+    // Check candidates[0].groundingMetadata first
+    const candidates = response?.candidates;
+    if (Array.isArray(candidates) && candidates.length > 0) {
+      const gm = candidates[0]?.groundingMetadata;
+      if (gm) {
+        return {
+          webSearchQueries: Array.isArray(gm.webSearchQueries) ? gm.webSearchQueries : undefined,
+          groundingSupports: Array.isArray(gm.groundingSupports) ? gm.groundingSupports.map((s: any) => ({
+            segment: s.segment ? {
+              startIndex: s.segment.startIndex,
+              endIndex: s.segment.endIndex,
+              text: s.segment.text
+            } : undefined,
+            groundingChunkIndices: Array.isArray(s.groundingChunkIndices) ? s.groundingChunkIndices : undefined
+          })) : undefined
+        };
+      }
+    }
+    
+    // Fallback: check direct response.groundingMetadata
+    if (response?.groundingMetadata) {
+      const gm = response.groundingMetadata;
+      return {
+        webSearchQueries: Array.isArray(gm.webSearchQueries) ? gm.webSearchQueries : undefined,
+        groundingSupports: Array.isArray(gm.groundingSupports) ? gm.groundingSupports : undefined
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('[extractGroundingMetadata] Error:', error);
+    return null;
+  }
+}
+
 // Gemini client using Replit AI Integrations with Google Search grounding
-async function queryGemini(prompt: string, businessName: string, url?: string, brandAliases?: string[]): Promise<{ found: boolean; response: string; competitors: string[]; citations: ExtractedCitation[] }> {
+async function queryGemini(prompt: string, businessName: string, url?: string, brandAliases?: string[]): Promise<{ found: boolean; response: string; competitors: string[]; citations: ExtractedCitation[]; groundingMetadata: GeminiGroundingMetadata | null }> {
   try {
     const { GoogleGenAI } = await import("@google/genai");
     
@@ -549,6 +596,12 @@ async function queryGemini(prompt: string, businessName: string, url?: string, b
     const textCitations = extractUrlsFromText(text);
     const citations = mergeCitations(structuredCitations, textCitations);
     
+    // Extract grounding metadata for geo-optimization analysis
+    const groundingMetadata = extractGroundingMetadata(response);
+    if (groundingMetadata?.webSearchQueries?.length) {
+      console.log(`[GEMINI] Web search queries used: ${groundingMetadata.webSearchQueries.join(', ')}`);
+    }
+    
     const detection = checkForMentions(text, businessName, url, brandAliases);
     const competitors = extractCompetitors(text, businessName);
     
@@ -560,11 +613,11 @@ async function queryGemini(prompt: string, businessName: string, url?: string, b
       console.log(`[GEMINI] Response preview (first 300 chars): ${text.slice(0, 300).replace(/\n/g, ' ')}`);
     }
 
-    return { found: detection.found, response: text, competitors, citations };
+    return { found: detection.found, response: text, competitors, citations, groundingMetadata };
   } catch (error) {
     console.error("Gemini API error:", error);
     const fallback = simulateResponse(prompt, businessName);
-    return { ...fallback, citations: [] };
+    return { ...fallback, citations: [], groundingMetadata: null };
   }
 }
 
@@ -2057,6 +2110,7 @@ export interface PromptCheckResult {
     response: string;
     cited: boolean;
     citations: ExtractedCitation[];
+    groundingMetadata?: GeminiGroundingMetadata | null;
   };
   competitors: string[];
 }
@@ -2081,21 +2135,22 @@ async function queryOpenAI(prompt: string, businessName: string, domain: string,
 }
 
 // Helper function to query Google AI/Gemini for monitoring
-async function queryGoogleAI(prompt: string, businessName: string, domain: string, brandAliases?: string[]): Promise<{ found: boolean; response: string; cited: boolean; competitors: string[]; citations: ExtractedCitation[] }> {
+async function queryGoogleAI(prompt: string, businessName: string, domain: string, brandAliases?: string[]): Promise<{ found: boolean; response: string; cited: boolean; competitors: string[]; citations: ExtractedCitation[]; groundingMetadata: GeminiGroundingMetadata | null }> {
   try {
     console.log(`[queryGoogleAI] Calling Gemini...`);
     const result = await queryGemini(prompt, businessName, domain, brandAliases);
-    console.log(`[queryGoogleAI] Result - found: ${result.found}, response length: ${result.response.length}, citations: ${result.citations.length}`);
+    console.log(`[queryGoogleAI] Result - found: ${result.found}, response length: ${result.response.length}, citations: ${result.citations.length}, has grounding: ${!!result.groundingMetadata}`);
     return {
       found: result.found,
       response: result.response,
       cited: result.response.toLowerCase().includes(domain.toLowerCase()),
       competitors: result.competitors,
       citations: result.citations,
+      groundingMetadata: result.groundingMetadata,
     };
   } catch (error) {
     console.error("queryGoogleAI error (full):", error);
-    return { found: false, response: "Error querying Google AI", cited: false, competitors: [], citations: [] };
+    return { found: false, response: "Error querying Google AI", cited: false, competitors: [], citations: [], groundingMetadata: null };
   }
 }
 
@@ -2135,6 +2190,7 @@ export async function runPromptCheck(
         response: googleAIResult.response,
         cited: googleAIResult.cited,
         citations: googleAIResult.citations,
+        groundingMetadata: googleAIResult.groundingMetadata,
       },
       competitors: uniqueCompetitors.slice(0, 10),
     };
@@ -2142,7 +2198,7 @@ export async function runPromptCheck(
     console.error("Error running prompt check:", error);
     return {
       chatgpt: { found: false, response: "Error occurred during check", cited: false, citations: [] },
-      googleAI: { found: false, response: "Error occurred during check", cited: false, citations: [] },
+      googleAI: { found: false, response: "Error occurred during check", cited: false, citations: [], groundingMetadata: null },
       competitors: [],
     };
   }

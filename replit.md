@@ -32,10 +32,19 @@ The backend handles AI service integration, data processing, and persistence. It
 ### AI Service Integration
 The tool integrates with:
 1.  **OpenAI/ChatGPT**: Uses `MY_OPENAI_API_KEY` with `gpt-5-mini` model via Responses API, utilizing a `web_search` tool for grounding.
-2.  **Google Gemini**: Integrates via Replit AI Integrations (no API key needed), using a `googleSearch` tool for grounding.
+2.  **Google Gemini**: Integrates via Replit AI Integrations (no API key needed), using a `googleSearch` tool for grounding. Captures grounding metadata (`webSearchQueries`, `groundingSupports`) for geo-optimization analysis.
 3.  **Perplexity**: Requires `PERPLEXITY_API_KEY`.
 
 AI queries are processed with bounded concurrency (8 simultaneous prompts) and parallel API calls to optimize performance and cost.
+
+### Gemini Grounding Metadata
+-   **Purpose**: Captures what geographic search queries Gemini uses internally when answering prompts (e.g., "best plumber Woodbury MN"). This reveals how AI platforms interpret location-specific queries.
+-   **Data Captured**: 
+    - `webSearchQueries`: Array of actual search queries Gemini generates
+    - `groundingSupports`: Maps response segments to source chunks for citation tracking
+-   **Storage**: Stored as JSONB in `check_results.google_ai_grounding_metadata` column
+-   **Export**: "Gemini Web Search Queries" column in Excel exports (pipe-separated list)
+-   **Use Case**: Enables geo-optimization analysis to understand how clients can improve visibility for specific city-based searches
 
 ### Core Features
 -   **Multi-City Support**: Businesses can configure multiple target cities (e.g., Minneapolis, St. Paul, Rochester). Each city can be scanned separately, with dashboard filtering to view per-city or aggregate results.

@@ -878,6 +878,7 @@ export async function registerRoutes(
               googleAICitations: googleAICitationsToStore,
               chatgptSnippet: chatgptAnalytics.snippet,
               googleAISnippet: googleAIAnalytics.snippet,
+              googleAIGroundingMetadata: result.googleAI.groundingMetadata,
             });
           } catch (storeError) {
             console.error(`[STORAGE ERROR] Scan: Failed to store result for prompt ${originalIndex + 1}:`, storeError);
@@ -1517,6 +1518,7 @@ export async function registerRoutes(
               googleAICitations: googleAICitationsToStore,
               chatgptSnippet: chatgptAnalytics.snippet,
               googleAISnippet: googleAIAnalytics.snippet,
+              googleAIGroundingMetadata: result.googleAI.groundingMetadata,
             });
           } catch (storeError) {
             console.error(`[STORAGE ERROR] Failed to store result for prompt ${originalIndex + 1}:`, storeError);
@@ -2057,6 +2059,7 @@ export async function registerRoutes(
               googleAICitations: googleAICitationsToStore,
               chatgptSnippet: chatgptAnalytics.snippet,
               googleAISnippet: googleAIAnalytics.snippet,
+              googleAIGroundingMetadata: result.googleAI.groundingMetadata,
             });
           } catch (storeError) {
             console.error(`[STORAGE ERROR] Resume: Failed to store result for prompt ${originalIndex + 1}:`, storeError);

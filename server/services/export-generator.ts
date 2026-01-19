@@ -384,6 +384,23 @@ function sanitizeSheetName(name: string): string {
   return sanitized || "Sheet";
 }
 
+// Extract webSearchQueries from grounding metadata
+function formatWebSearchQueries(groundingMetadata: any): string {
+  if (!groundingMetadata) return "";
+  try {
+    const metadata = typeof groundingMetadata === 'string' 
+      ? JSON.parse(groundingMetadata) 
+      : groundingMetadata;
+    
+    if (metadata?.webSearchQueries && Array.isArray(metadata.webSearchQueries)) {
+      return metadata.webSearchQueries.join(" | ");
+    }
+  } catch (e) {
+    // Ignore parsing errors
+  }
+  return "";
+}
+
 // Create Excel worksheet data for a service group
 function createGroupSheetData(
   groupName: string,
@@ -400,6 +417,7 @@ function createGroupSheetData(
     "Google AI Response",
     "Google AI Citations",
     "Google AI Sentiment",
+    "Gemini Web Search Queries",
     "Competitors Mentioned",
     "Scan Date"
   ];
@@ -417,6 +435,7 @@ function createGroupSheetData(
       result.googleAIResponse || "",
       formatCitations(result.googleAICitations),
       result.googleAISentiment || "",
+      formatWebSearchQueries(result.googleAIGroundingMetadata),
       result.competitors || "",
       sessionDate.toISOString().split("T")[0]
     ]);
@@ -484,6 +503,7 @@ function generateCityExcel(cityData: CityExportData, clientName: string): Buffer
       { wch: 60 },  // Google AI Response
       { wch: 40 },  // Google AI Citations
       { wch: 12 },  // Google AI Sentiment
+      { wch: 50 },  // Gemini Web Search Queries
       { wch: 30 },  // Competitors
       { wch: 12 },  // Scan Date
     ];
