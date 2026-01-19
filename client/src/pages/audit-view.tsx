@@ -37,17 +37,36 @@ import type { AuditResults, SentimentResult } from "@shared/schema";
 import logoFull from "@assets/RMG-Logo-Black-1920w_(1)_1765741951083.webp";
 import logoIcon from "@assets/images_1765741951084.png";
 
+interface NegativeSignal {
+  platform: "ChatGPT" | "Google AI";
+  text: string;
+}
+
 function NegativeFeedbackDetails({ results }: { results: SentimentResult[] }) {
   const [expandedCards, setExpandedCards] = useState<Record<number, boolean>>({});
 
-  const negativeResults = results
-    .filter(result => 
-      result.chatgpt?.sentiment === "negative" || 
-      result.googleAI?.sentiment === "negative"
-    )
-    .slice(0, 3);
+  // Build a flat list of individual negative signals (one per platform)
+  const negativeSignals: NegativeSignal[] = [];
+  
+  for (const result of results) {
+    if (result.chatgpt?.sentiment === "negative" && result.chatgpt.response) {
+      negativeSignals.push({
+        platform: "ChatGPT",
+        text: result.chatgpt.response
+      });
+    }
+    if (result.googleAI?.sentiment === "negative" && result.googleAI.response) {
+      negativeSignals.push({
+        platform: "Google AI",
+        text: result.googleAI.response
+      });
+    }
+  }
 
-  if (negativeResults.length === 0) return null;
+  // Limit to 5 signals max
+  const displaySignals = negativeSignals.slice(0, 5);
+
+  if (displaySignals.length === 0) return null;
 
   const toggleExpand = (idx: number) => {
     setExpandedCards(prev => ({ ...prev, [idx]: !prev[idx] }));
@@ -79,76 +98,69 @@ function NegativeFeedbackDetails({ results }: { results: SentimentResult[] }) {
     return cleaned;
   };
 
-  // Common section header patterns in AI responses (case-insensitive, match at start)
-  const headerPatterns = [
-    /^(Short answer\s*[-–—:]+)/i,
-    /^(What customers say\s*[-–—:]+\s*(?:positives?|negatives?|negatives? or cautions?)?[-–—:]?\s*)/i,
-    /^(Representative examples?\s*[-–—:]*)/i,
-    /^(Summary\s*[-–—:]*)/i,
-    /^(Overview\s*[-–—:]*)/i,
-    /^(Pros?\s*[-–—:]+)/i,
-    /^(Cons?\s*[-–—:]+)/i,
-    /^(Strengths?\s*[-–—:]*)/i,
-    /^(Weaknesses?\s*[-–—:]*)/i,
-    /^(Positives?\s*[-–—:]+)/i,
-    /^(Negatives?\s*[-–—:]+)/i,
-    /^(Customer feedback\s*[-–—:]*)/i,
-    /^(Common complaints?\s*[-–—:]*)/i,
-    /^(Common praise\s*[-–—:]*)/i,
-  ];
-
-  const formatWithHeaders = (text: string): React.ReactNode => {
-    // Use regex to find and replace headers inline while preserving structure
-    let result = text;
+  // Extract just the negative portion from the full response
+  const extractNegativePortion = (text: string): string => {
+    const cleaned = cleanText(text);
     
-    // Create markers for headers we find
-    const headerMarker = '\u0000HEADER_START\u0000';
-    const headerEnd = '\u0000HEADER_END\u0000';
+    // Look for negative section markers (more flexible patterns)
+    const negativePatterns = [
+      // "What customers say — negatives" or similar
+      /what customers say\s*[-–—:\s]*negatives?\s*(?:or cautions?)?\s*[-–—:\s]*([\s\S]*?)(?=\n\s*what customers say|\n\s*representative|\n\s*positives?|\n\n|$)/i,
+      // "Negatives:" or "Negatives" on its own line
+      /\bnegatives?\s*[-–—:\s]*([\s\S]*?)(?=\n\s*positives?|\n\s*representative|\n\s*summary|\n\n\n|$)/i,
+      // "Cons:" or "Cons"
+      /\bcons?\s*[-–—:\s]*([\s\S]*?)(?=\n\s*pros?|\n\s*summary|\n\n\n|$)/i,
+      // "Concerns:" or "Concerns"  
+      /\bconcerns?\s*[-–—:\s]*([\s\S]*?)(?=\n\s*positives?|\n\s*summary|\n\n\n|$)/i,
+      // "Complaints"
+      /\bcomplaints?\s*[-–—:\s]*([\s\S]*?)(?=\n\s*positives?|\n\s*summary|\n\n\n|$)/i,
+      // "Cautions"
+      /\bcautions?\s*[-–—:\s]*([\s\S]*?)(?=\n\s*positives?|\n\s*summary|\n\n\n|$)/i,
+      // "Weaknesses"
+      /\bweaknesses?\s*[-–—:\s]*([\s\S]*?)(?=\n\s*strengths?|\n\s*summary|\n\n\n|$)/i,
+      // "A minority of customers report..."
+      /a minority of customers?\s*(?:report|say|mention|have)?\s*([\s\S]*?)(?=\n\s*representative|\n\n\n|$)/i,
+      // "However, some customers..."
+      /however,?\s*some\s*(?:customers?|reviewers?)?\s*([\s\S]*?)(?=\n\n\n|$)/i,
+      // "Issues reported include..."
+      /issues?\s*(?:reported|include|noted)?\s*[-–—:\s]*([\s\S]*?)(?=\n\s*positives?|\n\n\n|$)/i,
+    ];
     
-    for (const pattern of headerPatterns) {
-      result = result.replace(pattern, `${headerMarker}$1${headerEnd}`);
-    }
-    
-    // If no headers found, return as-is
-    if (!result.includes(headerMarker)) {
-      return text;
-    }
-    
-    // Split by markers and build React elements
-    const parts = result.split(/(\u0000HEADER_START\u0000.*?\u0000HEADER_END\u0000)/);
-    
-    return parts.map((part, idx) => {
-      if (part.startsWith(headerMarker)) {
-        const headerText = part.replace(headerMarker, '').replace(headerEnd, '');
-        return <strong key={idx} className="font-semibold text-gray-800">{headerText}</strong>;
+    for (const pattern of negativePatterns) {
+      const match = cleaned.match(pattern);
+      if (match && match[1]?.trim()) {
+        const extracted = match[1].trim();
+        // Return any matched content (removed minimum length requirement)
+        if (extracted.length > 0) {
+          // Cap at reasonable length
+          return extracted.length > 400 ? extracted.substring(0, 400) + "..." : extracted;
+        }
       }
-      return <span key={idx}>{part}</span>;
-    });
+    }
+    
+    // If no negative section found, return a truncated version of the cleaned text
+    return cleaned.length > 250 ? cleaned.substring(0, 250) + "..." : cleaned;
   };
 
   return (
     <div className="mt-4 pt-4 border-t border-gray-100">
       <p className="text-xs font-bold uppercase tracking-wider text-red-600 mb-3">Negative Feedback Details</p>
       <div className="space-y-3">
-        {negativeResults.map((result, idx) => {
-          const negativeResponse = result.chatgpt?.sentiment === "negative" 
-            ? result.chatgpt.response 
-            : result.googleAI?.response;
-          const platform = result.chatgpt?.sentiment === "negative" ? "ChatGPT" : "Google AI";
-          const fullText = negativeResponse ? cleanText(negativeResponse) : "No details available";
-          const isLongText = fullText.length > 300;
+        {displaySignals.map((signal, idx) => {
+          const negativeText = extractNegativePortion(signal.text);
+          const isLongText = negativeText.length > 200;
           const isExpanded = expandedCards[idx] || false;
-          const displayText = isExpanded || !isLongText ? fullText : fullText.substring(0, 300) + "...";
+          const displayText = isExpanded || !isLongText ? negativeText : negativeText.substring(0, 200) + "...";
           
           return (
             <div key={idx} className="p-4 bg-red-50 rounded-lg border border-red-100" data-testid={`negative-signal-${idx}`}>
               <div className="flex items-center gap-2 mb-2">
                 <AlertTriangle size={14} className="text-red-500" />
-                <span className="text-xs font-semibold text-red-600 uppercase tracking-wide">{platform}</span>
+                <span className="text-xs font-semibold text-red-600 uppercase tracking-wide">{signal.platform}</span>
               </div>
-              <div className={`text-sm text-gray-700 leading-relaxed whitespace-pre-line ${isLongText ? 'print:hidden' : ''}`}>
-                {formatWithHeaders(displayText)}
-              </div>
+              <p className={`text-sm text-gray-700 leading-relaxed whitespace-pre-line ${isLongText ? 'print:hidden' : ''}`}>
+                {displayText}
+              </p>
               {isLongText && (
                 <>
                   <button 
@@ -162,7 +174,7 @@ function NegativeFeedbackDetails({ results }: { results: SentimentResult[] }) {
                       <>Read more <ChevronDown size={12} /></>
                     )}
                   </button>
-                  <div className="hidden print:block text-sm text-gray-700 leading-relaxed whitespace-pre-line">{formatWithHeaders(fullText)}</div>
+                  <p className="hidden print:block text-sm text-gray-700 leading-relaxed whitespace-pre-line">{negativeText}</p>
                 </>
               )}
             </div>
