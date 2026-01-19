@@ -147,7 +147,6 @@ const METRIC_TOOLTIPS = {
   shareOfVoice: "Your brand's percentage of total mentions compared to competitors. Calculated by dividing your mentions by total market mentions.",
   topCitations: "Websites most frequently cited by AI when answering queries about your services. These are the authoritative sources AI trusts.",
   prominence: "How prominently your business is featured when mentioned. Average position tracks where you appear in lists, and first choice counts #1 rankings.",
-  sentimentScore: "Numerical score (0-100) measuring how positively AI describes your business. Calculated by analyzing the language used in responses about you.",
   competitorVisibility: "Top competitors ranked by how often they appear in AI responses. Visibility percentage shows their mention rate across all prompts.",
   sentimentDrivers: "AI-synthesized insights about what drives perception of your brand. Strengths show positive factors, improvements show areas to address.",
 };
@@ -315,54 +314,13 @@ function computeTopCitations(results: CheckResult[]): Citation[] {
     .slice(0, 10);
 }
 
-function computeSentimentMetrics(results: CheckResult[]): {
-  sentimentScore: number | null;
-  sentimentBreakdown: { positive: number; neutral: number; negative: number };
-  firstPlaceCount: number;
-} {
-  let positiveCount = 0;
-  let neutralCount = 0;
-  let negativeCount = 0;
-  let sentimentScoreSum = 0;
-  let sentimentScoreCount = 0;
-  let firstPlaceCount = 0;
-  
+function computeFirstPlaceCount(results: CheckResult[]): number {
+  let count = 0;
   results.forEach(result => {
-    // Count sentiment categories
-    if (result.chatgptSentiment === 'positive') positiveCount++;
-    else if (result.chatgptSentiment === 'neutral') neutralCount++;
-    else if (result.chatgptSentiment === 'negative') negativeCount++;
-    
-    if (result.googleAISentiment === 'positive') positiveCount++;
-    else if (result.googleAISentiment === 'neutral') neutralCount++;
-    else if (result.googleAISentiment === 'negative') negativeCount++;
-    
-    // Sum sentiment scores
-    if (result.chatgptSentimentScore != null) {
-      sentimentScoreSum += result.chatgptSentimentScore;
-      sentimentScoreCount++;
-    }
-    if (result.googleAISentimentScore != null) {
-      sentimentScoreSum += result.googleAISentimentScore;
-      sentimentScoreCount++;
-    }
-    
-    // Count first place rankings
-    if (result.chatgptRank === 1) firstPlaceCount++;
-    if (result.googleAIRank === 1) firstPlaceCount++;
+    if (result.chatgptRank === 1) count++;
+    if (result.googleAIRank === 1) count++;
   });
-  
-  const totalSentiments = positiveCount + neutralCount + negativeCount;
-  
-  return {
-    sentimentScore: sentimentScoreCount > 0 ? Math.round(sentimentScoreSum / sentimentScoreCount) : null,
-    sentimentBreakdown: {
-      positive: totalSentiments > 0 ? Math.round((positiveCount / totalSentiments) * 100) : 0,
-      neutral: totalSentiments > 0 ? Math.round((neutralCount / totalSentiments) * 100) : 0,
-      negative: totalSentiments > 0 ? Math.round((negativeCount / totalSentiments) * 100) : 0
-    },
-    firstPlaceCount
-  };
+  return count;
 }
 
 export default function MonitorDashboard() {
@@ -962,8 +920,8 @@ export default function MonitorDashboard() {
   const computedCompetitorVisibility = computeCompetitorVisibility(serviceResultsOnly, client.businessName);
   const computedShareOfVoice = computeShareOfVoice(serviceResultsOnly, client.businessName);
   const computedTopCitations = computeTopCitations(serviceResultsOnly);
-  // Use brandSentimentResults for sentiment metrics
-  const computedSentimentMetrics = computeSentimentMetrics(brandSentimentResults);
+  // Calculate first place count from service results for prominence metric
+  const firstPlaceCount = computeFirstPlaceCount(serviceResultsOnly);
 
   // Prepare chart data - use filtered sessions
   const sessionChartData = filteredSessions.slice().reverse().map((session) => ({
@@ -1522,9 +1480,8 @@ export default function MonitorDashboard() {
           </Card>
         </div>
 
-        {/* Analytics Grid - 2x2 Layout */}
-        <div className="grid md:grid-cols-2 gap-4">
-          {/* Row 1: Top Citations & Prominence */}
+        {/* Analytics Grid - 3 Column Layout */}
+        <div className="grid md:grid-cols-3 gap-4">
           {/* Top Citations */}
           <Card className="shadow-2xl shadow-blue-900/5">
             <CardHeader className="pb-2">
@@ -1591,75 +1548,13 @@ export default function MonitorDashboard() {
               <div>
                 <p className="text-xs text-gray-500 uppercase tracking-wider">First Choice</p>
                 <div className="flex items-baseline gap-1 mt-1">
-                  <span className="text-2xl font-bold text-[#ffb41c]">{computedSentimentMetrics.firstPlaceCount}</span>
+                  <span className="text-2xl font-bold text-[#ffb41c]">{firstPlaceCount}</span>
                   <span className="text-sm text-gray-500">times ranked #1</span>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Sentiment Score */}
-          <Card className="shadow-2xl shadow-blue-900/5">
-            <CardHeader className="pb-2">
-              <div className="flex items-center gap-2">
-                <ThumbsUp className="w-4 h-4 text-green-500" />
-                <CardTitle className="text-sm font-bold tracking-tight flex items-center">
-                  Sentiment Score
-                  <MetricInfo tooltip={METRIC_TOOLTIPS.sentimentScore} id="sentiment-score" />
-                </CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-0">
-              {computedSentimentMetrics.sentimentScore !== null ? (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-4">
-                    <div className={`text-4xl font-bold ${
-                      computedSentimentMetrics.sentimentScore >= 70 ? 'text-green-500' : 
-                      computedSentimentMetrics.sentimentScore >= 40 ? 'text-[#ffb41c]' : 
-                      'text-red-500'
-                    }`}>
-                      {computedSentimentMetrics.sentimentScore}
-                    </div>
-                    <div className="flex-1">
-                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div 
-                          className={`h-full rounded-full transition-all ${
-                            computedSentimentMetrics.sentimentScore >= 70 ? 'bg-green-500' : 
-                            computedSentimentMetrics.sentimentScore >= 40 ? 'bg-[#ffb41c]' : 
-                            'bg-red-500'
-                          }`}
-                          style={{ width: `${computedSentimentMetrics.sentimentScore}%` }}
-                        />
-                      </div>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {computedSentimentMetrics.sentimentScore >= 70 ? 'Positive perception' : 
-                         computedSentimentMetrics.sentimentScore >= 40 ? 'Mixed perception' : 
-                         'Needs improvement'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 text-xs text-gray-500">
-                    <div className="flex items-center gap-1">
-                      <ThumbsUp className="w-3 h-3 text-green-500" />
-                      <span>{computedSentimentMetrics.sentimentBreakdown.positive}%</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Meh className="w-3 h-3 text-gray-400" />
-                      <span>{computedSentimentMetrics.sentimentBreakdown.neutral}%</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <ThumbsDown className="w-3 h-3 text-red-500" />
-                      <span>{computedSentimentMetrics.sentimentBreakdown.negative}%</span>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-sm text-gray-500">No sentiment data yet</p>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Row 2: Sentiment Score & Competitor Visibility */}
           {/* Competitor Visibility */}
           <Card className="shadow-2xl shadow-blue-900/5">
             <CardHeader className="pb-2">
