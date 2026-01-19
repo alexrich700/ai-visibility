@@ -333,12 +333,7 @@ export default function MonitorDashboard() {
   const [selectedViewCity, setSelectedViewCity] = useState<string>("all"); // Filter dashboard view by city
   const [selectedResult, setSelectedResult] = useState<CheckResult | null>(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
-  const [exportStartDate, setExportStartDate] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 30);
-    return d.toISOString().split("T")[0];
-  });
-  const [exportEndDate, setExportEndDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [selectedExportDate, setSelectedExportDate] = useState<string>("");
   const [isExporting, setIsExporting] = useState(false);
   const [displayLimit, setDisplayLimit] = useState(20);
   
@@ -775,6 +770,12 @@ export default function MonitorDashboard() {
   const { data: competitorTrendsData } = useQuery<{ competitorTrends: CompetitorTrendData[] }>({
     queryKey: ["/api/monitoring/trends/competitors", clientId],
     enabled: !!clientId && trendView === "competitors",
+  });
+
+  // Fetch available scan dates for export dropdown
+  const { data: scanDatesData } = useQuery<{ scanDates: { date: string; cities: string[]; sessionIds: number[] }[] }>({
+    queryKey: ["/api/monitoring/scan-dates", clientId],
+    enabled: !!clientId && exportDialogOpen,
   });
 
   if (!clientId) {
@@ -2118,44 +2119,57 @@ export default function MonitorDashboard() {
       </Dialog>
 
       {/* Export Dialog */}
-      <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
+      <Dialog open={exportDialogOpen} onOpenChange={(open) => {
+        setExportDialogOpen(open);
+        if (!open) setSelectedExportDate("");
+      }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-bold tracking-tight">Export Data</DialogTitle>
+            <DialogTitle className="font-bold tracking-tight">Export Scan Data</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <p className="text-sm text-gray-600">
-              Download your visibility data as a ZIP file. This export is formatted for use with AI assistants like Claude or ChatGPT to help optimize your website.
+              Select a scan date to export. {client.cities && client.cities.length > 1 
+                ? `Each city will be exported as a separate Excel file with service group tabs.`
+                : `Data will be exported as an Excel file with service group tabs.`}
             </p>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="export-start">Start Date</Label>
-                <Input
-                  id="export-start"
-                  type="date"
-                  value={exportStartDate}
-                  onChange={(e) => setExportStartDate(e.target.value)}
-                  data-testid="input-export-start-date"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="export-end">End Date</Label>
-                <Input
-                  id="export-end"
-                  type="date"
-                  value={exportEndDate}
-                  onChange={(e) => setExportEndDate(e.target.value)}
-                  data-testid="input-export-end-date"
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="export-scan-date">Select Scan Date</Label>
+              <Select value={selectedExportDate} onValueChange={setSelectedExportDate}>
+                <SelectTrigger className="w-full" data-testid="select-export-scan-date">
+                  <SelectValue placeholder="Choose a scan date..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {scanDatesData?.scanDates && scanDatesData.scanDates.length > 0 ? (
+                    scanDatesData.scanDates.map((scanDate) => (
+                      <SelectItem key={scanDate.date} value={scanDate.date}>
+                        {format(new Date(scanDate.date + "T12:00:00"), "MMMM d, yyyy")}
+                        {scanDate.cities.length > 0 && (
+                          <span className="text-gray-400 ml-2">
+                            ({scanDate.cities.join(", ")})
+                          </span>
+                        )}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="" disabled>No scans available</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
             </div>
             <div className="text-xs text-gray-500">
               <p className="font-medium mb-1">Export includes:</p>
               <ul className="list-disc list-inside space-y-0.5">
-                <li>README with AI assistant instructions</li>
-                <li>Summary of your visibility metrics</li>
-                <li>ChatGPT results (prompts, responses, citations)</li>
-                <li>Google AI results (prompts, responses, citations)</li>
+                <li>README with usage instructions</li>
+                {client.cities && client.cities.length > 1 ? (
+                  <>
+                    <li>Separate Excel file for each city</li>
+                    <li>Tabs for each service group (Plumber, Drain Cleaner, etc.)</li>
+                  </>
+                ) : (
+                  <li>Excel file with tabs for each service group</li>
+                )}
+                <li>All prompts, responses, and citations</li>
               </ul>
             </div>
           </div>
@@ -2165,9 +2179,17 @@ export default function MonitorDashboard() {
             </Button>
             <Button
               onClick={async () => {
+                if (!selectedExportDate) {
+                  toast({
+                    title: "Select a scan date",
+                    description: "Please choose a scan date to export",
+                    variant: "destructive",
+                  });
+                  return;
+                }
                 setIsExporting(true);
                 try {
-                  const url = `/api/monitoring/exports/${clientId}?startDate=${exportStartDate}&endDate=${exportEndDate}`;
+                  const url = `/api/monitoring/export-by-date/${clientId}?scanDate=${selectedExportDate}`;
                   const response = await fetch(url);
                   if (!response.ok) {
                     const error = await response.json();
@@ -2177,25 +2199,33 @@ export default function MonitorDashboard() {
                   const downloadUrl = window.URL.createObjectURL(blob);
                   const a = document.createElement("a");
                   a.href = downloadUrl;
-                  a.download = `visibility-export-${client.businessName.replace(/[^a-zA-Z0-9]/g, "-")}-${exportEndDate}.zip`;
+                  a.download = `visibility-export-${client.businessName.replace(/[^a-zA-Z0-9]/g, "-")}-${selectedExportDate}.zip`;
                   document.body.appendChild(a);
                   a.click();
                   document.body.removeChild(a);
                   window.URL.revokeObjectURL(downloadUrl);
                   setExportDialogOpen(false);
+                  toast({
+                    title: "Export Complete",
+                    description: "Your visibility data has been downloaded",
+                  });
                 } catch (error) {
                   console.error("Export error:", error);
-                  alert(error instanceof Error ? error.message : "Export failed");
+                  toast({
+                    title: "Export Failed",
+                    description: error instanceof Error ? error.message : "Export failed",
+                    variant: "destructive",
+                  });
                 } finally {
                   setIsExporting(false);
                 }
               }}
-              disabled={isExporting}
+              disabled={isExporting || !selectedExportDate}
               className="flex items-center gap-2"
               data-testid="button-download-export"
             >
               {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              {isExporting ? "Preparing..." : "Download ZIP"}
+              {isExporting ? "Preparing..." : "Download"}
             </Button>
           </div>
         </DialogContent>
