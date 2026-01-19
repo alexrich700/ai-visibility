@@ -422,16 +422,6 @@ const NEGATIVE_WORDS = [
   'caution', 'mixed reviews', 'inconsistent', 'hit or miss', 'subpar'
 ];
 
-// Weighted sentiment words (stronger positive/negative indicators)
-const STRONG_POSITIVE_WORDS = [
-  'best', 'highly recommended', 'excellent', 'outstanding', 'exceptional',
-  'first choice', 'top-rated', 'award-winning', 'premier'
-];
-
-const STRONG_NEGATIVE_WORDS = [
-  'avoid', 'scam', 'terrible', 'worst', 'stay away', 'warning', 'beware'
-];
-
 /**
  * Classifies sentiment of brand mention in response
  */
@@ -481,88 +471,6 @@ export function aggregateSentiment(
   }
   
   return breakdown;
-}
-
-/**
- * Calculates a numerical sentiment score (0-100) based on word analysis
- * 50 = neutral, 100 = very positive, 0 = very negative
- * Uses mutually exclusive counting - strong words are counted at 2x, regular words at 1x
- */
-export function calculateSentimentScore(
-  responseText: string | null | undefined,
-  brandName: string
-): number | null {
-  if (!responseText || !brandName) return null;
-  
-  const snippet = extractMentionContext(responseText, brandName);
-  if (!snippet) return null;
-  
-  const lowerSnippet = snippet.toLowerCase();
-  
-  // Track found words to avoid double-counting
-  const foundPositive = new Set<string>();
-  const foundNegative = new Set<string>();
-  
-  // Check for positive words
-  for (const word of POSITIVE_WORDS) {
-    if (lowerSnippet.includes(word)) {
-      foundPositive.add(word);
-    }
-  }
-  
-  // Check for negative words
-  for (const word of NEGATIVE_WORDS) {
-    if (lowerSnippet.includes(word)) {
-      foundNegative.add(word);
-    }
-  }
-  
-  // Calculate scores - strong words get 2 points, regular words get 1 point
-  // No double counting: a word is either strong (2 points) or regular (1 point)
-  let positiveScore = 0;
-  let negativeScore = 0;
-  
-  for (const word of Array.from(foundPositive)) {
-    if (STRONG_POSITIVE_WORDS.includes(word)) {
-      positiveScore += 2;
-    } else {
-      positiveScore += 1;
-    }
-  }
-  
-  for (const word of Array.from(foundNegative)) {
-    if (STRONG_NEGATIVE_WORDS.includes(word)) {
-      negativeScore += 2;
-    } else {
-      negativeScore += 1;
-    }
-  }
-  
-  // Calculate score: neutral = 50, shift based on positive/negative balance
-  // Maximum shift is 50 points in either direction
-  const netScore = positiveScore - negativeScore;
-  const maxPoints = 10; // After this many net points, we hit 100 or 0
-  
-  // Clamp netScore to [-maxPoints, maxPoints] range
-  const clampedNet = Math.max(-maxPoints, Math.min(maxPoints, netScore));
-  
-  // Convert to 0-100 scale: -maxPoints -> 0, 0 -> 50, +maxPoints -> 100
-  const score = 50 + (clampedNet / maxPoints) * 50;
-  
-  return Math.round(score);
-}
-
-/**
- * Calculates overall sentiment score from multiple individual scores
- */
-export function calculateOverallSentimentScore(
-  scores: (number | null)[]
-): number | null {
-  const validScores = scores.filter((s): s is number => s !== null);
-  if (validScores.length === 0) return null;
-  
-  const sum = validScores.reduce((a, b) => a + b, 0);
-  return Math.round(sum / validScores.length);
 }
 
 export interface SentimentStatement {
