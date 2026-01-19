@@ -79,6 +79,53 @@ function NegativeFeedbackDetails({ results }: { results: SentimentResult[] }) {
     return cleaned;
   };
 
+  // Common section header patterns in AI responses (case-insensitive, match at start)
+  const headerPatterns = [
+    /^(Short answer\s*[-–—:]+)/i,
+    /^(What customers say\s*[-–—:]+\s*(?:positives?|negatives?|negatives? or cautions?)?[-–—:]?\s*)/i,
+    /^(Representative examples?\s*[-–—:]*)/i,
+    /^(Summary\s*[-–—:]*)/i,
+    /^(Overview\s*[-–—:]*)/i,
+    /^(Pros?\s*[-–—:]+)/i,
+    /^(Cons?\s*[-–—:]+)/i,
+    /^(Strengths?\s*[-–—:]*)/i,
+    /^(Weaknesses?\s*[-–—:]*)/i,
+    /^(Positives?\s*[-–—:]+)/i,
+    /^(Negatives?\s*[-–—:]+)/i,
+    /^(Customer feedback\s*[-–—:]*)/i,
+    /^(Common complaints?\s*[-–—:]*)/i,
+    /^(Common praise\s*[-–—:]*)/i,
+  ];
+
+  const formatWithHeaders = (text: string): React.ReactNode => {
+    // Use regex to find and replace headers inline while preserving structure
+    let result = text;
+    
+    // Create markers for headers we find
+    const headerMarker = '\u0000HEADER_START\u0000';
+    const headerEnd = '\u0000HEADER_END\u0000';
+    
+    for (const pattern of headerPatterns) {
+      result = result.replace(pattern, `${headerMarker}$1${headerEnd}`);
+    }
+    
+    // If no headers found, return as-is
+    if (!result.includes(headerMarker)) {
+      return text;
+    }
+    
+    // Split by markers and build React elements
+    const parts = result.split(/(\u0000HEADER_START\u0000.*?\u0000HEADER_END\u0000)/);
+    
+    return parts.map((part, idx) => {
+      if (part.startsWith(headerMarker)) {
+        const headerText = part.replace(headerMarker, '').replace(headerEnd, '');
+        return <strong key={idx} className="font-semibold text-gray-800">{headerText}</strong>;
+      }
+      return <span key={idx}>{part}</span>;
+    });
+  };
+
   return (
     <div className="mt-4 pt-4 border-t border-gray-100">
       <p className="text-xs font-bold uppercase tracking-wider text-red-600 mb-3">Negative Feedback Details</p>
@@ -100,7 +147,7 @@ function NegativeFeedbackDetails({ results }: { results: SentimentResult[] }) {
                 <span className="text-xs font-semibold text-red-600 uppercase tracking-wide">{platform}</span>
               </div>
               <div className={`text-sm text-gray-700 leading-relaxed whitespace-pre-line ${isLongText ? 'print:hidden' : ''}`}>
-                {displayText}
+                {formatWithHeaders(displayText)}
               </div>
               {isLongText && (
                 <>
@@ -115,7 +162,7 @@ function NegativeFeedbackDetails({ results }: { results: SentimentResult[] }) {
                       <>Read more <ChevronDown size={12} /></>
                     )}
                   </button>
-                  <div className="hidden print:block text-sm text-gray-700 leading-relaxed whitespace-pre-line">{fullText}</div>
+                  <div className="hidden print:block text-sm text-gray-700 leading-relaxed whitespace-pre-line">{formatWithHeaders(fullText)}</div>
                 </>
               )}
             </div>
