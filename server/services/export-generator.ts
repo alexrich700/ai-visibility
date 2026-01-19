@@ -1,4 +1,5 @@
 import archiver from "archiver";
+import * as XLSX from "xlsx";
 import type { MonitoringClient, MonitoringGroup, CheckSession, CheckResult } from "@shared/schema";
 import type { Response } from "express";
 
@@ -349,6 +350,271 @@ export async function streamExportZip(res: Response, data: ExportData): Promise<
   archive.append(generateChatGPTCSV(data), { name: "chatgpt_results.csv" });
   archive.append(generateGoogleAICSV(data), { name: "google_results.csv" });
   archive.append(JSON.stringify(generateMetadata(), null, 2), { name: "metadata.json" });
+
+  await archive.finalize();
+}
+
+// ============================================
+// NEW: Excel export with per-city files and service group sheets
+// ============================================
+
+interface ExportBySessionData {
+  client: MonitoringClient;
+  groups: MonitoringGroup[];
+  sessions: CheckSession[]; // Sessions for the selected scan date
+  results: CheckResult[];
+  scanDate: string; // The selected scan date (YYYY-MM-DD)
+}
+
+interface CityExportData {
+  city: string;
+  session: CheckSession;
+  results: CheckResult[];
+  groups: MonitoringGroup[];
+}
+
+// Sanitize sheet name for Excel (max 31 chars, no special chars)
+function sanitizeSheetName(name: string): string {
+  // Remove special chars that Excel doesn't allow
+  let sanitized = name.replace(/[\\\/\*\?\[\]:]/g, "");
+  // Truncate to 31 characters
+  if (sanitized.length > 31) {
+    sanitized = sanitized.substring(0, 31);
+  }
+  return sanitized || "Sheet";
+}
+
+// Create Excel worksheet data for a service group
+function createGroupSheetData(
+  groupName: string,
+  results: CheckResult[],
+  sessionDate: Date
+): any[][] {
+  const headers = [
+    "Prompt",
+    "ChatGPT Found",
+    "ChatGPT Response",
+    "ChatGPT Citations",
+    "ChatGPT Sentiment",
+    "Google AI Found",
+    "Google AI Response",
+    "Google AI Citations",
+    "Google AI Sentiment",
+    "Competitors Mentioned",
+    "Scan Date"
+  ];
+
+  const rows: any[][] = [headers];
+
+  for (const result of results) {
+    rows.push([
+      result.promptText,
+      result.chatgptFound ? "Yes" : "No",
+      result.chatgptResponse || "",
+      formatCitations(result.chatgptCitations),
+      result.chatgptSentiment || "",
+      result.googleAIFound ? "Yes" : "No",
+      result.googleAIResponse || "",
+      formatCitations(result.googleAICitations),
+      result.googleAISentiment || "",
+      result.competitors || "",
+      sessionDate.toISOString().split("T")[0]
+    ]);
+  }
+
+  return rows;
+}
+
+// Generate Excel workbook for a city with service group sheets
+function generateCityExcel(cityData: CityExportData, clientName: string): Buffer {
+  const workbook = XLSX.utils.book_new();
+  
+  // Create a map of group ID to group name
+  const groupMap = new Map(cityData.groups.map(g => [g.id, g.name]));
+  
+  // Group results by service group
+  const resultsByGroup = new Map<number, CheckResult[]>();
+  for (const result of cityData.results) {
+    const groupResults = resultsByGroup.get(result.groupId) || [];
+    groupResults.push(result);
+    resultsByGroup.set(result.groupId, groupResults);
+  }
+  
+  // Filter to only service groups (exclude brand sentiment)
+  const serviceGroups = cityData.groups.filter(g => 
+    (g as any).promptCategory === 'service' || !(g as any).promptCategory
+  );
+  
+  // Track sheet names to avoid duplicates
+  const usedSheetNames = new Set<string>();
+  
+  // Create a sheet for each service group that has results
+  for (const group of serviceGroups) {
+    const groupResults = resultsByGroup.get(group.id);
+    if (!groupResults || groupResults.length === 0) continue;
+    
+    let sheetName = sanitizeSheetName(group.name);
+    
+    // Ensure unique sheet names
+    let counter = 1;
+    const originalName = sheetName;
+    while (usedSheetNames.has(sheetName)) {
+      const suffix = ` (${counter})`;
+      sheetName = sanitizeSheetName(originalName.substring(0, 31 - suffix.length) + suffix);
+      counter++;
+    }
+    usedSheetNames.add(sheetName);
+    
+    const sheetData = createGroupSheetData(
+      group.name,
+      groupResults,
+      cityData.session.createdAt
+    );
+    
+    const worksheet = XLSX.utils.aoa_to_sheet(sheetData);
+    
+    // Set column widths for better readability
+    worksheet['!cols'] = [
+      { wch: 50 },  // Prompt
+      { wch: 12 },  // ChatGPT Found
+      { wch: 60 },  // ChatGPT Response
+      { wch: 40 },  // ChatGPT Citations
+      { wch: 12 },  // ChatGPT Sentiment
+      { wch: 12 },  // Google AI Found
+      { wch: 60 },  // Google AI Response
+      { wch: 40 },  // Google AI Citations
+      { wch: 12 },  // Google AI Sentiment
+      { wch: 30 },  // Competitors
+      { wch: 12 },  // Scan Date
+    ];
+    
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+  }
+  
+  // If no sheets were added, add an empty summary sheet
+  if (workbook.SheetNames.length === 0) {
+    const summaryData = [
+      ["No service group results found for this scan"],
+      [""],
+      ["Client", clientName],
+      ["City", cityData.city],
+      ["Scan Date", cityData.session.createdAt.toISOString().split("T")[0]]
+    ];
+    const worksheet = XLSX.utils.aoa_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Summary");
+  }
+  
+  // Write to buffer
+  const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+  return buffer;
+}
+
+// Main export function: generates ZIP with Excel files per city
+export async function streamSessionExportZip(
+  res: Response, 
+  data: ExportBySessionData
+): Promise<void> {
+  const archive = archiver("zip", { zlib: { level: 9 } });
+  const safeName = data.client.businessName.replace(/[^a-zA-Z0-9]/g, "-");
+  const filename = `visibility-export-${safeName}-${data.scanDate}.zip`;
+
+  res.setHeader("Content-Type", "application/zip");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+
+  archive.pipe(res);
+
+  // Group sessions by city
+  const sessionsByCity = new Map<string, CheckSession>();
+  for (const session of data.sessions) {
+    const city = session.city || "All Cities";
+    sessionsByCity.set(city, session);
+  }
+
+  // Create a map of session ID to results
+  const resultsBySession = new Map<number, CheckResult[]>();
+  for (const result of data.results) {
+    if (!result.sessionId) continue;
+    const sessionResults = resultsBySession.get(result.sessionId) || [];
+    sessionResults.push(result);
+    resultsBySession.set(result.sessionId, sessionResults);
+  }
+
+  // Generate Excel file for each city
+  const cities = Array.from(sessionsByCity.keys());
+  
+  if (cities.length === 0) {
+    // No city-specific sessions, create a single file
+    const allResults = data.results;
+    const cityData: CityExportData = {
+      city: "All",
+      session: data.sessions[0],
+      results: allResults,
+      groups: data.groups,
+    };
+    const excelBuffer = generateCityExcel(cityData, data.client.businessName);
+    archive.append(excelBuffer, { 
+      name: `${safeName}-${data.scanDate}.xlsx` 
+    });
+  } else {
+    for (const city of cities) {
+      const session = sessionsByCity.get(city);
+      if (!session) continue;
+      
+      const cityResults = resultsBySession.get(session.id) || [];
+      
+      const cityData: CityExportData = {
+        city,
+        session,
+        results: cityResults,
+        groups: data.groups,
+      };
+      
+      const excelBuffer = generateCityExcel(cityData, data.client.businessName);
+      const safeCity = city.replace(/[^a-zA-Z0-9]/g, "-");
+      archive.append(excelBuffer, { 
+        name: `${safeName}-${safeCity}-${data.scanDate}.xlsx` 
+      });
+    }
+  }
+
+  // Add a README file
+  const readmeContent = `AI VISIBILITY AUDIT EXPORT
+==========================
+
+Generated: ${new Date().toISOString().split("T")[0]}
+Client: ${data.client.businessName}
+Domain: ${data.client.domain}
+Scan Date: ${data.scanDate}
+
+CONTENTS
+--------
+${cities.length > 1 
+  ? `This export contains ${cities.length} Excel files, one for each city:\n${cities.map(c => `- ${safeName}-${c.replace(/[^a-zA-Z0-9]/g, "-")}-${data.scanDate}.xlsx`).join("\n")}`
+  : `This export contains one Excel file with all scan results.`}
+
+Each Excel file contains:
+- Multiple sheets, one for each service group (e.g., "Plumber", "Drain Cleaner")
+- Each sheet contains all prompts and AI responses for that service group
+
+SHEET COLUMNS
+-------------
+- Prompt: The search query sent to AI platforms
+- ChatGPT Found/Response/Citations/Sentiment: Results from ChatGPT
+- Google AI Found/Response/Citations/Sentiment: Results from Google AI
+- Competitors Mentioned: Other businesses mentioned in responses
+- Scan Date: When this check was performed
+
+HOW TO USE
+----------
+1. Open the Excel file for the city you want to analyze
+2. Navigate between service group tabs to review different categories
+3. Filter by "Found = No" to identify visibility gaps
+4. Compare ChatGPT vs Google AI results for each prompt
+
+For support, contact Rossman Media.
+`;
+
+  archive.append(readmeContent, { name: "README.txt" });
 
   await archive.finalize();
 }

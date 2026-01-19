@@ -21,7 +21,7 @@ import {
   type Citation,
   type BrandSentimentFinding
 } from "./services/scan-analytics";
-import { streamExportZip } from "./services/export-generator";
+import { streamExportZip, streamSessionExportZip } from "./services/export-generator";
 import apiRouter from "./routes/index";
 
 
@@ -2401,7 +2401,97 @@ export async function registerRoutes(
     }
   });
 
-  // Export monitoring data as ZIP
+  // Get available scan dates for export dropdown
+  app.get("/api/monitoring/scan-dates/:id", async (req, res) => {
+    try {
+      const clientId = parseInt(req.params.id);
+      const allSessions = await storage.getCheckSessionsByClientId(clientId);
+      
+      // Filter to only completed sessions
+      const completedSessions = allSessions.filter(s => 
+        s.status === 'complete' || s.status === 'running'
+      );
+      
+      // Group sessions by date (YYYY-MM-DD) and collect cities
+      const dateMap = new Map<string, { date: string; cities: string[]; sessionIds: number[] }>();
+      
+      for (const session of completedSessions) {
+        const dateStr = new Date(session.createdAt).toISOString().split("T")[0];
+        
+        if (!dateMap.has(dateStr)) {
+          dateMap.set(dateStr, { date: dateStr, cities: [], sessionIds: [] });
+        }
+        
+        const entry = dateMap.get(dateStr)!;
+        entry.sessionIds.push(session.id);
+        if (session.city && !entry.cities.includes(session.city)) {
+          entry.cities.push(session.city);
+        }
+      }
+      
+      // Convert to array and sort by date (newest first)
+      const scanDates = Array.from(dateMap.values())
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      
+      res.json({ scanDates });
+    } catch (error) {
+      console.error("Get scan dates error:", error);
+      res.status(500).json({ error: "Failed to get scan dates" });
+    }
+  });
+
+  // Export by specific scan date (new format with per-city Excel files)
+  app.get("/api/monitoring/export-by-date/:id", async (req, res) => {
+    try {
+      const clientId = parseInt(req.params.id);
+      const { scanDate } = req.query;
+      
+      if (!scanDate || typeof scanDate !== 'string') {
+        return res.status(400).json({ error: "scanDate query parameter is required" });
+      }
+      
+      const client = await storage.getMonitoringClientById(clientId);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+      
+      const groups = await storage.getGroupsByClientId(clientId);
+      const allSessions = await storage.getCheckSessionsByClientId(clientId);
+      
+      // Filter sessions to the selected date (matching date portion only)
+      const sessions = allSessions.filter(s => {
+        const sessionDateStr = new Date(s.createdAt).toISOString().split("T")[0];
+        return sessionDateStr === scanDate;
+      });
+      
+      if (sessions.length === 0) {
+        return res.status(404).json({ error: "No data found for the selected scan date" });
+      }
+      
+      // Get all results from sessions for this date
+      const results: any[] = [];
+      for (const session of sessions) {
+        const sessionResults = await storage.getCheckResultsBySessionId(session.id);
+        results.push(...sessionResults);
+      }
+      
+      // Stream the new format export (Excel files per city with service group sheets)
+      await streamSessionExportZip(res, {
+        client,
+        groups,
+        sessions,
+        results,
+        scanDate,
+      });
+    } catch (error) {
+      console.error("Export by date error:", error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Failed to generate export" });
+      }
+    }
+  });
+
+  // Export monitoring data as ZIP (legacy date range format)
   app.get("/api/monitoring/exports/:id", async (req, res) => {
     try {
       const clientId = parseInt(req.params.id);
