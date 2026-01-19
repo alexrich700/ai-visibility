@@ -17,7 +17,8 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
-      <Route path="/audit/:id" component={AuditView} />
+      <Route path="/audit/share/:token">{() => <AuditView isSharedView={true} />}</Route>
+      <Route path="/audit/:id">{() => <AuditView />}</Route>
       <Route path="/admin" component={Admin} />
       <Route path="/admin/audit/:id" component={AdminAuditView} />
       <Route path="/monitor/clients" component={MonitorClients} />

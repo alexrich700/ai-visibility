@@ -14,6 +14,8 @@ export interface IStorage {
   createAudit(audit: InsertAudit): Promise<Audit>;
   getAudits(): Promise<Audit[]>;
   getAuditById(id: number): Promise<Audit | undefined>;
+  getAuditByShareToken(token: string): Promise<Audit | undefined>;
+  updateAuditShareToken(id: number, shareToken: string): Promise<Audit | undefined>;
   createLead(lead: InsertLead): Promise<DbLead>;
   getLeads(): Promise<DbLead[]>;
   getLeadById(id: number): Promise<DbLead | undefined>;
@@ -80,6 +82,20 @@ export class DatabaseStorage implements IStorage {
 
   async getAuditById(id: number): Promise<Audit | undefined> {
     const [audit] = await db.select().from(audits).where(eq(audits.id, id));
+    return audit;
+  }
+
+  async getAuditByShareToken(token: string): Promise<Audit | undefined> {
+    const [audit] = await db.select().from(audits).where(eq(audits.shareToken, token));
+    return audit;
+  }
+
+  async updateAuditShareToken(id: number, shareToken: string): Promise<Audit | undefined> {
+    const [audit] = await db
+      .update(audits)
+      .set({ shareToken })
+      .where(eq(audits.id, id))
+      .returning();
     return audit;
   }
 

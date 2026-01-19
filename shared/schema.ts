@@ -29,6 +29,7 @@ export const audits = pgTable("audits", {
   chatgptScore: integer("chatgpt_score").notNull(),
   googleAIScore: integer("google_ai_score").notNull(),
   fullResults: text("full_results"),
+  shareToken: text("share_token").unique(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

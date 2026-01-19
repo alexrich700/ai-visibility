@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 import {
   ArrowLeft,
   Building2,
@@ -27,6 +28,9 @@ import {
   ArrowRight,
   Loader2,
   FileText,
+  Share2,
+  Copy,
+  Check,
 } from "lucide-react";
 import { format } from "date-fns";
 import type { AuditResults } from "@shared/schema";
@@ -45,27 +49,40 @@ interface AuditData {
   googleAIScore: number;
   fullResults: string | null;
   createdAt: string;
+  shareToken?: string | null;
 }
 
-export default function AuditView() {
-  const { id } = useParams();
+interface AuditViewProps {
+  isSharedView?: boolean;
+  shareToken?: string;
+}
+
+export default function AuditView(props: AuditViewProps = {}) {
+  const { isSharedView = false, shareToken } = props;
+  const { id, token } = useParams();
+  const { toast } = useToast();
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
   const [isPrinting, setIsPrinting] = useState(false);
+  const [isShareCopied, setIsShareCopied] = useState(false);
   const [promptLogTab, setPromptLogTab] = useState<"chatgpt" | "google">("chatgpt");
-  const [isReportUnlocked, setIsReportUnlocked] = useState(false);
+  const [isReportUnlocked, setIsReportUnlocked] = useState(isSharedView);
   const [showLeadForm, setShowLeadForm] = useState(false);
   
   const [leadName, setLeadName] = useState("");
   const [leadEmail, setLeadEmail] = useState("");
   const [leadPhone, setLeadPhone] = useState("");
 
+  const effectiveToken = shareToken || token;
+  const isShared = isSharedView || !!effectiveToken;
+
   const { data: audit, isLoading, error } = useQuery<AuditData>({
-    queryKey: ["/api/audit", id],
+    queryKey: isShared ? ["/api/audit/share", effectiveToken] : ["/api/audit", id],
     queryFn: async () => {
-      const response = await apiRequest("GET", `/api/audit/${id}`);
+      const endpoint = isShared ? `/api/audit/share/${effectiveToken}` : `/api/audit/${id}`;
+      const response = await apiRequest("GET", endpoint);
       return response.json();
     },
-    enabled: !!id,
+    enabled: isShared ? !!effectiveToken : !!id,
   });
 
   const leadMutation = useMutation({
@@ -78,6 +95,44 @@ export default function AuditView() {
       setIsReportUnlocked(true);
     },
   });
+
+  const shareMutation = useMutation({
+    mutationFn: async (auditId: number) => {
+      const response = await apiRequest("POST", `/api/audit/${auditId}/share`);
+      return await response.json();
+    },
+    onSuccess: async (data: { shareToken: string }) => {
+      const shareUrl = `${window.location.origin}/audit/share/${data.shareToken}`;
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        setIsShareCopied(true);
+        toast({
+          title: "Share link copied!",
+          description: "Anyone with this link can view the audit without entering their information.",
+        });
+        setTimeout(() => setIsShareCopied(false), 3000);
+      } catch (err) {
+        toast({
+          title: "Share link generated",
+          description: shareUrl,
+          variant: "default",
+        });
+      }
+    },
+    onError: () => {
+      toast({
+        title: "Failed to generate share link",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleShare = () => {
+    if (audit?.id) {
+      shareMutation.mutate(audit.id);
+    }
+  };
 
   const handleLeadSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -423,6 +478,22 @@ export default function AuditView() {
                 data-testid="button-download-pdf"
               >
                 <Download size={16} /> Download PDF
+              </button>
+              <div className="w-px h-4 bg-gray-700"></div>
+              <button 
+                onClick={handleShare}
+                disabled={shareMutation.isPending}
+                className="flex items-center gap-2 hover:text-[#5599f9] transition-colors text-sm font-medium disabled:opacity-50"
+                data-testid="button-share-audit"
+              >
+                {shareMutation.isPending ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : isShareCopied ? (
+                  <Check size={16} className="text-green-400" />
+                ) : (
+                  <Share2 size={16} />
+                )}
+                {isShareCopied ? "Copied!" : "Share"}
               </button>
               <div className="w-px h-4 bg-gray-700"></div>
             </>
@@ -780,6 +851,39 @@ export default function AuditView() {
                       <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
                         <div className="bg-red-500 h-full" style={{ width: `${(auditResults.sentimentAnalysis.negativeCount / 10) * 100}%` }}></div>
                       </div>
+
+                      {auditResults.sentimentAnalysis.negativeCount > 0 && auditResults.sentimentAnalysis.results && (
+                        <div className="mt-4 pt-4 border-t border-gray-100">
+                          <p className="text-xs font-bold uppercase tracking-wider text-red-600 mb-3">Negative Feedback Details</p>
+                          <div className="space-y-3">
+                            {auditResults.sentimentAnalysis.results
+                              .filter(result => 
+                                result.chatgpt?.sentiment === "negative" || 
+                                result.googleAI?.sentiment === "negative"
+                              )
+                              .slice(0, 3)
+                              .map((result, idx) => {
+                                const negativeResponse = result.chatgpt?.sentiment === "negative" 
+                                  ? result.chatgpt.response 
+                                  : result.googleAI?.response;
+                                const platform = result.chatgpt?.sentiment === "negative" ? "ChatGPT" : "Google AI";
+                                const snippet = negativeResponse 
+                                  ? negativeResponse.replace(/\*\*/g, '').replace(/###?\s/g, '').replace(/\n+/g, ' ').trim().substring(0, 180) + (negativeResponse.length > 180 ? "..." : "")
+                                  : "No details available";
+                                
+                                return (
+                                  <div key={idx} className="p-3 bg-red-50 rounded-lg border border-red-100" data-testid={`negative-signal-${idx}`}>
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <AlertTriangle size={12} className="text-red-500" />
+                                      <span className="text-xs font-medium text-red-600">{platform}</span>
+                                    </div>
+                                    <p className="text-xs text-gray-600 leading-relaxed">{snippet}</p>
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
