@@ -328,6 +328,8 @@ export const checkResults = pgTable("check_results", {
   googleAICitations: jsonb("google_ai_citations"),
   chatgptSnippet: text("chatgpt_snippet"), // Context around brand mention
   googleAISnippet: text("google_ai_snippet"),
+  // Gemini grounding metadata for geo-optimization analysis
+  googleAIGroundingMetadata: jsonb("google_ai_grounding_metadata"), // {webSearchQueries: string[], groundingSupports: [...]}
   checkedAt: timestamp("checked_at").defaultNow().notNull(),
 });
 
