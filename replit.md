@@ -58,17 +58,15 @@ AI queries are processed with bounded concurrency (8 simultaneous prompts) and p
     - Average score calculated only from successful cities
 
 ### Analytics Dashboard
-The monitoring dashboard provides a 2x2 analytics grid:
+The monitoring dashboard provides a 3-column analytics grid:
 -   **City-Filtered Analytics**: All dashboard metrics are dynamically recalculated based on selected city filter:
     - "All Cities" aggregates latest session per city (scores averaged, competitors combined top 5)
     - Specific city selection shows only that city's session data
-    - Frontend computes analytics from city-filtered results using helper functions: `computeCompetitorVisibility`, `computeTopCitations`, `computeSentimentMetrics`
--   **2x2 Analytics Grid Layout**:
-    - Row 1: Top Citations | Prominence
-    - Row 2: Sentiment Score | Competitor Visibility
+    - Frontend computes analytics from city-filtered results using helper functions: `computeCompetitorVisibility`, `computeTopCitations`, `computeFirstPlaceCount`
+-   **3-Column Analytics Grid Layout**: Top Citations | Prominence | Competitor Visibility
 -   **Top Citations**: Tracks and displays top domains cited by AI platforms (from service results only). Filters out Google internal redirect URLs (vertexaisearch.cloud.google.com, grounding-api-redirect).
 -   **Prominence Tracking**: Measures average mention rank and "first place" recommendations.
--   **Sentiment Analysis**: Provides a numerical 0-100 sentiment score and AI-synthesized narratives (strengths and improvements) based on brand sentiment prompts.
+-   **Sentiment Analysis**: Uses categorical sentiment classification (positive/neutral/negative) with AI-synthesized narratives (strengths and improvements) based on brand sentiment prompts. Numerical sentiment scores (0-100) were removed in favor of the more valuable categorical approach.
 -   **Competitor Visibility**: Identifies and tracks top 5 competitors, filtering out city names (from service results only).
 -   **Response Viewer**: Allows detailed viewing of AI responses with brand highlighting.
 -   **Historical Trending**: Stores session-level metrics for trend analysis, including overall visibility, group-specific visibility, and competitor visibility over time, presented in tabbed charts.
