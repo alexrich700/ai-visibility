@@ -3,6 +3,7 @@ import { storage } from "../storage";
 import { runAudit } from "../ai-services";
 import { auditRequestSchema } from "@shared/schema";
 import crypto from "crypto";
+import { sendAuditNotification } from "../email";
 
 const router = Router();
 
@@ -29,6 +30,17 @@ router.post("/", async (req, res) => {
       googleAIScore: results.googleAIScore,
       fullResults: JSON.stringify(results),
     });
+
+    // Send email notification (don't block response)
+    sendAuditNotification({
+      businessName,
+      keyword,
+      city: city || null,
+      overallScore: results.overallScore,
+      chatgptScore: results.chatgptScore,
+      googleAIScore: results.googleAIScore,
+      auditId: audit.id
+    }).catch(err => console.error('Failed to send audit notification:', err));
 
     res.json({
       auditId: audit.id,
