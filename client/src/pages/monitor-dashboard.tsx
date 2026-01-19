@@ -925,13 +925,59 @@ export default function MonitorDashboard() {
   const firstPlaceCount = computeFirstPlaceCount(serviceResultsOnly);
 
   // Prepare chart data - use filtered sessions
-  const sessionChartData = filteredSessions.slice().reverse().map((session) => ({
-    date: format(new Date(session.createdAt), "MMM d"),
-    overall: session.overallScore,
-    chatgpt: session.chatgptScore,
-    googleAI: session.googleAIScore,
-    city: (session as any).city || null, // Include city info for reference
-  }));
+  // When "All Cities" is selected, group sessions by date and average scores
+  // When a specific city is selected, show individual session data points
+  const sessionChartData = (() => {
+    if (isSpecificCitySelected) {
+      // Specific city: show individual session data points
+      return filteredSessions.slice().reverse().map((session) => ({
+        date: format(new Date(session.createdAt), "MMM d"),
+        overall: session.overallScore,
+        chatgpt: session.chatgptScore,
+        googleAI: session.googleAIScore,
+        city: (session as any).city || null,
+      }));
+    } else {
+      // All Cities: group by date and average scores across all cities
+      const dateGroupMap = new Map<string, { 
+        dateObj: Date;
+        sessions: typeof filteredSessions;
+      }>();
+      
+      for (const session of filteredSessions) {
+        const dateObj = new Date(session.createdAt);
+        const dateKey = format(dateObj, "yyyy-MM-dd"); // Group by calendar date
+        
+        if (!dateGroupMap.has(dateKey)) {
+          dateGroupMap.set(dateKey, { dateObj, sessions: [] });
+        }
+        dateGroupMap.get(dateKey)!.sessions.push(session);
+      }
+      
+      // Convert to chart data with averaged scores, sorted chronologically
+      return Array.from(dateGroupMap.entries())
+        .sort((a, b) => a[1].dateObj.getTime() - b[1].dateObj.getTime())
+        .map(([_, { dateObj, sessions: dateSessions }]) => {
+          const avgOverall = Math.round(
+            dateSessions.reduce((sum, s) => sum + (s.overallScore || 0), 0) / dateSessions.length
+          );
+          const avgChatgpt = Math.round(
+            dateSessions.reduce((sum, s) => sum + (s.chatgptScore || 0), 0) / dateSessions.length
+          );
+          const avgGoogleAI = Math.round(
+            dateSessions.reduce((sum, s) => sum + (s.googleAIScore || 0), 0) / dateSessions.length
+          );
+          
+          return {
+            date: format(dateObj, "MMM d"),
+            overall: avgOverall,
+            chatgpt: avgChatgpt,
+            googleAI: avgGoogleAI,
+            city: null, // Aggregated across all cities
+          };
+        });
+    }
+  })();
 
   // Prepare group trend chart data (merge all groups into a single dataset)
   const groupTrendChartData = (() => {
