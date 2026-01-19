@@ -72,74 +72,20 @@ function NegativeFeedbackDetails({ results }: { results: SentimentResult[] }) {
     setExpandedCards(prev => ({ ...prev, [idx]: !prev[idx] }));
   };
 
+  // Clean text: remove URLs and markdown, preserve structure
   const cleanText = (text: string) => {
-    // Remove URLs (http/https links and markdown-style links)
     let cleaned = text
       .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // [text](url) -> text
       .replace(/\(https?:\/\/[^)]+\)/g, '') // (https://...) -> remove
       .replace(/https?:\/\/[^\s\])]+/g, '') // plain URLs -> remove
-      
-    // Clean up markdown formatting
-    cleaned = cleaned
-      .replace(/\*\*/g, '') // bold
-      .replace(/\*([^*]+)\*/g, '$1') // italic
+      .replace(/\*\*/g, '') // bold markdown
+      .replace(/\*([^*]+)\*/g, '$1') // italic markdown
       .replace(/###?\s?/g, '') // headers
-      
-    // Normalize bullets at start of lines only (don't replace hyphens in words)
-    cleaned = cleaned.replace(/^[\s]*[-•]\s+/gm, '• ')
-      
-    // Clean up excessive whitespace while preserving paragraph structure
-    cleaned = cleaned
-      .replace(/[ \t]+/g, ' ') // multiple spaces/tabs to single space
+      .replace(/[ \t]+/g, ' ') // multiple spaces to single
       .replace(/\n{3,}/g, '\n\n') // limit to max 2 newlines
-      .replace(/^\s+/gm, '') // remove leading whitespace on lines
       .trim();
       
     return cleaned;
-  };
-
-  // Extract just the negative portion from the full response
-  const extractNegativePortion = (text: string): string => {
-    const cleaned = cleanText(text);
-    
-    // Look for negative section markers (more flexible patterns)
-    const negativePatterns = [
-      // "What customers say — negatives" or similar
-      /what customers say\s*[-–—:\s]*negatives?\s*(?:or cautions?)?\s*[-–—:\s]*([\s\S]*?)(?=\n\s*what customers say|\n\s*representative|\n\s*positives?|\n\n|$)/i,
-      // "Negatives:" or "Negatives" on its own line
-      /\bnegatives?\s*[-–—:\s]*([\s\S]*?)(?=\n\s*positives?|\n\s*representative|\n\s*summary|\n\n\n|$)/i,
-      // "Cons:" or "Cons"
-      /\bcons?\s*[-–—:\s]*([\s\S]*?)(?=\n\s*pros?|\n\s*summary|\n\n\n|$)/i,
-      // "Concerns:" or "Concerns"  
-      /\bconcerns?\s*[-–—:\s]*([\s\S]*?)(?=\n\s*positives?|\n\s*summary|\n\n\n|$)/i,
-      // "Complaints"
-      /\bcomplaints?\s*[-–—:\s]*([\s\S]*?)(?=\n\s*positives?|\n\s*summary|\n\n\n|$)/i,
-      // "Cautions"
-      /\bcautions?\s*[-–—:\s]*([\s\S]*?)(?=\n\s*positives?|\n\s*summary|\n\n\n|$)/i,
-      // "Weaknesses"
-      /\bweaknesses?\s*[-–—:\s]*([\s\S]*?)(?=\n\s*strengths?|\n\s*summary|\n\n\n|$)/i,
-      // "A minority of customers report..."
-      /a minority of customers?\s*(?:report|say|mention|have)?\s*([\s\S]*?)(?=\n\s*representative|\n\n\n|$)/i,
-      // "However, some customers..."
-      /however,?\s*some\s*(?:customers?|reviewers?)?\s*([\s\S]*?)(?=\n\n\n|$)/i,
-      // "Issues reported include..."
-      /issues?\s*(?:reported|include|noted)?\s*[-–—:\s]*([\s\S]*?)(?=\n\s*positives?|\n\n\n|$)/i,
-    ];
-    
-    for (const pattern of negativePatterns) {
-      const match = cleaned.match(pattern);
-      if (match && match[1]?.trim()) {
-        const extracted = match[1].trim();
-        // Return any matched content (removed minimum length requirement)
-        if (extracted.length > 0) {
-          // Cap at reasonable length
-          return extracted.length > 400 ? extracted.substring(0, 400) + "..." : extracted;
-        }
-      }
-    }
-    
-    // If no negative section found, return a truncated version of the cleaned text
-    return cleaned.length > 250 ? cleaned.substring(0, 250) + "..." : cleaned;
   };
 
   return (
@@ -147,20 +93,20 @@ function NegativeFeedbackDetails({ results }: { results: SentimentResult[] }) {
       <p className="text-xs font-bold uppercase tracking-wider text-red-600 mb-3">Negative Feedback Details</p>
       <div className="space-y-3">
         {displaySignals.map((signal, idx) => {
-          const negativeText = extractNegativePortion(signal.text);
-          const isLongText = negativeText.length > 200;
+          const fullText = cleanText(signal.text);
+          const isLongText = fullText.length > 300;
           const isExpanded = expandedCards[idx] || false;
-          const displayText = isExpanded || !isLongText ? negativeText : negativeText.substring(0, 200) + "...";
+          const displayText = isExpanded || !isLongText ? fullText : fullText.substring(0, 300) + "...";
           
           return (
             <div key={idx} className="p-4 bg-red-50 rounded-lg border border-red-100" data-testid={`negative-signal-${idx}`}>
               <div className="flex items-center gap-2 mb-2">
                 <AlertTriangle size={14} className="text-red-500" />
-                <span className="text-xs font-semibold text-red-600 uppercase tracking-wide">{signal.platform}</span>
+                <span className="text-xs font-semibold text-red-600 uppercase tracking-wide">{signal.platform} Response</span>
               </div>
-              <p className={`text-sm text-gray-700 leading-relaxed whitespace-pre-line ${isLongText ? 'print:hidden' : ''}`}>
-                {displayText}
-              </p>
+              <blockquote className={`text-sm text-gray-700 leading-relaxed whitespace-pre-line border-l-2 border-red-200 pl-3 italic ${isLongText ? 'print:hidden' : ''}`}>
+                "{displayText}"
+              </blockquote>
               {isLongText && (
                 <>
                   <button 
@@ -174,7 +120,7 @@ function NegativeFeedbackDetails({ results }: { results: SentimentResult[] }) {
                       <>Read more <ChevronDown size={12} /></>
                     )}
                   </button>
-                  <p className="hidden print:block text-sm text-gray-700 leading-relaxed whitespace-pre-line">{negativeText}</p>
+                  <blockquote className="hidden print:block text-sm text-gray-700 leading-relaxed whitespace-pre-line border-l-2 border-red-200 pl-3 italic">"{fullText}"</blockquote>
                 </>
               )}
             </div>
