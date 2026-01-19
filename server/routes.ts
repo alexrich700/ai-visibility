@@ -2407,9 +2407,9 @@ export async function registerRoutes(
       const clientId = parseInt(req.params.id);
       const allSessions = await storage.getCheckSessionsByClientId(clientId);
       
-      // Filter to only completed sessions
+      // Filter to sessions that have data (completed, running, or paused with partial results)
       const completedSessions = allSessions.filter(s => 
-        s.status === 'complete' || s.status === 'running'
+        s.status === 'complete' || s.status === 'running' || s.status === 'paused'
       );
       
       // Group sessions by date (YYYY-MM-DD) and collect cities

@@ -2135,13 +2135,13 @@ export default function MonitorDashboard() {
             </p>
             <div className="space-y-2">
               <Label htmlFor="export-scan-date">Select Scan Date</Label>
-              <Select value={selectedExportDate} onValueChange={setSelectedExportDate}>
-                <SelectTrigger className="w-full" data-testid="select-export-scan-date">
-                  <SelectValue placeholder="Choose a scan date..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {scanDatesData?.scanDates && scanDatesData.scanDates.length > 0 ? (
-                    scanDatesData.scanDates.map((scanDate) => (
+              {scanDatesData?.scanDates && scanDatesData.scanDates.length > 0 ? (
+                <Select value={selectedExportDate} onValueChange={setSelectedExportDate}>
+                  <SelectTrigger className="w-full" data-testid="select-export-scan-date">
+                    <SelectValue placeholder="Choose a scan date..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {scanDatesData.scanDates.map((scanDate) => (
                       <SelectItem key={scanDate.date} value={scanDate.date}>
                         {format(new Date(scanDate.date + "T12:00:00"), "MMMM d, yyyy")}
                         {scanDate.cities.length > 0 && (
@@ -2150,12 +2150,14 @@ export default function MonitorDashboard() {
                           </span>
                         )}
                       </SelectItem>
-                    ))
-                  ) : (
-                    <SelectItem value="" disabled>No scans available</SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="text-sm text-gray-500 italic py-2">
+                  No scans available. Run a scan first to export data.
+                </div>
+              )}
             </div>
             <div className="text-xs text-gray-500">
               <p className="font-medium mb-1">Export includes:</p>
