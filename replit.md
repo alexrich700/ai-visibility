@@ -101,11 +101,25 @@ The monitoring dashboard provides a 3-column analytics grid:
 
 ### Admin Portal
 -   **Functionality**: Provides a dashboard for viewing audit submissions, managing lead statuses, and detailed audit reports.
--   **Authentication**: Token-based authentication with `ADMIN_PASSWORD` and rate limiting.
+-   **Authentication**: Email/password-based authentication with secure bcrypt password hashing:
+    - Admin users stored in `admin_users` table with hashed passwords
+    - Login via POST `/api/admin/login` with email and password
+    - Token-based sessions with 24-hour expiry
+    - Rate limiting (5 attempts per 15 minutes, then 15-minute lockout)
+-   **Password Reset Flow**:
+    - Request reset via POST `/api/admin/forgot-password` with email
+    - Reset tokens hashed with bcrypt before storage (expires in 1 hour)
+    - Reset password via POST `/api/admin/reset-password` with token and new password
+    - Reset emails sent via SendGrid from buildingbrandsmarketing.com domain
+-   **Routes**:
+    - `/admin` - Login page and dashboard
+    - `/admin/reset-password?token=xxx` - Password reset page
+    - `/admin/audit/:id` - Detailed audit report view
 
 ### Security
 -   **Authentication Middleware**: Ensures secure access to admin routes with token validation and rate limiting.
--   **Protected Routes**: All `/api/admin/*` endpoints are secured.
+-   **Password Security**: Uses bcrypt with salt rounds=10 for password and reset token hashing.
+-   **Protected Routes**: All `/api/admin/*` endpoints (except login/register/forgot/reset) are secured.
 
 ### Shared Code
 The `shared/` directory contains common TypeScript schemas and types, using Zod for runtime validation.
