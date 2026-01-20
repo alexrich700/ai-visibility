@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Home from "@/pages/home";
 import Admin from "@/pages/admin";
+import AdminResetPassword from "@/pages/admin-reset-password";
 import AdminAuditView from "@/pages/admin-audit-view";
 import AuditView from "@/pages/audit-view";
 import MonitorClients from "@/pages/monitor-clients";
@@ -20,6 +21,7 @@ function Router() {
       <Route path="/audit/share/:token">{() => <AuditView isSharedView={true} />}</Route>
       <Route path="/audit/:id">{() => <AuditView />}</Route>
       <Route path="/admin" component={Admin} />
+      <Route path="/admin/reset-password" component={AdminResetPassword} />
       <Route path="/admin/audit/:id" component={AdminAuditView} />
       <Route path="/monitor/clients" component={MonitorClients} />
       <Route path="/monitor/setup" component={MonitorSetup} />

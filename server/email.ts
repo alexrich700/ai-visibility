@@ -70,6 +70,14 @@ export async function sendAuditNotification(data: AuditNotificationData): Promis
     
     const scoreColor = data.overallScore >= 70 ? '#22c55e' : data.overallScore >= 40 ? '#eab308' : '#ef4444';
     
+    const baseUrl = process.env.REPLIT_DEV_DOMAIN 
+      ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+      : process.env.REPLIT_DEPLOYMENT_URL 
+        ? `https://${process.env.REPLIT_DEPLOYMENT_URL}`
+        : 'http://localhost:5000';
+    
+    const auditUrl = `${baseUrl}/admin/audit/${data.auditId}`;
+    
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #1f2937; border-bottom: 2px solid #3b82f6; padding-bottom: 10px;">
@@ -101,8 +109,15 @@ export async function sendAuditNotification(data: AuditNotificationData): Promis
         </div>
         ` : ''}
         
-        <p style="color: #6b7280; font-size: 12px; margin-top: 30px;">
-          View full audit details in the admin portal.
+        <div style="margin: 30px 0; text-align: center;">
+          <a href="${auditUrl}" 
+             style="background: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
+            View Audit Report
+          </a>
+        </div>
+        
+        <p style="color: #9ca3af; font-size: 12px; margin-top: 30px;">
+          Or copy this link: <a href="${auditUrl}" style="color: #3b82f6;">${auditUrl}</a>
         </p>
       </div>
     `;
