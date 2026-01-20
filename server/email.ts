@@ -1,5 +1,5 @@
-// Email service using Resend integration
-import { Resend } from 'resend';
+// Email service using SendGrid integration
+import sgMail from '@sendgrid/mail';
 
 let connectionSettings: any;
 
@@ -16,7 +16,7 @@ async function getCredentials() {
   }
 
   connectionSettings = await fetch(
-    'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=resend',
+    'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=sendgrid',
     {
       headers: {
         'Accept': 'application/json',
@@ -25,16 +25,17 @@ async function getCredentials() {
     }
   ).then(res => res.json()).then(data => data.items?.[0]);
 
-  if (!connectionSettings || (!connectionSettings.settings.api_key)) {
-    throw new Error('Resend not connected');
+  if (!connectionSettings || (!connectionSettings.settings.api_key || !connectionSettings.settings.from_email)) {
+    throw new Error('SendGrid not connected');
   }
   return { apiKey: connectionSettings.settings.api_key, fromEmail: connectionSettings.settings.from_email };
 }
 
-async function getResendClient() {
+async function getSendGridClient() {
   const { apiKey, fromEmail } = await getCredentials();
+  sgMail.setApiKey(apiKey);
   return {
-    client: new Resend(apiKey),
+    client: sgMail,
     fromEmail
   };
 }
@@ -60,10 +61,10 @@ interface AuditNotificationData {
 
 export async function sendAuditNotification(data: AuditNotificationData): Promise<boolean> {
   try {
-    const { client, fromEmail } = await getResendClient();
+    const { client, fromEmail } = await getSendGridClient();
     
     if (!fromEmail) {
-      console.error('Resend fromEmail not configured - cannot send notification');
+      console.error('SendGrid fromEmail not configured - cannot send notification');
       return false;
     }
     
@@ -106,14 +107,14 @@ export async function sendAuditNotification(data: AuditNotificationData): Promis
       </div>
     `;
 
-    const result = await client.emails.send({
-      from: fromEmail,
+    await client.send({
       to: NOTIFICATION_RECIPIENTS,
+      from: fromEmail,
       subject: `New AI Audit: ${data.businessName} (${data.overallScore}% visibility)`,
       html
     });
 
-    console.log('Audit notification email sent:', result);
+    console.log('Audit notification email sent via SendGrid');
     return true;
   } catch (error) {
     console.error('Failed to send audit notification email:', error);
