@@ -70,11 +70,7 @@ export async function sendAuditNotification(data: AuditNotificationData): Promis
     
     const scoreColor = data.overallScore >= 70 ? '#22c55e' : data.overallScore >= 40 ? '#eab308' : '#ef4444';
     
-    const baseUrl = process.env.REPLIT_DEV_DOMAIN 
-      ? `https://${process.env.REPLIT_DEV_DOMAIN}`
-      : process.env.REPLIT_DEPLOYMENT_URL 
-        ? `https://${process.env.REPLIT_DEPLOYMENT_URL}`
-        : 'http://localhost:5000';
+    const baseUrl = 'https://ai.buildingbrandsmarketing.com';
     
     const auditUrl = `${baseUrl}/admin/audit/${data.auditId}`;
     
@@ -146,11 +142,7 @@ export async function sendPasswordResetEmail(email: string, name: string, resetT
       return false;
     }
     
-    const baseUrl = process.env.REPLIT_DEV_DOMAIN 
-      ? `https://${process.env.REPLIT_DEV_DOMAIN}`
-      : process.env.REPLIT_DEPLOYMENT_URL 
-        ? `https://${process.env.REPLIT_DEPLOYMENT_URL}`
-        : 'http://localhost:5000';
+    const baseUrl = 'https://ai.buildingbrandsmarketing.com';
     
     const resetUrl = `${baseUrl}/admin/reset-password?token=${resetToken}`;
     
