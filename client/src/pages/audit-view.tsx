@@ -907,7 +907,7 @@ export default function AuditView(props: AuditViewProps = {}) {
               <div className="p-12 border-b md:border-b-0 md:border-r border-gray-200">
                 <SectionHeader title="Brand Sentiment" icon={BarChart2} />
                 
-                {auditResults.sentimentAnalysis && (
+                {auditResults.sentimentAnalysis ? (
                   <div className="space-y-6">
                     <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">
                       <div>
@@ -950,6 +950,12 @@ export default function AuditView(props: AuditViewProps = {}) {
                         <NegativeFeedbackDetails results={auditResults.sentimentAnalysis.results} />
                       )}
                     </div>
+                  </div>
+                ) : (
+                  <div className="p-6 bg-gray-50 rounded-xl border border-gray-100 text-center" data-testid="sentiment-not-available">
+                    <Minus size={32} className="text-gray-300 mx-auto mb-3" />
+                    <p className="text-gray-500 text-sm">Sentiment analysis not available for this audit.</p>
+                    <p className="text-gray-400 text-xs mt-1">Run a new audit to see brand sentiment data.</p>
                   </div>
                 )}
               </div>
