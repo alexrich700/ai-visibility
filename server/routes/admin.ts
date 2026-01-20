@@ -1,29 +1,137 @@
 import { Router } from "express";
 import { storage } from "../storage";
+import { adminLoginSchema, passwordResetRequestSchema, passwordResetSchema } from "@shared/schema";
 import { 
-  ADMIN_PASSWORD, 
   requireAdminAuth, 
   loginRateLimiter, 
   generateAdminToken,
   resetLoginAttempts
 } from "../middleware/auth";
+import bcrypt from "bcrypt";
+import crypto from "crypto";
+import { sendPasswordResetEmail } from "../email";
 
 const router = Router();
 
+const SALT_ROUNDS = 10;
+
 router.post("/login", loginRateLimiter, async (req, res) => {
   try {
-    const { password } = req.body;
-    if (password === ADMIN_PASSWORD) {
-      const ip = req.ip || req.socket.remoteAddress || "unknown";
-      resetLoginAttempts(ip);
-      const token = generateAdminToken();
-      res.json({ success: true, token });
-    } else {
-      res.status(401).json({ error: "Invalid password" });
+    const { email, password } = adminLoginSchema.parse(req.body);
+    
+    const user = await storage.getAdminUserByEmail(email.toLowerCase());
+    
+    if (!user) {
+      return res.status(401).json({ error: "Invalid email or password" });
     }
+    
+    const isValid = await bcrypt.compare(password, user.passwordHash);
+    
+    if (!isValid) {
+      return res.status(401).json({ error: "Invalid email or password" });
+    }
+    
+    const ip = req.ip || req.socket.remoteAddress || "unknown";
+    resetLoginAttempts(ip);
+    
+    const token = generateAdminToken();
+    res.json({ 
+      success: true, 
+      token,
+      user: { id: user.id, email: user.email, name: user.name }
+    });
   } catch (error) {
     console.error("Admin login error:", error);
-    res.status(500).json({ error: "Login failed" });
+    res.status(400).json({ error: "Login failed" });
+  }
+});
+
+router.post("/register", async (req, res) => {
+  try {
+    const { email, password, name } = req.body;
+    
+    if (!email || !password || !name) {
+      return res.status(400).json({ error: "Email, password, and name are required" });
+    }
+    
+    const existingUser = await storage.getAdminUserByEmail(email.toLowerCase());
+    if (existingUser) {
+      return res.status(400).json({ error: "An account with this email already exists" });
+    }
+    
+    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+    
+    const user = await storage.createAdminUser({
+      email: email.toLowerCase(),
+      passwordHash,
+      name,
+      resetToken: null,
+      resetTokenExpiry: null,
+    });
+    
+    res.json({ 
+      success: true, 
+      user: { id: user.id, email: user.email, name: user.name }
+    });
+  } catch (error) {
+    console.error("Admin registration error:", error);
+    res.status(500).json({ error: "Registration failed" });
+  }
+});
+
+router.post("/forgot-password", async (req, res) => {
+  try {
+    const { email } = passwordResetRequestSchema.parse(req.body);
+    
+    const user = await storage.getAdminUserByEmail(email.toLowerCase());
+    
+    if (!user) {
+      return res.json({ success: true, message: "If an account exists, a reset email has been sent." });
+    }
+    
+    const resetToken = crypto.randomBytes(32).toString("hex");
+    const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000);
+    
+    await storage.updateAdminUser(user.id, {
+      resetToken,
+      resetTokenExpiry,
+    });
+    
+    await sendPasswordResetEmail(user.email, user.name, resetToken);
+    
+    res.json({ success: true, message: "If an account exists, a reset email has been sent." });
+  } catch (error) {
+    console.error("Forgot password error:", error);
+    res.status(500).json({ error: "Failed to process request" });
+  }
+});
+
+router.post("/reset-password", async (req, res) => {
+  try {
+    const { token, password } = passwordResetSchema.parse(req.body);
+    
+    const user = await storage.getAdminUserByResetToken(token);
+    
+    if (!user) {
+      return res.status(400).json({ error: "Invalid or expired reset token" });
+    }
+    
+    if (user.resetTokenExpiry && new Date() > user.resetTokenExpiry) {
+      return res.status(400).json({ error: "Reset token has expired" });
+    }
+    
+    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+    
+    await storage.updateAdminUser(user.id, {
+      passwordHash,
+      resetToken: null,
+      resetTokenExpiry: null,
+    });
+    
+    res.json({ success: true, message: "Password has been reset successfully" });
+  } catch (error) {
+    console.error("Reset password error:", error);
+    res.status(500).json({ error: "Failed to reset password" });
   }
 });
 

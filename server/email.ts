@@ -121,3 +121,63 @@ export async function sendAuditNotification(data: AuditNotificationData): Promis
     return false;
   }
 }
+
+export async function sendPasswordResetEmail(email: string, name: string, resetToken: string): Promise<boolean> {
+  try {
+    const { client, fromEmail } = await getSendGridClient();
+    
+    if (!fromEmail) {
+      console.error('SendGrid fromEmail not configured - cannot send reset email');
+      return false;
+    }
+    
+    const baseUrl = process.env.REPLIT_DEV_DOMAIN 
+      ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+      : process.env.REPLIT_DEPLOYMENT_URL 
+        ? `https://${process.env.REPLIT_DEPLOYMENT_URL}`
+        : 'http://localhost:5000';
+    
+    const resetUrl = `${baseUrl}/admin/reset-password?token=${resetToken}`;
+    
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #1f2937; border-bottom: 2px solid #3b82f6; padding-bottom: 10px;">
+          Password Reset Request
+        </h2>
+        
+        <p>Hi ${name},</p>
+        
+        <p>We received a request to reset your password for the AI Visibility Audit admin portal.</p>
+        
+        <div style="margin: 30px 0; text-align: center;">
+          <a href="${resetUrl}" 
+             style="background: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
+            Reset Your Password
+          </a>
+        </div>
+        
+        <p style="color: #6b7280; font-size: 14px;">
+          This link will expire in 1 hour. If you didn't request this reset, you can safely ignore this email.
+        </p>
+        
+        <p style="color: #9ca3af; font-size: 12px; margin-top: 30px;">
+          If the button doesn't work, copy and paste this link into your browser:<br>
+          <a href="${resetUrl}" style="color: #3b82f6;">${resetUrl}</a>
+        </p>
+      </div>
+    `;
+
+    await client.send({
+      to: email,
+      from: fromEmail,
+      subject: 'Password Reset - AI Visibility Audit Portal',
+      html
+    });
+
+    console.log('Password reset email sent via SendGrid to', email);
+    return true;
+  } catch (error) {
+    console.error('Failed to send password reset email:', error);
+    return false;
+  }
+}

@@ -6,7 +6,8 @@ import {
   InsertMonitoringClient, InsertMonitoringGroup, InsertMonitoringPrompt, InsertCheckResult, InsertCheckSession,
   InsertCheckGroupMetric, InsertCheckCompetitorMetric,
   MonitoringClient, MonitoringGroup, MonitoringPrompt, CheckResult, CheckSession,
-  CheckGroupMetric, CheckCompetitorMetric
+  CheckGroupMetric, CheckCompetitorMetric,
+  adminUsers, InsertAdminUser, AdminUser
 } from "@shared/schema";
 import { eq, desc, and, lte, isNull, or } from "drizzle-orm";
 
@@ -68,6 +69,13 @@ export interface IStorage {
   
   // Scheduled check operations
   getClientsDueForCheck(): Promise<MonitoringClient[]>;
+  
+  // Admin user operations
+  createAdminUser(user: InsertAdminUser): Promise<AdminUser>;
+  getAdminUserByEmail(email: string): Promise<AdminUser | undefined>;
+  getAdminUserById(id: number): Promise<AdminUser | undefined>;
+  getAdminUserByResetToken(token: string): Promise<AdminUser | undefined>;
+  updateAdminUser(id: number, data: Partial<InsertAdminUser>): Promise<AdminUser | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -374,6 +382,36 @@ export class DatabaseStorage implements IStorage {
         )
       )
       .orderBy(monitoringClients.nextCheckAt);
+  }
+
+  // Admin user operations
+  async createAdminUser(userData: InsertAdminUser): Promise<AdminUser> {
+    const [user] = await db.insert(adminUsers).values(userData).returning();
+    return user;
+  }
+
+  async getAdminUserByEmail(email: string): Promise<AdminUser | undefined> {
+    const [user] = await db.select().from(adminUsers).where(eq(adminUsers.email, email.toLowerCase()));
+    return user;
+  }
+
+  async getAdminUserById(id: number): Promise<AdminUser | undefined> {
+    const [user] = await db.select().from(adminUsers).where(eq(adminUsers.id, id));
+    return user;
+  }
+
+  async getAdminUserByResetToken(token: string): Promise<AdminUser | undefined> {
+    const [user] = await db.select().from(adminUsers).where(eq(adminUsers.resetToken, token));
+    return user;
+  }
+
+  async updateAdminUser(id: number, data: Partial<InsertAdminUser>): Promise<AdminUser | undefined> {
+    const [user] = await db
+      .update(adminUsers)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(adminUsers.id, id))
+      .returning();
+    return user;
   }
 }
 

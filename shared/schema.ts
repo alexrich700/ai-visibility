@@ -64,6 +64,46 @@ export const insertLeadSchema = createInsertSchema(leads).omit({
 export type InsertLead = z.infer<typeof insertLeadSchema>;
 export type DbLead = typeof leads.$inferSelect;
 
+// Admin users table - for admin portal authentication
+export const adminUsers = pgTable("admin_users", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  name: text("name").notNull(),
+  resetToken: text("reset_token"),
+  resetTokenExpiry: timestamp("reset_token_expiry"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertAdminUserSchema = createInsertSchema(adminUsers).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertAdminUser = z.infer<typeof insertAdminUserSchema>;
+export type AdminUser = typeof adminUsers.$inferSelect;
+
+// Admin login schema
+export const adminLoginSchema = z.object({
+  email: z.string().email("Valid email is required"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+});
+
+export type AdminLogin = z.infer<typeof adminLoginSchema>;
+
+// Password reset request schema
+export const passwordResetRequestSchema = z.object({
+  email: z.string().email("Valid email is required"),
+});
+
+// Password reset schema
+export const passwordResetSchema = z.object({
+  token: z.string().min(1, "Reset token is required"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+});
+
 // Audit request schema for frontend validation
 export const auditRequestSchema = z.object({
   businessName: z.string().min(1, "Business name is required"),
