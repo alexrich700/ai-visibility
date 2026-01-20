@@ -9,7 +9,7 @@ import {
   CheckGroupMetric, CheckCompetitorMetric,
   adminUsers, InsertAdminUser, AdminUser
 } from "@shared/schema";
-import { eq, desc, and, lte, isNull, or } from "drizzle-orm";
+import { eq, desc, and, lte, isNull, or, isNotNull, gte } from "drizzle-orm";
 
 export interface IStorage {
   createAudit(audit: InsertAudit): Promise<Audit>;
@@ -75,6 +75,7 @@ export interface IStorage {
   getAdminUserByEmail(email: string): Promise<AdminUser | undefined>;
   getAdminUserById(id: number): Promise<AdminUser | undefined>;
   getAdminUserByResetToken(token: string): Promise<AdminUser | undefined>;
+  getAdminUsersWithPendingReset(): Promise<AdminUser[]>;
   updateAdminUser(id: number, data: Partial<InsertAdminUser>): Promise<AdminUser | undefined>;
 }
 
@@ -403,6 +404,17 @@ export class DatabaseStorage implements IStorage {
   async getAdminUserByResetToken(token: string): Promise<AdminUser | undefined> {
     const [user] = await db.select().from(adminUsers).where(eq(adminUsers.resetToken, token));
     return user;
+  }
+
+  async getAdminUsersWithPendingReset(): Promise<AdminUser[]> {
+    const now = new Date();
+    return await db.select().from(adminUsers)
+      .where(
+        and(
+          isNotNull(adminUsers.resetToken),
+          gte(adminUsers.resetTokenExpiry, now)
+        )
+      );
   }
 
   async updateAdminUser(id: number, data: Partial<InsertAdminUser>): Promise<AdminUser | undefined> {

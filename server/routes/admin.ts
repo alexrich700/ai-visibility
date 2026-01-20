@@ -90,10 +90,11 @@ router.post("/forgot-password", async (req, res) => {
     }
     
     const resetToken = crypto.randomBytes(32).toString("hex");
+    const resetTokenHash = await bcrypt.hash(resetToken, SALT_ROUNDS);
     const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000);
     
     await storage.updateAdminUser(user.id, {
-      resetToken,
+      resetToken: resetTokenHash,
       resetTokenExpiry,
     });
     
@@ -110,19 +111,26 @@ router.post("/reset-password", async (req, res) => {
   try {
     const { token, password } = passwordResetSchema.parse(req.body);
     
-    const user = await storage.getAdminUserByResetToken(token);
+    const usersWithPendingReset = await storage.getAdminUsersWithPendingReset();
     
-    if (!user) {
-      return res.status(400).json({ error: "Invalid or expired reset token" });
+    let matchedUser = null;
+    for (const user of usersWithPendingReset) {
+      if (user.resetToken) {
+        const isMatch = await bcrypt.compare(token, user.resetToken);
+        if (isMatch) {
+          matchedUser = user;
+          break;
+        }
+      }
     }
     
-    if (user.resetTokenExpiry && new Date() > user.resetTokenExpiry) {
-      return res.status(400).json({ error: "Reset token has expired" });
+    if (!matchedUser) {
+      return res.status(400).json({ error: "Invalid or expired reset token" });
     }
     
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
     
-    await storage.updateAdminUser(user.id, {
+    await storage.updateAdminUser(matchedUser.id, {
       passwordHash,
       resetToken: null,
       resetTokenExpiry: null,
