@@ -3,6 +3,7 @@ import { storage } from "../storage";
 import { runAudit } from "../ai-services";
 import { auditRequestSchema } from "@shared/schema";
 import crypto from "crypto";
+import { withDatabaseRetry } from "../db-utils";
 
 const router = Router();
 
@@ -18,17 +19,20 @@ router.post("/", async (req, res) => {
 
     const results = await runAudit(businessName, url, keyword, scope, city);
 
-    const audit = await storage.createAudit({
-      businessName,
-      url: url || null,
-      keyword,
-      scope,
-      city: city || null,
-      overallScore: results.overallScore,
-      chatgptScore: results.chatgptScore,
-      googleAIScore: results.googleAIScore,
-      fullResults: JSON.stringify(results),
-    });
+    // Use retry wrapper for database operation in case connection was lost during long AI operations
+    const audit = await withDatabaseRetry(() => 
+      storage.createAudit({
+        businessName,
+        url: url || null,
+        keyword,
+        scope,
+        city: city || null,
+        overallScore: results.overallScore,
+        chatgptScore: results.chatgptScore,
+        googleAIScore: results.googleAIScore,
+        fullResults: JSON.stringify(results),
+      })
+    );
 
     res.json({
       auditId: audit.id,

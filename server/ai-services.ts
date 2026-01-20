@@ -8,6 +8,7 @@ import {
 } from "./services/citation-extractor";
 import { db } from "./db";
 import { promptFallbackLogs } from "@shared/schema";
+import { DatabaseKeepaliveContext } from "./db-utils";
 
 // Configuration constants for prompt generation
 export const PROMPTS_PER_GROUP = 5; // Number of prompts to generate per service group
@@ -1448,119 +1449,128 @@ export async function runAudit(
     }>;
   };
 }> {
-  // Generate research prompts (NO brand name - for visibility testing)
-  const researchPrompts = await generateResearchPrompts(keyword, scope, city, url);
+  // Start database keepalive to prevent connection timeout during long AI operations
+  const keepalive = new DatabaseKeepaliveContext(10000);
+  console.log("[AUDIT] Started database keepalive for audit operation");
   
-  // Generate sentiment prompts (WITH brand name - for sentiment analysis)
-  const sentimentPrompts = await generateSentimentPrompts(businessName, keyword, scope, city);
+  try {
+    // Generate research prompts (NO brand name - for visibility testing)
+    const researchPrompts = await generateResearchPrompts(keyword, scope, city, url);
+    
+    // Generate sentiment prompts (WITH brand name - for sentiment analysis)
+    const sentimentPrompts = await generateSentimentPrompts(businessName, keyword, scope, city);
 
-  // Format location for web search (use city if provided)
-  const searchLocation = city || undefined;
+    // Format location for web search (use city if provided)
+    const searchLocation = city || undefined;
 
-  // Query ChatGPT and Google AI for research prompts (visibility)
-  const promptResults = await Promise.all(
-    researchPrompts.map(async (prompt) => {
-      const [chatgpt, googleAI] = await Promise.all([
-        queryChatGPT(prompt, businessName, url, searchLocation),
-        queryGemini(prompt, businessName, url),
-      ]);
-      const summary = generatePromptSummary(
-        chatgpt.found,
-        googleAI.found,
-        chatgpt.competitors,
-        googleAI.competitors,
-        businessName
-      );
-      return { prompt, summary, chatgpt, googleAI };
-    })
-  );
+    // Query ChatGPT and Google AI for research prompts (visibility)
+    const promptResults = await Promise.all(
+      researchPrompts.map(async (prompt) => {
+        const [chatgpt, googleAI] = await Promise.all([
+          queryChatGPT(prompt, businessName, url, searchLocation),
+          queryGemini(prompt, businessName, url),
+        ]);
+        const summary = generatePromptSummary(
+          chatgpt.found,
+          googleAI.found,
+          chatgpt.competitors,
+          googleAI.competitors,
+          businessName
+        );
+        return { prompt, summary, chatgpt, googleAI };
+      })
+    );
 
-  // Query ChatGPT and Google AI for sentiment prompts
-  const sentimentResults = await Promise.all(
-    sentimentPrompts.map(async (prompt) => {
-      const [chatgptResult, googleAIResult] = await Promise.all([
-        queryChatGPT(prompt, businessName, url, searchLocation),
-        queryGemini(prompt, businessName, url),
-      ]);
-      return {
-        prompt,
-        chatgpt: {
-          response: chatgptResult.response,
-          sentiment: analyzeSentiment(chatgptResult.response, businessName),
-        },
-        googleAI: {
-          response: googleAIResult.response,
-          sentiment: analyzeSentiment(googleAIResult.response, businessName),
-        },
-      };
-    })
-  );
+    // Query ChatGPT and Google AI for sentiment prompts
+    const sentimentResults = await Promise.all(
+      sentimentPrompts.map(async (prompt) => {
+        const [chatgptResult, googleAIResult] = await Promise.all([
+          queryChatGPT(prompt, businessName, url, searchLocation),
+          queryGemini(prompt, businessName, url),
+        ]);
+        return {
+          prompt,
+          chatgpt: {
+            response: chatgptResult.response,
+            sentiment: analyzeSentiment(chatgptResult.response, businessName),
+          },
+          googleAI: {
+            response: googleAIResult.response,
+            sentiment: analyzeSentiment(googleAIResult.response, businessName),
+          },
+        };
+      })
+    );
 
-  // Calculate visibility scores
-  const chatgptFound = promptResults.filter((r) => r.chatgpt.found).length;
-  const googleAIFound = promptResults.filter((r) => r.googleAI.found).length;
+    // Calculate visibility scores
+    const chatgptFound = promptResults.filter((r) => r.chatgpt.found).length;
+    const googleAIFound = promptResults.filter((r) => r.googleAI.found).length;
 
-  const chatgptScore = Math.round((chatgptFound / researchPrompts.length) * 100);
-  const googleAIScore = Math.round((googleAIFound / researchPrompts.length) * 100);
-  const overallScore = Math.round((chatgptScore + googleAIScore) / 2);
+    const chatgptScore = Math.round((chatgptFound / researchPrompts.length) * 100);
+    const googleAIScore = Math.round((googleAIFound / researchPrompts.length) * 100);
+    const overallScore = Math.round((chatgptScore + googleAIScore) / 2);
 
-  // Calculate sentiment summary
-  let positiveCount = 0;
-  let negativeCount = 0;
-  let neutralCount = 0;
-  
-  for (const result of sentimentResults) {
-    for (const sentiment of [result.chatgpt.sentiment, result.googleAI.sentiment]) {
-      if (sentiment === "positive") positiveCount++;
-      else if (sentiment === "negative") negativeCount++;
-      else neutralCount++;
+    // Calculate sentiment summary
+    let positiveCount = 0;
+    let negativeCount = 0;
+    let neutralCount = 0;
+    
+    for (const result of sentimentResults) {
+      for (const sentiment of [result.chatgpt.sentiment, result.googleAI.sentiment]) {
+        if (sentiment === "positive") positiveCount++;
+        else if (sentiment === "negative") negativeCount++;
+        else neutralCount++;
+      }
     }
-  }
-  
-  const overallSentiment: "positive" | "negative" | "neutral" = 
-    positiveCount > negativeCount + neutralCount ? "positive" :
-    negativeCount > positiveCount ? "negative" : "neutral";
+    
+    const overallSentiment: "positive" | "negative" | "neutral" = 
+      positiveCount > negativeCount + neutralCount ? "positive" :
+      negativeCount > positiveCount ? "negative" : "neutral";
 
-  // Aggregate competitors
-  const competitorMap = new Map<string, number>();
-  for (const result of promptResults) {
-    for (const competitor of [...result.chatgpt.competitors, ...result.googleAI.competitors]) {
-      competitorMap.set(competitor, (competitorMap.get(competitor) || 0) + 1);
+    // Aggregate competitors
+    const competitorMap = new Map<string, number>();
+    for (const result of promptResults) {
+      for (const competitor of [...result.chatgpt.competitors, ...result.googleAI.competitors]) {
+        competitorMap.set(competitor, (competitorMap.get(competitor) || 0) + 1);
+      }
     }
+
+    const competitors = Array.from(competitorMap.entries())
+      .map(([name, mentions]) => ({ name, mentions }))
+      .sort((a, b) => b.mentions - a.mentions)
+      .slice(0, 5);
+
+    // Generate executive summary
+    const location = scope === "local" && city ? city : "nationwide";
+    const executiveSummary = await generateExecutiveSummary(
+      businessName,
+      keyword,
+      overallScore,
+      chatgptScore,
+      googleAIScore,
+      overallSentiment,
+      location
+    );
+
+    console.log("[AUDIT] Audit completed successfully, stopping keepalive");
+    return {
+      promptResults,
+      overallScore,
+      chatgptScore,
+      googleAIScore,
+      executiveSummary,
+      competitors,
+      sentimentAnalysis: {
+        overall: overallSentiment,
+        positiveCount,
+        negativeCount,
+        neutralCount,
+        results: sentimentResults,
+      },
+    };
+  } finally {
+    keepalive.stop();
   }
-
-  const competitors = Array.from(competitorMap.entries())
-    .map(([name, mentions]) => ({ name, mentions }))
-    .sort((a, b) => b.mentions - a.mentions)
-    .slice(0, 5);
-
-  // Generate executive summary
-  const location = scope === "local" && city ? city : "nationwide";
-  const executiveSummary = await generateExecutiveSummary(
-    businessName,
-    keyword,
-    overallScore,
-    chatgptScore,
-    googleAIScore,
-    overallSentiment,
-    location
-  );
-
-  return {
-    promptResults,
-    overallScore,
-    chatgptScore,
-    googleAIScore,
-    executiveSummary,
-    competitors,
-    sentimentAnalysis: {
-      overall: overallSentiment,
-      positiveCount,
-      negativeCount,
-      neutralCount,
-      results: sentimentResults,
-    },
-  };
 }
 
 // ============================================
