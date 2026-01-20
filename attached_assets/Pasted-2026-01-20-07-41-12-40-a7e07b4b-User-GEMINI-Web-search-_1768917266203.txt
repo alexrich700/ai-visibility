@@ -1,0 +1,140 @@
+2026-01-20 07:41:12.40
+a7e07b4b
+User
+[GEMINI] Web search queries used: 24/7 emergency plumber Woodbury MN, emergency plumbing services Woodbury MN, Woodbury MN plumber 24 hour service, emergency plumber Woodbury MN response time
+2026-01-20 07:41:12.41
+a7e07b4b
+User
+[GEMINI] Response preview (first 300 chars): Here are companies offering 24/7 emergency plumbing services in Woodbury, MN, along with their available emergency phone lines and typical response times: * **On Time Service Pros** * Emergency Phone Line: (651) 300-2928 * Typical Response Time: Offers emergency plumbing services "eve
+2026-01-20 07:41:12.41
+a7e07b4b
+User
+[GEMINI] Extracted 8 citations
+2026-01-20 07:41:12.41
+a7e07b4b
+User
+[GEMINI DETECTION] Business: "MSP Plumbing Heating Air" | URL: "https://mspplumbingheatingair.com/" | Aliases: 0 | Search terms: ["msp plumbing heating air","mspplumbingheatingair","mspplumbingheatingair","mspplumbingheatingair.com"] | Found: false
+2026-01-20 07:41:13.03
+a7e07b4b
+User
+[GEMINI] Extracted 4 citations
+2026-01-20 07:41:13.03
+a7e07b4b
+User
+[GEMINI] Web search queries used: highest-rated plumbers Woodbury MN with verified reviews, best plumbers Woodbury MN reviews
+2026-01-20 07:41:13.03
+a7e07b4b
+User
+[GEMINI] Response preview (first 300 chars): Here are some of the highest-rated plumber providers in Woodbury, MN, with their verified review scores and number of reviews: * **A.J. Alberts Plumbing** boasts a 4.9-star Google rating and over 600 5-star reviews, having served the area for over 35 years. They were also voted Best Plumbing Serv
+2026-01-20 07:41:13.03
+a7e07b4b
+User
+[GEMINI DETECTION] Business: "MSP Plumbing Heating Air" | URL: "https://mspplumbingheatingair.com/" | Aliases: 0 | Search terms: ["msp plumbing heating air","mspplumbingheatingair","mspplumbingheatingair","mspplumbingheatingair.com"] | Found: false
+2026-01-20 07:41:13.36
+a7e07b4b
+User
+[GEMINI] Web search queries used: Plumber services Woodbury MN, emergency plumber Woodbury MN, 24/7 plumbing Woodbury MN
+2026-01-20 07:41:13.36
+a7e07b4b
+User
+[GEMINI DETECTION] Business: "MSP Plumbing Heating Air" | URL: "https://mspplumbingheatingair.com/" | Aliases: 0 | Search terms: ["msp plumbing heating air","mspplumbingheatingair","mspplumbingheatingair","mspplumbingheatingair.com"] | Found: false
+2026-01-20 07:41:13.36
+a7e07b4b
+User
+[GEMINI] Extracted 9 citations
+2026-01-20 07:41:13.36
+a7e07b4b
+User
+[GEMINI] Response preview (first 300 chars): It appears "Plumberq" was a typo and you are looking for "Plumber" services. Here are several local businesses in Woodbury, MN that offer plumbing services, including emergency availability: * **On Time Service Pros** has been serving clients since 1945 and offers 24/7 emergency plumbing services
+2026-01-20 07:41:17.18
+a7e07b4b
+User
+[GEMINI] Web search queries used: affordable plumbers Woodbury MN, plumbers Woodbury MN flat rate pricing, low cost plumbing services Woodbury MN, sample plumbing estimates Woodbury MN clogged drain, sample plumbing estimates Woodbury MN water heater repair
+2026-01-20 07:41:17.19
+a7e07b4b
+User
+[GEMINI] Response preview (first 300 chars): Several plumbing businesses in Woodbury, MN, advertise affordable services, competitive pricing, or offer free estimates. However, specific flat-rate pricing or detailed sample estimates for common jobs like clogged drains or water heater repairs are not consistently provided online by most companie
+2026-01-20 07:41:17.19
+a7e07b4b
+User
+[GEMINI DETECTION] Business: "MSP Plumbing Heating Air" | URL: "https://mspplumbingheatingair.com/" | Aliases: 0 | Search terms: ["msp plumbing heating air","mspplumbingheatingair","mspplumbingheatingair","mspplumbingheatingair.com"] | Found: false
+2026-01-20 07:41:17.19
+a7e07b4b
+User
+[GEMINI] Extracted 8 citations
+2026-01-20 07:41:19.30
+a7e07b4b
+User
+[CHATGPT] Extracted 0 citations
+2026-01-20 07:41:19.30
+a7e07b4b
+User
+[CHATGPT] Response preview (first 300 chars): Do you mean a specific service called "Plumberq," or did you mean "plumbers" in general? Also, which review source do you want me to use for the verified scores (Google, Yelp, Angi/HomeAdvisor, or another site)? I can pull the highest‑rated plumbers in Woodbury, MN and give their review scores and n
+2026-01-20 07:41:19.30
+a7e07b4b
+User
+[CHATGPT DETECTION] Business: "MSP Plumbing Heating Air" | URL: "https://mspplumbingheatingair.com/" | Aliases: 0 | Search terms: ["msp plumbing heating air","mspplumbingheatingair","mspplumbingheatingair","mspplumbingheatingair.com"] | Found: false
+2026-01-20 07:41:56.95
+a7e07b4b
+User
+[CHATGPT DETECTION] Business: "MSP Plumbing Heating Air" | URL: "https://mspplumbingheatingair.com/" | Aliases: 0 | Search terms: ["msp plumbing heating air","mspplumbingheatingair","mspplumbingheatingair","mspplumbingheatingair.com"] | Found: false
+2026-01-20 07:41:56.95
+a7e07b4b
+User
+[CHATGPT] Extracted 8 citations
+2026-01-20 07:41:56.95
+a7e07b4b
+User
+[NO MATCH] AI cited these domains: rotorooter.com, burgerplumbing.com, plumbingexpertsusa.com, mikeedwardsplumbinginc.com, mnmps.com
+2026-01-20 07:41:56.95
+a7e07b4b
+User
+[CHATGPT] Response preview (first 300 chars): Here are Woodbury-area plumbing companies that advertise 24/7 emergency service, with their emergency phone numbers and any typical response-time information they publish. Sources checked and current as of January 20, 2026. - Roto‑Rooter Plumbing & Water Cleanup — Emergency phone: 651‑705‑1115. Rot
+2026-01-20 07:42:01.45
+a7e07b4b
+User
+[CHATGPT DETECTION] Business: "MSP Plumbing Heating Air" | URL: "https://mspplumbingheatingair.com/" | Aliases: 0 | Search terms: ["msp plumbing heating air","mspplumbingheatingair","mspplumbingheatingair","mspplumbingheatingair.com"] | Found: false
+2026-01-20 07:42:01.45
+a7e07b4b
+User
+[NO MATCH] AI cited these domains: ajalberts.com, bonfe.com, bonfeunderground.com, trustindex.io, rotorooter.com
+2026-01-20 07:42:01.45
+a7e07b4b
+User
+[CHATGPT] Extracted 11 citations
+2026-01-20 07:42:01.45
+a7e07b4b
+User
+[CHATGPT] Response preview (first 300 chars): I looked up current listings and reviews for plumbers that regularly serve Woodbury, MN (checked Jan 20, 2026). Below are five top companies, a short comparison of what makes each different, and their approximate average customer ratings with sources. - A.J. Alberts Plumbing — https://ajalberts.com
+2026-01-20 07:42:30.57
+a7e07b4b
+User
+[GEMINI] Web search queries used: top plumbing companies Woodbury MN, best plumbers Woodbury MN reviews, plumbing services Woodbury MN comparison, Woodbury MN plumbers ratings, Done Right Plumbing Woodbury MN reviews services, Hero Plumbing, Heating & Cooling Woodbury MN reviews services, Dean's Home Services Woodbury MN reviews services
+2026-01-20 07:53:38.25
+a7e07b4b
+User
+[GEMINI] Response preview (first 300 chars): When seeking a plumber in Woodbury, MN, several companies stand out for their range of services and customer feedback. Here's a comparison of top plumbing companies serving the area, highlighting their business names, key service differences, and average customer ratings: | Business Name |
+2026-01-20 07:53:38.25
+a7e07b4b
+User
+[GEMINI] Extracted 15 citations
+2026-01-20 07:53:38.25
+a7e07b4b
+User
+[GEMINI DETECTION] Business: "MSP Plumbing Heating Air" | URL: "https://mspplumbingheatingair.com/" | Aliases: 0 | Search terms: ["msp plumbing heating air","mspplumbingheatingair","mspplumbingheatingair","mspplumbingheatingair.com"] | Found: false
+2026-01-20 07:53:38.26
+a7e07b4b
+User
+node:events:502
+2026-01-20 07:53:38.26
+a7e07b4b
+User
+at Readable.push (node:internal/streams/readable:392:5)
+2026-01-20 07:53:38.26
+a7e07b4b
+User
+host: 'ep-lively-butterfly-ahwbyfyh.c-3.us-east-1.aws.neon.tech',
+2026-01-20 07:53:38.26
+a7e07b4b
+User
+routine: 'ProcessInterrupts',
