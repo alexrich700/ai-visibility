@@ -1,0 +1,148 @@
+2026-01-22 08:01:37.51
+8aaa58dd
+User
+[NO MATCH] AI cited these domains: standardacinc.com, standardheating.com, genzryan.com, prontoheat.com, bonfe.com
+2026-01-22 08:01:37.51
+8aaa58dd
+User
+[CHATGPT DETECTION] Business: "MSP Plumbing Heating Air" | URL: "https://mspplumbingheatingair.com/" | Aliases: 0 | Search terms: ["msp plumbing heating air","mspplumbingheatingair","mspplumbingheatingair","mspplumbingheatingair.com"] | Found: false
+2026-01-22 08:01:37.51
+8aaa58dd
+User
+Rescan cancelled - client disconnected during batch
+2026-01-22 08:01:37.51
+8aaa58dd
+User
+[CHATGPT] Extracted 18 citations
+2026-01-22 08:01:37.51
+8aaa58dd
+User
+[CHATGPT] Response preview (first 300 chars): Below are eight widely recommended HVAC providers that serve Minneapolis; for each I note whether they emphasize installation, repairs (including emergency service), and what warranty/guarantee offerings they advertise. I used each company’s site or reliable local profiles to confirm services and wa
+2026-01-22 08:01:38.75
+8aaa58dd
+User
+[queryOpenAI] Result - found: true, response length: 5276, citations: 19
+2026-01-22 08:01:38.75
+8aaa58dd
+User
+[CHATGPT] Extracted 19 citations
+2026-01-22 08:01:38.75
+8aaa58dd
+User
+[CHATGPT DETECTION] Business: "MSP Plumbing Heating Air" | URL: "https://mspplumbingheatingair.com/" | Aliases: 0 | Search terms: ["msp plumbing heating air","mspplumbingheatingair","mspplumbingheatingair","mspplumbingheatingair.com"] | Found: true (matched: "mspplumbingheatingair.com")
+2026-01-22 08:01:38.75
+8aaa58dd
+User
+[DOMAIN MATCH] Brand domain "mspplumbingheatingair.com" exactly matches AI-cited URL: "mspplumbingheatingair.com"
+2026-01-22 08:02:14.98
+8aaa58dd
+User
+[CHATGPT DETECTION] Business: "MSP Plumbing Heating Air" | URL: "https://mspplumbingheatingair.com/" | Aliases: 0 | Search terms: ["msp plumbing heating air","mspplumbingheatingair","mspplumbingheatingair","mspplumbingheatingair.com"] | Found: false
+2026-01-22 08:02:14.98
+8aaa58dd
+User
+[CHATGPT] Extracted 13 citations
+2026-01-22 08:02:14.98
+8aaa58dd
+User
+[CHATGPT] Response preview (first 300 chars): I checked local company pages and directories for 24/7 emergency plumbing coverage in Saint Paul, MN (information verified as of Jan 22, 2026). Below are reputable companies that advertise 24/7 emergency service, each entry includes the emergency contact number, the company website when available, a
+2026-01-22 08:02:14.98
+8aaa58dd
+User
+[queryOpenAI] Result - found: false, response length: 5525, citations: 13
+2026-01-22 08:02:14.98
+8aaa58dd
+User
+[NO MATCH] AI cited these domains: rotorooter.com, onehourrooter.com, mrrooter.com, emergencyrootermn.com, 4frontenergy.com
+2026-01-22 08:02:22.00
+8aaa58dd
+User
+[CHATGPT] Extracted 16 citations
+2026-01-22 08:02:22.00
+8aaa58dd
+User
+[queryOpenAI] Result - found: true, response length: 10263, citations: 16
+2026-01-22 08:02:22.00
+8aaa58dd
+User
+[DOMAIN MATCH] Brand domain "mspplumbingheatingair.com" exactly matches AI-cited URL: "mspplumbingheatingair.com"
+2026-01-22 08:02:22.00
+8aaa58dd
+User
+[CHATGPT DETECTION] Business: "MSP Plumbing Heating Air" | URL: "https://mspplumbingheatingair.com/" | Aliases: 0 | Search terms: ["msp plumbing heating air","mspplumbingheatingair","mspplumbingheatingair","mspplumbingheatingair.com"] | Found: true (matched: "mspplumbingheatingair.com")
+2026-01-22 08:02:22.15
+8aaa58dd
+User
+[CHATGPT DETECTION] Business: "MSP Plumbing Heating Air" | URL: "https://mspplumbingheatingair.com/" | Aliases: 0 | Search terms: ["msp plumbing heating air","mspplumbingheatingair","mspplumbingheatingair","mspplumbingheatingair.com"] | Found: false
+2026-01-22 08:02:22.15
+8aaa58dd
+User
+[queryOpenAI] Result - found: false, response length: 7491, citations: 10
+2026-01-22 08:02:22.15
+8aaa58dd
+User
+[CHATGPT] Extracted 10 citations
+2026-01-22 08:02:22.15
+8aaa58dd
+User
+[NO MATCH] AI cited these domains: rotorooter.com, benjaminfranklinplumbing.com, stpaulpipeworks.com, pro.porch.com, rascherplghtg.com
+2026-01-22 08:02:22.15
+8aaa58dd
+User
+[CHATGPT] Response preview (first 300 chars): Below are six widely used plumbing companies that serve Saint Paul, MN, with a short comparison (specialties, pros, cons) and the most recent visible average-customer rating I could find. Ratings and site information are current as of Jan 22, 2026 — I’ve cited the company pages and review listings I
+2026-01-22 08:02:22.45
+8aaa58dd
+User
+[Checkpoint] Rescan session 16: Saved checkpoint at prompt 1/89 (score: 1%)
+2026-01-22 08:02:22.57
+8aaa58dd
+User
+[Checkpoint] Rescan session 16: Saved checkpoint at prompt 2/89 (score: 1%)
+2026-01-22 08:02:22.64
+8aaa58dd
+User
+[Checkpoint] Rescan session 16: Saved checkpoint at prompt 3/89 (score: 1%)
+2026-01-22 08:02:22.71
+8aaa58dd
+User
+[Checkpoint] Rescan session 16: Saved checkpoint at prompt 4/89 (score: 1%)
+2026-01-22 08:02:22.71
+8aaa58dd
+User
+[runPromptCheck] Checking visibility for "MSP Plumbing Heating Air" with location: "Saint Paul, MN", aliases: 0
+2026-01-22 08:02:22.71
+8aaa58dd
+User
+[queryGoogleAI] Calling Gemini...
+2026-01-22 08:02:22.71
+8aaa58dd
+User
+[runPromptCheck] Checking visibility for "MSP Plumbing Heating Air" with location: "Saint Paul, MN", aliases: 0
+2026-01-22 08:02:22.71
+8aaa58dd
+User
+[queryOpenAI] Calling ChatGPT with location: "Saint Paul, MN", aliases: 0
+2026-01-22 08:02:22.71
+8aaa58dd
+User
+[queryOpenAI] Calling ChatGPT with location: "Saint Paul, MN", aliases: 0
+2026-01-22 08:02:22.71
+8aaa58dd
+User
+[queryOpenAI] Calling ChatGPT with location: "Saint Paul, MN", aliases: 0
+2026-01-22 08:02:22.71
+8aaa58dd
+User
+[queryGoogleAI] Calling Gemini...
+2026-01-22 08:02:22.71
+8aaa58dd
+User
+[runPromptCheck] Checking visibility for "MSP Plumbing Heating Air" with location: "Saint Paul, MN", aliases: 0
+2026-01-22 08:02:22.71
+8aaa58dd
+User
+[runPromptCheck] Checking visibility for "MSP Plumbing Heating Air" with location: "Saint Paul, MN", aliases: 0
+2026-01-22 08:02:22.71
+8aaa58dd
+User
+[queryGoogleAI] Calling Gemini...
