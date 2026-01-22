@@ -1,4 +1,4 @@
-import { db } from "./db";
+import { db, pool } from "./db";
 import { 
   audits, leads, InsertAudit, InsertLead, Audit, DbLead,
   monitoringClients, monitoringGroups, monitoringPrompts, checkResults, checkSessions,
@@ -85,6 +85,7 @@ export interface IStorage {
   getQueuedScanJobs(): Promise<ScanJob[]>;
   getRunningScanJobs(): Promise<ScanJob[]>;
   getActiveScanJobForClient(clientId: number): Promise<ScanJob | undefined>;
+  claimQueuedJob(): Promise<ScanJob | null>; // Atomically claim a queued job for processing
   updateScanJob(id: number, data: Partial<InsertScanJob & { startedAt?: Date; lastProgressAt?: Date; completedAt?: Date }>): Promise<ScanJob | undefined>;
   deleteScanJob(id: number): Promise<void>;
 }
@@ -476,6 +477,78 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(scanJobs.createdAt))
       .limit(1);
     return job;
+  }
+
+  async claimQueuedJob(): Promise<ScanJob | null> {
+    // Uses database-level locking with FOR UPDATE SKIP LOCKED to atomically claim a job
+    // This ensures safe distributed processing across multiple server instances:
+    // - FOR UPDATE locks the selected row
+    // - SKIP LOCKED causes other workers to skip already-locked rows
+    // - All within a single transaction for atomic claim
+    
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      
+      // Select and lock the oldest queued job, skipping any that are already locked by other workers
+      const selectResult = await client.query<ScanJob>(`
+        SELECT * FROM scan_jobs 
+        WHERE status = 'queued' 
+        ORDER BY created_at ASC 
+        LIMIT 1 
+        FOR UPDATE SKIP LOCKED
+      `);
+      
+      if (selectResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      
+      const job = selectResult.rows[0];
+      const now = new Date();
+      
+      // Update the job to 'running' while still holding the lock
+      const updateResult = await client.query<ScanJob>(`
+        UPDATE scan_jobs 
+        SET status = 'running', 
+            started_at = $1, 
+            last_progress_at = $2, 
+            progress_message = 'Starting scan...'
+        WHERE id = $3
+        RETURNING *
+      `, [now, now, job.id]);
+      
+      await client.query('COMMIT');
+      
+      if (updateResult.rows.length === 0) {
+        return null;
+      }
+      
+      // Map snake_case columns to camelCase for TypeScript
+      const row = updateResult.rows[0];
+      return {
+        id: row.id,
+        clientId: (row as any).client_id ?? row.clientId,
+        targetCity: (row as any).target_city ?? row.targetCity,
+        status: row.status,
+        progress: row.progress,
+        progressMessage: (row as any).progress_message ?? row.progressMessage,
+        completedPrompts: (row as any).completed_prompts ?? row.completedPrompts,
+        totalPrompts: (row as any).total_prompts ?? row.totalPrompts,
+        sessionId: (row as any).session_id ?? row.sessionId,
+        errorMessage: (row as any).error_message ?? row.errorMessage,
+        resultScore: (row as any).result_score ?? row.resultScore,
+        startedAt: (row as any).started_at ?? row.startedAt,
+        lastProgressAt: (row as any).last_progress_at ?? row.lastProgressAt,
+        completedAt: (row as any).completed_at ?? row.completedAt,
+        createdAt: (row as any).created_at ?? row.createdAt,
+      } as ScanJob;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async updateScanJob(id: number, data: Partial<InsertScanJob & { startedAt?: Date; lastProgressAt?: Date; completedAt?: Date }>): Promise<ScanJob | undefined> {

@@ -90,18 +90,26 @@ async function detectAndFailStuckJobs(): Promise<void> {
   }
 }
 
-async function processScanJob(job: ScanJob): Promise<void> {
+async function processScanJob(job: ScanJob, alreadyClaimed: boolean = false): Promise<void> {
   const startTime = Date.now();
   log(`[ScanJobProcessor] Starting job ${job.id} for client ${job.clientId}`, "job-processor");
 
   try {
-    const now = new Date();
-    await storage.updateScanJob(job.id, {
-      status: 'running',
-      startedAt: now,
-      lastProgressAt: now,
-      progressMessage: 'Initializing scan...',
-    });
+    // If the job was already claimed by claimQueuedJob(), skip the status update
+    // This prevents race conditions with distributed job processing
+    if (!alreadyClaimed) {
+      const now = new Date();
+      await storage.updateScanJob(job.id, {
+        status: 'running',
+        startedAt: now,
+        lastProgressAt: now,
+        progressMessage: 'Initializing scan...',
+      });
+    } else {
+      await storage.updateScanJob(job.id, {
+        progressMessage: 'Initializing scan...',
+      });
+    }
 
     const client = await storage.getMonitoringClientById(job.clientId);
     if (!client) {
@@ -505,16 +513,23 @@ async function pollAndProcessJobs(): Promise<void> {
       return;
     }
 
-    const queuedJobs = await storage.getQueuedScanJobs();
-    if (queuedJobs.length === 0) {
-      return;
-    }
-
-    const jobsToProcess = queuedJobs.slice(0, MAX_RUNNING_JOBS - runningJobs.length);
+    // Claim and process jobs up to the limit
+    const slotsAvailable = MAX_RUNNING_JOBS - runningJobs.length;
     
-    for (const job of jobsToProcess) {
-      processScanJob(job).catch(error => {
-        log(`[ScanJobProcessor] Uncaught error processing job ${job.id}: ${error}`, "job-processor");
+    for (let i = 0; i < slotsAvailable; i++) {
+      // Atomically claim a job - this prevents race conditions with multiple server instances
+      const claimedJob = await storage.claimQueuedJob();
+      
+      if (!claimedJob) {
+        // No more queued jobs
+        break;
+      }
+      
+      log(`[ScanJobProcessor] Claimed job ${claimedJob.id} for processing`, "job-processor");
+      
+      // Process the claimed job (status is already 'running')
+      processScanJob(claimedJob, true).catch(error => {
+        log(`[ScanJobProcessor] Uncaught error processing job ${claimedJob.id}: ${error}`, "job-processor");
       });
     }
   } catch (error) {
