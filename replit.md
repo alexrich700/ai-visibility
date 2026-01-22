@@ -53,7 +53,8 @@ AI queries are processed with bounded concurrency (8 simultaneous prompts) and p
 -   **Citation Detection**: Prioritizes exact domain matches in AI responses, then business name mentions, and brand aliases.
 -   **Brand Aliases**: Allows clients to configure alternative business names for more accurate mention detection.
 -   **Brand Sentiment Prompts**: Includes specific prompts to gather AI-driven feedback on brand perception, customer experience, trust factors, and pain points, separate from visibility scoring.
--   **Real-time Progress Streaming**: Uses Server-Sent Events (SSE) for live updates during scans, including group progress, prompt status, and early termination on client disconnect.
+-   **Real-time Progress Streaming**: Uses Server-Sent Events (SSE) for live updates during scans, including group progress and prompt status. Scans continue running on the server even if the user navigates away or closes the browser.
+-   **Background-Safe Scans**: Scans continue running on the server even when the client disconnects. Users can safely close their browser during a scan and return later to see completed results.
 -   **Resilient Scan System**: Implements checkpoint/resume architecture for long-running scans:
     - Sessions created at scan start with 'running' status and track progress incrementally
     - Checkpoint updated after each prompt completion with running scores (foundCount, overallScore, chatgptScore, googleAIScore)
