@@ -477,18 +477,10 @@ export async function registerRoutes(
     
     req.on("close", async () => {
       isClientConnected = false;
-      console.log("Client disconnected from scan stream");
-      // Mark session as paused so it can be resumed later
-      if (activeSessionId) {
-        try {
-          await storage.updateCheckSession(activeSessionId, {
-            status: 'paused',
-          } as any);
-          console.log(`Session ${activeSessionId} marked as paused for resume`);
-        } catch (err) {
-          console.error("Failed to mark session as paused:", err);
-        }
-      }
+      console.log("Client disconnected from scan stream - scan will continue in background");
+      // Note: We do NOT mark the session as paused or cancel the scan
+      // The scan continues running on the server even if the client navigates away
+      // The user can check the monitoring dashboard to see the completed results
     });
 
     // Helper to send SSE events
@@ -739,14 +731,8 @@ export async function registerRoutes(
       }, 5000);
       
       // Process prompts in concurrent batches
+      // Note: Scan continues even if client disconnects - do NOT cancel on disconnect
       for (let i = 0; i < allPromptsWithGroups.length; i += CONCURRENT_PROMPTS) {
-        // Exit early if client disconnected
-        if (!isClientConnected) {
-          console.log("Scan cancelled - client disconnected");
-          clearInterval(heartbeatInterval);
-          return;
-        }
-        
         const batch = allPromptsWithGroups.slice(i, i + CONCURRENT_PROMPTS);
         
         // Send testing events for all prompts in this batch (use original index)
@@ -761,10 +747,9 @@ export async function registerRoutes(
         }
         
         // Run all prompts in this batch concurrently with per-prompt error handling
+        // Note: Scan continues even if client disconnects
         const batchResults = await Promise.all(
           batch.map(async (item) => {
-            if (!isClientConnected) return null;
-            
             try {
               const result = await retryWithBackoff(() => 
                 runPromptCheck(
@@ -792,16 +777,10 @@ export async function registerRoutes(
           })
         );
         
-        // Exit early if client disconnected during batch
-        if (!isClientConnected) {
-          console.log("Scan cancelled - client disconnected during batch");
-          clearInterval(heartbeatInterval);
-          return;
-        }
-        
         // Process and store results from this batch (maintain order for consistent indices)
+        // Note: Scan continues even if client disconnects
         for (const batchResult of batchResults) {
-          if (!batchResult || !isClientConnected) continue;
+          if (!batchResult) continue;
           
           const { prompt, groupName, originalIndex, result } = batchResult;
           completedCount++;
@@ -950,12 +929,7 @@ export async function registerRoutes(
         }
       }
       
-      // Exit early if client disconnected
-      if (!isClientConnected) {
-        console.log("Scan cancelled - client disconnected");
-        clearInterval(heartbeatInterval);
-        return;
-      }
+      // Note: Scan continues even if client disconnects - do NOT cancel here
       
       // Clear heartbeat now that processing is complete
       clearInterval(heartbeatInterval);
@@ -1346,24 +1320,15 @@ export async function registerRoutes(
     res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders();
 
-    // Track if client disconnected to cancel remaining work
+    // Track if client disconnected (scan continues even if they disconnect)
     let isClientConnected = true;
-    let activeSessionId: number | null = null; // Track session for pause on disconnect
+    let activeSessionId: number | null = null;
     
     req.on("close", async () => {
       isClientConnected = false;
-      console.log("Client disconnected from rescan stream");
-      // Mark session as paused so it can be resumed later
-      if (activeSessionId) {
-        try {
-          await storage.updateCheckSession(activeSessionId, {
-            status: 'paused',
-          } as any);
-          console.log(`Rescan session ${activeSessionId} marked as paused for resume`);
-        } catch (err) {
-          console.error("Failed to mark rescan session as paused:", err);
-        }
-      }
+      console.log("Client disconnected from rescan stream - scan will continue in background");
+      // Note: We do NOT mark the session as paused or cancel the scan
+      // The scan continues running on the server even if the client navigates away
     });
 
     // Helper to send SSE events
@@ -1533,13 +1498,8 @@ export async function registerRoutes(
       }, 5000);
       
       // Process prompts in concurrent batches
+      // Note: Scan continues even if client disconnects - do NOT cancel on disconnect
       for (let i = 0; i < promptsWithGroups.length; i += CONCURRENT_PROMPTS) {
-        if (!isClientConnected) {
-          console.log("Rescan cancelled - client disconnected");
-          clearInterval(heartbeatInterval);
-          return;
-        }
-        
         const batch = promptsWithGroups.slice(i, i + CONCURRENT_PROMPTS);
         
         // Send testing events for this batch
@@ -1554,10 +1514,9 @@ export async function registerRoutes(
         }
         
         // Run all prompts in this batch concurrently with per-prompt error handling
+        // Note: Scan continues even if client disconnects
         const batchResults = await Promise.all(
           batch.map(async (item) => {
-            if (!isClientConnected) return null;
-            
             try {
               const result = await retryWithBackoff(() =>
                 runPromptCheck(
@@ -1585,15 +1544,10 @@ export async function registerRoutes(
           })
         );
         
-        if (!isClientConnected) {
-          console.log("Rescan cancelled - client disconnected during batch");
-          clearInterval(heartbeatInterval);
-          return;
-        }
-        
         // Process and store results from this batch
+        // Note: Scan continues even if client disconnects
         for (const batchResult of batchResults) {
-          if (!batchResult || !isClientConnected) continue;
+          if (!batchResult) continue;
           
           const { prompt, groupName, originalIndex, result } = batchResult;
           completedCount++;
@@ -1732,11 +1686,7 @@ export async function registerRoutes(
         }
       }
       
-      if (!isClientConnected) {
-        console.log("Rescan cancelled - client disconnected");
-        clearInterval(heartbeatInterval);
-        return;
-      }
+      // Note: Scan continues even if client disconnects - do NOT cancel here
       
       // Clear heartbeat now that processing is complete
       clearInterval(heartbeatInterval);
@@ -1925,16 +1875,9 @@ export async function registerRoutes(
     
     req.on("close", async () => {
       isClientConnected = false;
-      console.log("Client disconnected from resume stream");
-      // Mark session as paused again
-      try {
-        await storage.updateCheckSession(sessionId, {
-          status: 'paused',
-        } as any);
-        console.log(`Resume session ${sessionId} marked as paused`);
-      } catch (err) {
-        console.error("Failed to mark resume session as paused:", err);
-      }
+      console.log("Client disconnected from resume stream - scan will continue in background");
+      // Note: We do NOT mark the session as paused or cancel the scan
+      // The scan continues running on the server even if the client navigates away
     });
 
     const sendEvent = (type: string, data: Record<string, unknown>) => {
@@ -2091,13 +2034,8 @@ export async function registerRoutes(
       });
       
       // Process remaining prompts
+      // Note: Scan continues even if client disconnects - do NOT cancel on disconnect
       for (let i = 0; i < promptsWithGroups.length; i += CONCURRENT_PROMPTS) {
-        if (!isClientConnected) {
-          console.log("Resume cancelled - client disconnected");
-          clearInterval(heartbeatInterval);
-          return;
-        }
-        
         const batch = promptsWithGroups.slice(i, i + CONCURRENT_PROMPTS);
         
         // Send testing events
@@ -2112,10 +2050,9 @@ export async function registerRoutes(
         }
         
         // Run batch concurrently
+        // Note: Scan continues even if client disconnects
         const batchResults = await Promise.all(
           batch.map(async (item) => {
-            if (!isClientConnected) return null;
-            
             try {
               const result = await retryWithBackoff(() => 
                 runPromptCheck(
@@ -2142,15 +2079,10 @@ export async function registerRoutes(
           })
         );
         
-        if (!isClientConnected) {
-          console.log("Resume cancelled during batch");
-          clearInterval(heartbeatInterval);
-          return;
-        }
-        
         // Store results
+        // Note: Scan continues even if client disconnects
         for (const batchResult of batchResults) {
-          if (!batchResult || !isClientConnected) continue;
+          if (!batchResult) continue;
           
           const { prompt, groupName, originalIndex, result } = batchResult;
           currentCompleted++;
