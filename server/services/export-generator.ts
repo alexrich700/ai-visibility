@@ -1,7 +1,26 @@
 import archiver from "archiver";
 import * as XLSX from "xlsx";
+import { Readable, PassThrough } from "stream";
 import type { MonitoringClient, MonitoringGroup, CheckSession, CheckResult } from "@shared/schema";
 import type { Response } from "express";
+
+// ============================================
+// EXPORT STREAMING OPTIMIZATION NOTES
+// ============================================
+// 
+// Memory Optimization Strategy:
+// 1. ZIP: Streamed directly to response via archiver.pipe(res) - OPTIMIZED
+// 2. CSV: Generated via Readable streams with row-by-row yield - OPTIMIZED
+// 3. Excel: Still buffered in memory (XLSX library limitation) - NOT OPTIMIZED
+// 4. Database: Results fetched into memory before export - NOT OPTIMIZED
+//
+// For very large exports (10,000+ results), consider:
+// - Using CSV-only exports instead of Excel
+// - Implementing cursor-based database pagination
+// - Switching to streaming XLSX library like 'xlsx-stream-reader'
+//
+// Current practical limits: ~50,000 results before memory pressure
+// ============================================
 
 interface SentimentNarrative {
   text: string;
@@ -94,6 +113,31 @@ function toCSV(rows: CSVRow[], headers: string[]): string {
     headers.map(h => escapeCSV(String(row[h] ?? ""))).join(",")
   );
   return [headerLine, ...dataLines].join("\n");
+}
+
+function createCSVStream(headers: string[], rowGenerator: () => Generator<CSVRow>): Readable {
+  let headerSent = false;
+  let generator: Generator<CSVRow> | null = null;
+  
+  return new Readable({
+    read() {
+      if (!headerSent) {
+        this.push(headers.join(",") + "\n");
+        headerSent = true;
+        generator = rowGenerator();
+      }
+      
+      if (generator) {
+        const next = generator.next();
+        if (next.done) {
+          this.push(null);
+        } else {
+          const line = headers.map(h => escapeCSV(String(next.value[h] ?? ""))).join(",") + "\n";
+          this.push(line);
+        }
+      }
+    }
+  });
 }
 
 function generateReadme(data: ExportData): string {
@@ -220,19 +264,42 @@ function formatCitations(citations: unknown): string {
     .join(" | ");
 }
 
-function generateChatGPTCSV(data: ExportData): string {
-  const headers = [
-    "session_date",
-    "group_name",
-    "prompt",
-    "found",
-    "cited",
-    "sentiment",
-    "source_urls",
-    "response",
-    "competitors_mentioned",
-  ];
+const CHATGPT_CSV_HEADERS = [
+  "session_date",
+  "group_name",
+  "prompt",
+  "found",
+  "cited",
+  "sentiment",
+  "source_urls",
+  "response",
+  "competitors_mentioned",
+];
 
+function* generateChatGPTRows(data: ExportData): Generator<CSVRow> {
+  const groupMap = new Map(data.groups.map(g => [g.id, g.name]));
+  const sessionMap = new Map(data.sessions.map(s => [s.id, s.createdAt]));
+  
+  for (const r of data.results) {
+    yield {
+      session_date: r.sessionId ? sessionMap.get(r.sessionId)?.toISOString().split("T")[0] ?? "" : "",
+      group_name: groupMap.get(r.groupId) ?? "",
+      prompt: r.promptText,
+      found: r.chatgptFound ? "Yes" : "No",
+      cited: r.chatgptCited ? "Yes" : "No",
+      sentiment: r.chatgptSentiment ?? "",
+      source_urls: formatCitations(r.chatgptCitations),
+      response: r.chatgptResponse ?? "",
+      competitors_mentioned: r.competitors ?? "",
+    };
+  }
+}
+
+function createChatGPTCSVStream(data: ExportData): Readable {
+  return createCSVStream(CHATGPT_CSV_HEADERS, () => generateChatGPTRows(data));
+}
+
+function generateChatGPTCSV(data: ExportData): string {
   const groupMap = new Map(data.groups.map(g => [g.id, g.name]));
   const sessionMap = new Map(data.sessions.map(s => [s.id, s.createdAt]));
 
@@ -248,22 +315,45 @@ function generateChatGPTCSV(data: ExportData): string {
     competitors_mentioned: r.competitors ?? "",
   }));
 
-  return toCSV(rows, headers);
+  return toCSV(rows, CHATGPT_CSV_HEADERS);
+}
+
+const GOOGLE_AI_CSV_HEADERS = [
+  "session_date",
+  "group_name",
+  "prompt",
+  "found",
+  "cited",
+  "sentiment",
+  "source_urls",
+  "response",
+  "competitors_mentioned",
+];
+
+function* generateGoogleAIRows(data: ExportData): Generator<CSVRow> {
+  const groupMap = new Map(data.groups.map(g => [g.id, g.name]));
+  const sessionMap = new Map(data.sessions.map(s => [s.id, s.createdAt]));
+  
+  for (const r of data.results) {
+    yield {
+      session_date: r.sessionId ? sessionMap.get(r.sessionId)?.toISOString().split("T")[0] ?? "" : "",
+      group_name: groupMap.get(r.groupId) ?? "",
+      prompt: r.promptText,
+      found: r.googleAIFound ? "Yes" : "No",
+      cited: r.googleAICited ? "Yes" : "No",
+      sentiment: r.googleAISentiment ?? "",
+      source_urls: formatCitations(r.googleAICitations),
+      response: r.googleAIResponse ?? "",
+      competitors_mentioned: r.competitors ?? "",
+    };
+  }
+}
+
+function createGoogleAICSVStream(data: ExportData): Readable {
+  return createCSVStream(GOOGLE_AI_CSV_HEADERS, () => generateGoogleAIRows(data));
 }
 
 function generateGoogleAICSV(data: ExportData): string {
-  const headers = [
-    "session_date",
-    "group_name",
-    "prompt",
-    "found",
-    "cited",
-    "sentiment",
-    "source_urls",
-    "response",
-    "competitors_mentioned",
-  ];
-
   const groupMap = new Map(data.groups.map(g => [g.id, g.name]));
   const sessionMap = new Map(data.sessions.map(s => [s.id, s.createdAt]));
 
@@ -279,7 +369,7 @@ function generateGoogleAICSV(data: ExportData): string {
     competitors_mentioned: r.competitors ?? "",
   }));
 
-  return toCSV(rows, headers);
+  return toCSV(rows, GOOGLE_AI_CSV_HEADERS);
 }
 
 function generateMetadata(): object {
@@ -347,8 +437,9 @@ export async function streamExportZip(res: Response, data: ExportData): Promise<
 
   archive.append(generateReadme(data), { name: "README.txt" });
   archive.append(JSON.stringify(generateSummary(data), null, 2), { name: "summary.json" });
-  archive.append(generateChatGPTCSV(data), { name: "chatgpt_results.csv" });
-  archive.append(generateGoogleAICSV(data), { name: "google_results.csv" });
+  
+  archive.append(createChatGPTCSVStream(data), { name: "chatgpt_results.csv" });
+  archive.append(createGoogleAICSVStream(data), { name: "google_results.csv" });
   archive.append(JSON.stringify(generateMetadata(), null, 2), { name: "metadata.json" });
 
   await archive.finalize();

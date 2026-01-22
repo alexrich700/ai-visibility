@@ -2612,6 +2612,14 @@ export async function registerRoutes(
         results.push(...sessionResults);
       }
       
+      // Check export size to prevent memory issues (Excel exports buffer in memory)
+      const MAX_EXPORT_RESULTS = 50000;
+      if (results.length > MAX_EXPORT_RESULTS) {
+        return res.status(413).json({ 
+          error: `Export too large (${results.length} results). Maximum is ${MAX_EXPORT_RESULTS} results. Please export a smaller date range.` 
+        });
+      }
+      
       // Stream the new format export (Excel files per city with service group sheets)
       await streamSessionExportZip(res, {
         client,
@@ -2664,6 +2672,14 @@ export async function registerRoutes(
       for (const session of sessions) {
         const sessionResults = await storage.getCheckResultsBySessionId(session.id);
         results.push(...sessionResults);
+      }
+      
+      // Check export size to prevent memory issues (exports buffer data in memory)
+      const MAX_EXPORT_RESULTS = 50000;
+      if (results.length > MAX_EXPORT_RESULTS) {
+        return res.status(413).json({ 
+          error: `Export too large (${results.length} results). Maximum is ${MAX_EXPORT_RESULTS} results. Please export a smaller date range.` 
+        });
       }
       
       // Compute analytics from results
