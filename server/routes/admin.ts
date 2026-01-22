@@ -10,6 +10,7 @@ import {
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 import { sendPasswordResetEmail } from "../email";
+import { logError, getSafeErrorResponse } from "../utils/error-sanitizer";
 
 const router = Router();
 
@@ -41,8 +42,8 @@ router.post("/login", loginRateLimiter, async (req, res) => {
       user: { id: user.id, email: user.email, name: user.name }
     });
   } catch (error) {
-    console.error("Admin login error:", error);
-    res.status(400).json({ error: "Login failed" });
+    logError("ADMIN LOGIN ERROR", error);
+    res.status(400).json(getSafeErrorResponse("Login failed"));
   }
 });
 
@@ -74,8 +75,8 @@ router.post("/register", async (req, res) => {
       user: { id: user.id, email: user.email, name: user.name }
     });
   } catch (error) {
-    console.error("Admin registration error:", error);
-    res.status(500).json({ error: "Registration failed" });
+    logError("ADMIN REGISTRATION ERROR", error);
+    res.status(500).json(getSafeErrorResponse("Registration failed"));
   }
 });
 
@@ -102,8 +103,8 @@ router.post("/forgot-password", async (req, res) => {
     
     res.json({ success: true, message: "If an account exists, a reset email has been sent." });
   } catch (error) {
-    console.error("Forgot password error:", error);
-    res.status(500).json({ error: "Failed to process request" });
+    logError("FORGOT PASSWORD ERROR", error);
+    res.status(500).json(getSafeErrorResponse("Failed to process request"));
   }
 });
 
@@ -138,8 +139,8 @@ router.post("/reset-password", async (req, res) => {
     
     res.json({ success: true, message: "Password has been reset successfully" });
   } catch (error) {
-    console.error("Reset password error:", error);
-    res.status(500).json({ error: "Failed to reset password" });
+    logError("RESET PASSWORD ERROR", error);
+    res.status(500).json(getSafeErrorResponse("Failed to reset password"));
   }
 });
 
@@ -148,8 +149,8 @@ router.get("/audits", requireAdminAuth, async (req, res) => {
     const auditsWithLeads = await storage.getAuditsWithLeads();
     res.json(auditsWithLeads);
   } catch (error) {
-    console.error("Get audits error:", error);
-    res.status(500).json({ error: "Failed to get audits" });
+    logError("GET AUDITS ERROR", error);
+    res.status(500).json(getSafeErrorResponse("Failed to get audits"));
   }
 });
 
@@ -158,8 +159,8 @@ router.get("/leads", requireAdminAuth, async (req, res) => {
     const leads = await storage.getLeads();
     res.json(leads);
   } catch (error) {
-    console.error("Get leads error:", error);
-    res.status(500).json({ error: "Failed to get leads" });
+    logError("GET LEADS ERROR", error);
+    res.status(500).json(getSafeErrorResponse("Failed to get leads"));
   }
 });
 
@@ -180,8 +181,8 @@ router.patch("/leads/:id", requireAdminAuth, async (req, res) => {
     
     res.json(lead);
   } catch (error) {
-    console.error("Update lead status error:", error);
-    res.status(500).json({ error: "Failed to update lead status" });
+    logError("UPDATE LEAD STATUS ERROR", error);
+    res.status(500).json(getSafeErrorResponse("Failed to update lead status"));
   }
 });
 
@@ -194,8 +195,8 @@ router.get("/audits/:id", requireAdminAuth, async (req, res) => {
     }
     res.json(audit);
   } catch (error) {
-    console.error("Get audit error:", error);
-    res.status(500).json({ error: "Failed to get audit" });
+    logError("GET AUDIT ERROR", error);
+    res.status(500).json(getSafeErrorResponse("Failed to get audit"));
   }
 });
 
@@ -326,8 +327,8 @@ router.post("/backfill-metrics", requireAdminAuth, async (req, res) => {
       message: `Backfilled ${totalGroupMetrics} group metrics and ${totalCompetitorMetrics} competitor metrics` 
     });
   } catch (error) {
-    console.error("Backfill metrics error:", error);
-    res.status(500).json({ error: "Failed to backfill metrics" });
+    logError("BACKFILL METRICS ERROR", error);
+    res.status(500).json(getSafeErrorResponse("Failed to backfill metrics"));
   }
 });
 

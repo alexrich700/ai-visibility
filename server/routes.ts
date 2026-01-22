@@ -7,6 +7,7 @@ import { db } from "./db";
 import { desc } from "drizzle-orm";
 import { z } from "zod";
 import { randomUUID } from "crypto";
+import { logError, getSafeErrorResponse } from "./utils/error-sanitizer";
 import { 
   analyzeResponse, 
   aggregateCitations, 
@@ -197,8 +198,8 @@ export async function registerRoutes(
         serverTime: new Date().toISOString()
       });
     } catch (error) {
-      console.error("Error fetching fallback logs:", error);
-      res.status(500).json({ error: "Failed to fetch fallback logs" });
+      logError("FETCH FALLBACK LOGS ERROR", error);
+      res.status(500).json(getSafeErrorResponse("Failed to fetch fallback logs"));
     }
   });
 
@@ -264,8 +265,8 @@ export async function registerRoutes(
         });
       }
     } catch (error) {
-      console.error("Generate groups error:", error);
-      res.status(500).json({ error: "Failed to generate groups" });
+      logError("GENERATE GROUPS ERROR", error);
+      res.status(500).json(getSafeErrorResponse("Failed to generate groups"));
     }
   });
 
@@ -283,8 +284,8 @@ export async function registerRoutes(
       
       res.json({ prompts });
     } catch (error) {
-      console.error("Generate prompts error:", error);
-      res.status(500).json({ error: "Failed to generate prompts" });
+      logError("GENERATE PROMPTS ERROR", error);
+      res.status(500).json(getSafeErrorResponse("Failed to generate prompts"));
     }
   });
 
@@ -416,11 +417,8 @@ export async function registerRoutes(
       
       res.json({ clientId: client.id, sessionId: session.id });
     } catch (error) {
-      console.error("Create and scan error:", error);
-      res.status(500).json({ 
-        error: "Failed to create client and run scan",
-        details: error instanceof Error ? error.message : "Unknown error"
-      });
+      logError("CREATE AND SCAN ERROR", error);
+      res.status(500).json(getSafeErrorResponse("Failed to create client and run scan"));
     }
   });
 
@@ -448,11 +446,8 @@ export async function registerRoutes(
       
       res.json({ prepareId });
     } catch (error) {
-      console.error("Scan prepare error:", error);
-      res.status(400).json({ 
-        error: "Failed to prepare scan",
-        details: error instanceof Error ? error.message : "Unknown error"
-      });
+      logError("SCAN PREPARE ERROR", error);
+      res.status(400).json(getSafeErrorResponse("Failed to prepare scan"));
     }
   });
 
@@ -783,18 +778,13 @@ export async function registerRoutes(
               
               return { ...item, result };
             } catch (error) {
-              const errMsg = error instanceof Error ? error.message : String(error);
-              const errStack = error instanceof Error ? error.stack : "";
-              console.error(`[PROMPT ERROR] Prompt ${item.originalIndex + 1}: "${item.prompt.text.slice(0, 50)}..."`);
-              console.error(`[PROMPT ERROR] Group: ${item.groupName}`);
-              console.error(`[PROMPT ERROR] Error: ${errMsg}`);
-              console.error(`[PROMPT ERROR] Stack: ${errStack}`);
-              // Return a failed result instead of crashing the batch
+              logError(`PROMPT ERROR - Prompt ${item.originalIndex + 1} (${item.groupName})`, error);
+              // Return a failed result with sanitized error message - no internal details
               return { 
                 ...item, 
                 result: {
-                  chatgpt: { found: false, response: `Error: ${errMsg}`, cited: false, citations: [] },
-                  googleAI: { found: false, response: `Error: ${errMsg}`, cited: false, citations: [] },
+                  chatgpt: { found: false, response: "Unable to complete this check at this time.", cited: false, citations: [] },
+                  googleAI: { found: false, response: "Unable to complete this check at this time.", cited: false, citations: [] },
                   competitors: []
                 }
               };
@@ -1099,30 +1089,25 @@ export async function registerRoutes(
       
       res.end();
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
-      const errorStack = error instanceof Error ? error.stack : String(error);
-      console.error("=== SCAN STREAM ERROR ===");
-      console.error("Error message:", errorMessage);
-      console.error("Error stack:", errorStack);
-      console.error("Scan context: prepareId =", prepareId);
-      console.error("=========================");
+      logError(`SCAN STREAM ERROR (prepareId=${prepareId})`, error);
       if (heartbeatInterval) clearInterval(heartbeatInterval);
       
-      // Mark session as failed with error details
+      // Mark session as failed with error details (safe for internal storage)
+      const internalErrorMessage = error instanceof Error ? error.message : "Unknown error occurred";
       if (activeSessionId) {
         try {
           await storage.updateCheckSession(activeSessionId, {
             status: 'failed',
-            errorMessage: errorMessage,
+            errorMessage: internalErrorMessage,
           } as any);
         } catch (updateErr) {
           console.error("Failed to mark session as failed:", updateErr);
         }
       }
       
+      // Send sanitized error to client - no stack traces or internal details
       sendEvent("error", { 
-        message: errorMessage,
-        details: errorStack,
+        message: "An error occurred during the scan. Please try again.",
       });
       res.end();
     }
@@ -1173,11 +1158,8 @@ export async function registerRoutes(
       
       res.json({ prepareId, totalPrompts: prompts.length, targetCity: targetCity || null });
     } catch (error) {
-      console.error("Rescan prepare error:", error);
-      res.status(400).json({ 
-        error: "Failed to prepare rescan",
-        details: error instanceof Error ? error.message : "Unknown error"
-      });
+      logError("RESCAN PREPARE ERROR", error);
+      res.status(400).json(getSafeErrorResponse("Failed to prepare rescan"));
     }
   });
 
@@ -1241,11 +1223,8 @@ export async function registerRoutes(
         message: 'Scan queued successfully. You can close this page - the scan will continue in the background.'
       });
     } catch (error) {
-      console.error("Scan job creation error:", error);
-      res.status(400).json({ 
-        error: "Failed to queue scan",
-        details: error instanceof Error ? error.message : "Unknown error"
-      });
+      logError("SCAN JOB CREATION ERROR", error);
+      res.status(400).json(getSafeErrorResponse("Failed to queue scan"));
     }
   });
 
@@ -1276,8 +1255,8 @@ export async function registerRoutes(
         createdAt: job.createdAt,
       });
     } catch (error) {
-      console.error("Scan job status error:", error);
-      res.status(400).json({ error: "Failed to get job status" });
+      logError("SCAN JOB STATUS ERROR", error);
+      res.status(400).json(getSafeErrorResponse("Failed to get job status"));
     }
   });
 
@@ -1305,8 +1284,8 @@ export async function registerRoutes(
         createdAt: job.createdAt,
       })));
     } catch (error) {
-      console.error("Scan jobs list error:", error);
-      res.status(400).json({ error: "Failed to get jobs" });
+      logError("SCAN JOBS LIST ERROR", error);
+      res.status(400).json(getSafeErrorResponse("Failed to get jobs"));
     }
   });
 
@@ -1339,8 +1318,8 @@ export async function registerRoutes(
         }
       });
     } catch (error) {
-      console.error("Active scan job check error:", error);
-      res.status(400).json({ error: "Failed to check active job" });
+      logError("ACTIVE SCAN JOB CHECK ERROR", error);
+      res.status(400).json(getSafeErrorResponse("Failed to check active job"));
     }
   });
 
@@ -1592,18 +1571,13 @@ export async function registerRoutes(
               
               return { ...item, result };
             } catch (error) {
-              const errMsg = error instanceof Error ? error.message : String(error);
-              const errStack = error instanceof Error ? error.stack : "";
-              console.error(`[RESCAN PROMPT ERROR] Prompt ${item.originalIndex + 1}: "${item.prompt.promptText.slice(0, 50)}..."`);
-              console.error(`[RESCAN PROMPT ERROR] Group: ${item.groupName}`);
-              console.error(`[RESCAN PROMPT ERROR] Error: ${errMsg}`);
-              console.error(`[RESCAN PROMPT ERROR] Stack: ${errStack}`);
-              // Return a failed result instead of crashing the batch
+              logError(`RESCAN PROMPT ERROR - Prompt ${item.originalIndex + 1} (${item.groupName})`, error);
+              // Return a failed result with sanitized error message - no internal details
               return { 
                 ...item, 
                 result: {
-                  chatgpt: { found: false, response: `Error: ${errMsg}`, cited: false, citations: [] },
-                  googleAI: { found: false, response: `Error: ${errMsg}`, cited: false, citations: [] },
+                  chatgpt: { found: false, response: "Unable to complete this check at this time.", cited: false, citations: [] },
+                  googleAI: { found: false, response: "Unable to complete this check at this time.", cited: false, citations: [] },
                   competitors: []
                 }
               };
@@ -1896,30 +1870,25 @@ export async function registerRoutes(
       
       res.end();
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
-      const errorStack = error instanceof Error ? error.stack : String(error);
-      console.error("=== RESCAN STREAM ERROR ===");
-      console.error("Error message:", errorMessage);
-      console.error("Error stack:", errorStack);
-      console.error("Rescan context: prepareId =", prepareId);
-      console.error("===========================");
+      logError(`RESCAN STREAM ERROR (prepareId=${prepareId})`, error);
       if (heartbeatInterval) clearInterval(heartbeatInterval);
       
-      // Mark session as failed with error details
+      // Mark session as failed with error details (safe for internal storage)
+      const internalErrorMessage = error instanceof Error ? error.message : "Unknown error occurred";
       if (activeSessionId) {
         try {
           await storage.updateCheckSession(activeSessionId, {
             status: 'failed',
-            errorMessage: errorMessage,
+            errorMessage: internalErrorMessage,
           } as any);
         } catch (updateErr) {
           console.error("Failed to mark rescan session as failed:", updateErr);
         }
       }
       
+      // Send sanitized error to client - no stack traces or internal details
       sendEvent("error", { 
-        message: errorMessage,
-        details: errorStack,
+        message: "An error occurred during the rescan. Please try again.",
       });
       res.end();
     }
@@ -1936,8 +1905,8 @@ export async function registerRoutes(
       const sessions = await storage.getResumableSessions(clientId);
       res.json({ sessions });
     } catch (error) {
-      console.error("Error getting resumable sessions:", error);
-      res.status(500).json({ error: "Failed to get resumable sessions" });
+      logError("GET RESUMABLE SESSIONS ERROR", error);
+      res.status(500).json(getSafeErrorResponse("Failed to get resumable sessions"));
     }
   });
 
@@ -2159,14 +2128,13 @@ export async function registerRoutes(
               );
               return { ...item, result };
             } catch (error) {
-              const errMsg = error instanceof Error ? error.message : String(error);
-              console.error(`[RESUME PROMPT ERROR] Prompt ${item.originalIndex}: "${item.prompt.promptText.slice(0, 50)}..."`);
-              console.error(`[RESUME PROMPT ERROR] Error: ${errMsg}`);
+              logError(`RESUME PROMPT ERROR - Prompt ${item.originalIndex}`, error);
+              // Return a failed result with sanitized error message - no internal details
               return { 
                 ...item, 
                 result: {
-                  chatgpt: { found: false, response: `Error: ${errMsg}`, cited: false, citations: [] },
-                  googleAI: { found: false, response: `Error: ${errMsg}`, cited: false, citations: [] },
+                  chatgpt: { found: false, response: "Unable to complete this check at this time.", cited: false, citations: [] },
+                  googleAI: { found: false, response: "Unable to complete this check at this time.", cited: false, citations: [] },
                   competitors: []
                 }
               };
@@ -2314,27 +2282,24 @@ export async function registerRoutes(
       
       res.end();
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
-      const errorStack = error instanceof Error ? error.stack : String(error);
-      console.error("=== RESUME STREAM ERROR ===");
-      console.error("Error:", errorMessage);
-      console.error("Stack:", errorStack);
-      console.error("===========================");
+      logError(`RESUME STREAM ERROR (sessionId=${sessionId})`, error);
       
       if (heartbeatInterval) clearInterval(heartbeatInterval);
       
+      // Mark session as failed with error details (safe for internal storage)
+      const internalErrorMessage = error instanceof Error ? error.message : "Unknown error occurred";
       try {
         await storage.updateCheckSession(sessionId, {
           status: 'failed',
-          errorMessage,
+          errorMessage: internalErrorMessage,
         } as any);
       } catch (updateErr) {
         console.error("Failed to mark resume session as failed:", updateErr);
       }
       
+      // Send sanitized error to client - no stack traces or internal details
       sendEvent("error", { 
-        message: errorMessage,
-        details: errorStack,
+        message: "An error occurred while resuming the scan. Please try again.",
       });
       res.end();
     }
@@ -2448,8 +2413,8 @@ export async function registerRoutes(
         trendData,
       });
     } catch (error) {
-      console.error("Get dashboard error:", error);
-      res.status(500).json({ error: "Failed to get dashboard data" });
+      logError("GET DASHBOARD ERROR", error);
+      res.status(500).json(getSafeErrorResponse("Failed to get dashboard data"));
     }
   });
 
@@ -2505,8 +2470,8 @@ export async function registerRoutes(
       
       res.json({ groupTrends: Object.values(groupTrends) });
     } catch (error) {
-      console.error("Get group trends error:", error);
-      res.status(500).json({ error: "Failed to get group trends" });
+      logError("GET GROUP TRENDS ERROR", error);
+      res.status(500).json(getSafeErrorResponse("Failed to get group trends"));
     }
   });
 
@@ -2568,8 +2533,8 @@ export async function registerRoutes(
       
       res.json({ competitorTrends: topCompetitors });
     } catch (error) {
-      console.error("Get competitor trends error:", error);
-      res.status(500).json({ error: "Failed to get competitor trends" });
+      logError("GET COMPETITOR TRENDS ERROR", error);
+      res.status(500).json(getSafeErrorResponse("Failed to get competitor trends"));
     }
   });
 
@@ -2607,8 +2572,8 @@ export async function registerRoutes(
       
       res.json({ scanDates });
     } catch (error) {
-      console.error("Get scan dates error:", error);
-      res.status(500).json({ error: "Failed to get scan dates" });
+      logError("GET SCAN DATES ERROR", error);
+      res.status(500).json(getSafeErrorResponse("Failed to get scan dates"));
     }
   });
 
@@ -2656,9 +2621,9 @@ export async function registerRoutes(
         scanDate,
       });
     } catch (error) {
-      console.error("Export by date error:", error);
+      logError("EXPORT BY DATE ERROR", error);
       if (!res.headersSent) {
-        res.status(500).json({ error: "Failed to generate export" });
+        res.status(500).json(getSafeErrorResponse("Failed to generate export"));
       }
     }
   });
@@ -2819,9 +2784,9 @@ export async function registerRoutes(
         },
       });
     } catch (error) {
-      console.error("Export error:", error);
+      logError("EXPORT ERROR", error);
       if (!res.headersSent) {
-        res.status(500).json({ error: "Failed to generate export" });
+        res.status(500).json(getSafeErrorResponse("Failed to generate export"));
       }
     }
   });
@@ -2832,8 +2797,8 @@ export async function registerRoutes(
       const clients = await storage.getMonitoringClients();
       res.json(clients);
     } catch (error) {
-      console.error("Get clients error:", error);
-      res.status(500).json({ error: "Failed to get clients" });
+      logError("GET CLIENTS ERROR", error);
+      res.status(500).json(getSafeErrorResponse("Failed to get clients"));
     }
   });
 
@@ -2868,8 +2833,8 @@ export async function registerRoutes(
       
       res.json(clientsWithStats);
     } catch (error) {
-      console.error("Get clients with stats error:", error);
-      res.status(500).json({ error: "Failed to get clients" });
+      logError("GET CLIENTS WITH STATS ERROR", error);
+      res.status(500).json(getSafeErrorResponse("Failed to get clients"));
     }
   });
 
@@ -2890,8 +2855,8 @@ export async function registerRoutes(
       
       res.json({ success: true, message: "Client deleted successfully" });
     } catch (error) {
-      console.error("Delete client error:", error);
-      res.status(500).json({ error: "Failed to delete client" });
+      logError("DELETE CLIENT ERROR", error);
+      res.status(500).json(getSafeErrorResponse("Failed to delete client"));
     }
   });
 
@@ -2923,8 +2888,8 @@ export async function registerRoutes(
       
       res.json(client);
     } catch (error) {
-      console.error("Update client error:", error);
-      res.status(500).json({ error: "Failed to update client" });
+      logError("UPDATE CLIENT ERROR", error);
+      res.status(500).json(getSafeErrorResponse("Failed to update client"));
     }
   });
 
@@ -2939,8 +2904,8 @@ export async function registerRoutes(
       const groups = await storage.getGroupsByClientId(clientId);
       res.json(groups);
     } catch (error) {
-      console.error("Get groups error:", error);
-      res.status(500).json({ error: "Failed to get groups" });
+      logError("GET GROUPS ERROR", error);
+      res.status(500).json(getSafeErrorResponse("Failed to get groups"));
     }
   });
 
@@ -2964,8 +2929,8 @@ export async function registerRoutes(
       
       res.json(group);
     } catch (error) {
-      console.error("Create group error:", error);
-      res.status(500).json({ error: "Failed to create group" });
+      logError("CREATE GROUP ERROR", error);
+      res.status(500).json(getSafeErrorResponse("Failed to create group"));
     }
   });
 
@@ -2988,8 +2953,8 @@ export async function registerRoutes(
       
       res.json(group);
     } catch (error) {
-      console.error("Update group error:", error);
-      res.status(500).json({ error: "Failed to update group" });
+      logError("UPDATE GROUP ERROR", error);
+      res.status(500).json(getSafeErrorResponse("Failed to update group"));
     }
   });
 
@@ -3000,8 +2965,8 @@ export async function registerRoutes(
       await storage.deleteGroup(id);
       res.json({ success: true });
     } catch (error) {
-      console.error("Delete group error:", error);
-      res.status(500).json({ error: "Failed to delete group" });
+      logError("DELETE GROUP ERROR", error);
+      res.status(500).json(getSafeErrorResponse("Failed to delete group"));
     }
   });
 
@@ -3016,8 +2981,8 @@ export async function registerRoutes(
       const prompts = await storage.getPromptsByGroupId(groupId);
       res.json(prompts);
     } catch (error) {
-      console.error("Get prompts error:", error);
-      res.status(500).json({ error: "Failed to get prompts" });
+      logError("GET PROMPTS ERROR", error);
+      res.status(500).json(getSafeErrorResponse("Failed to get prompts"));
     }
   });
 
@@ -3039,8 +3004,8 @@ export async function registerRoutes(
       
       res.json(prompt);
     } catch (error) {
-      console.error("Create prompt error:", error);
-      res.status(500).json({ error: "Failed to create prompt" });
+      logError("CREATE PROMPT ERROR", error);
+      res.status(500).json(getSafeErrorResponse("Failed to create prompt"));
     }
   });
 
@@ -3061,8 +3026,8 @@ export async function registerRoutes(
       
       res.json(prompt);
     } catch (error) {
-      console.error("Update prompt error:", error);
-      res.status(500).json({ error: "Failed to update prompt" });
+      logError("UPDATE PROMPT ERROR", error);
+      res.status(500).json(getSafeErrorResponse("Failed to update prompt"));
     }
   });
 
@@ -3073,8 +3038,8 @@ export async function registerRoutes(
       await storage.deletePrompt(id);
       res.json({ success: true });
     } catch (error) {
-      console.error("Delete prompt error:", error);
-      res.status(500).json({ error: "Failed to delete prompt" });
+      logError("DELETE PROMPT ERROR", error);
+      res.status(500).json(getSafeErrorResponse("Failed to delete prompt"));
     }
   });
 

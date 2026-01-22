@@ -4,6 +4,7 @@ import { runAudit } from "../ai-services";
 import { auditRequestSchema } from "@shared/schema";
 import crypto from "crypto";
 import { withDatabaseRetry } from "../db-utils";
+import { logError, getSafeErrorResponse } from "../utils/error-sanitizer";
 
 const router = Router();
 
@@ -51,11 +52,8 @@ router.post("/", async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Audit error:", error);
-    res.status(400).json({ 
-      error: "Failed to run audit",
-      details: error instanceof Error ? error.message : "Unknown error"
-    });
+    logError("AUDIT ERROR", error);
+    res.status(400).json(getSafeErrorResponse("Failed to run audit"));
   }
 });
 
@@ -71,8 +69,8 @@ router.get("/:id", async (req, res) => {
     }
     res.json(audit);
   } catch (error) {
-    console.error("Get audit error:", error);
-    res.status(500).json({ error: "Failed to get audit" });
+    logError("GET AUDIT ERROR", error);
+    res.status(500).json(getSafeErrorResponse("Failed to get audit"));
   }
 });
 
@@ -101,8 +99,8 @@ router.post("/:id/share", async (req, res) => {
     
     res.json({ shareToken: updatedAudit.shareToken });
   } catch (error) {
-    console.error("Generate share token error:", error);
-    res.status(500).json({ error: "Failed to generate share token" });
+    logError("GENERATE SHARE TOKEN ERROR", error);
+    res.status(500).json(getSafeErrorResponse("Failed to generate share token"));
   }
 });
 
@@ -120,8 +118,8 @@ router.get("/share/:token", async (req, res) => {
     
     res.json(audit);
   } catch (error) {
-    console.error("Get shared audit error:", error);
-    res.status(500).json({ error: "Failed to get shared audit" });
+    logError("GET SHARED AUDIT ERROR", error);
+    res.status(500).json(getSafeErrorResponse("Failed to get shared audit"));
   }
 });
 

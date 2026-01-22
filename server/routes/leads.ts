@@ -2,6 +2,7 @@ import { Router } from "express";
 import { storage } from "../storage";
 import { leadSchema } from "@shared/schema";
 import { sendAuditNotification } from "../email";
+import { logError, getSafeErrorResponse } from "../utils/error-sanitizer";
 
 const router = Router();
 
@@ -40,11 +41,8 @@ router.post("/", async (req, res) => {
 
     res.json(lead);
   } catch (error) {
-    console.error("Lead capture error:", error);
-    res.status(400).json({ 
-      error: "Failed to capture lead",
-      details: error instanceof Error ? error.message : "Unknown error"
-    });
+    logError("LEAD CAPTURE ERROR", error);
+    res.status(400).json(getSafeErrorResponse("Failed to capture lead"));
   }
 });
 
