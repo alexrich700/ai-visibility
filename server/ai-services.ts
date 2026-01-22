@@ -165,6 +165,120 @@ async function recordFallback(diagnostics: PromptGenerationDiagnostics, context?
 }
 
 // ============================================
+// CIRCUIT BREAKER PATTERN FOR AI API CALLS
+// ============================================
+
+type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
+
+interface CircuitBreakerConfig {
+  failureThreshold: number;
+  resetTimeoutMs: number;
+  halfOpenMaxAttempts: number;
+}
+
+class CircuitBreaker {
+  private state: CircuitState = 'CLOSED';
+  private failureCount = 0;
+  private lastFailureTime: number | null = null;
+  private halfOpenAttempts = 0;
+  private config: CircuitBreakerConfig;
+  private name: string;
+
+  constructor(name: string, config?: Partial<CircuitBreakerConfig>) {
+    this.name = name;
+    this.config = {
+      failureThreshold: config?.failureThreshold ?? 5,
+      resetTimeoutMs: config?.resetTimeoutMs ?? 60000,
+      halfOpenMaxAttempts: config?.halfOpenMaxAttempts ?? 2,
+    };
+  }
+
+  private updateState(): void {
+    if (this.state === 'OPEN' && this.lastFailureTime) {
+      const timeSinceLastFailure = Date.now() - this.lastFailureTime;
+      if (timeSinceLastFailure >= this.config.resetTimeoutMs) {
+        console.log(`[CIRCUIT_BREAKER:${this.name}] Transitioning from OPEN to HALF_OPEN after ${(timeSinceLastFailure/1000).toFixed(0)}s cooldown`);
+        this.state = 'HALF_OPEN';
+        this.halfOpenAttempts = 0;
+      }
+    }
+  }
+
+  isOpen(): boolean {
+    this.updateState();
+    return this.state === 'OPEN';
+  }
+
+  getState(): CircuitState {
+    this.updateState();
+    return this.state;
+  }
+
+  recordSuccess(): void {
+    if (this.state === 'HALF_OPEN') {
+      console.log(`[CIRCUIT_BREAKER:${this.name}] Request succeeded in HALF_OPEN state, closing circuit`);
+    }
+    this.state = 'CLOSED';
+    this.failureCount = 0;
+    this.halfOpenAttempts = 0;
+    this.lastFailureTime = null;
+  }
+
+  recordFailure(isRateLimit: boolean = false): void {
+    this.failureCount++;
+    this.lastFailureTime = Date.now();
+
+    if (this.state === 'HALF_OPEN') {
+      this.halfOpenAttempts++;
+      if (this.halfOpenAttempts >= this.config.halfOpenMaxAttempts) {
+        console.log(`[CIRCUIT_BREAKER:${this.name}] HALF_OPEN attempts exhausted (${this.halfOpenAttempts}), reopening circuit`);
+        this.state = 'OPEN';
+      }
+      return;
+    }
+
+    if (isRateLimit) {
+      console.log(`[CIRCUIT_BREAKER:${this.name}] Rate limit detected, immediately opening circuit for ${(this.config.resetTimeoutMs/1000)}s`);
+      this.state = 'OPEN';
+      return;
+    }
+
+    if (this.failureCount >= this.config.failureThreshold) {
+      console.log(`[CIRCUIT_BREAKER:${this.name}] Failure threshold reached (${this.failureCount}/${this.config.failureThreshold}), opening circuit`);
+      this.state = 'OPEN';
+    }
+  }
+
+  getStats(): { state: CircuitState; failureCount: number; lastFailureTime: number | null } {
+    this.updateState();
+    return {
+      state: this.state,
+      failureCount: this.failureCount,
+      lastFailureTime: this.lastFailureTime,
+    };
+  }
+}
+
+const openAICircuitBreaker = new CircuitBreaker('OpenAI', {
+  failureThreshold: 5,
+  resetTimeoutMs: 60000,
+  halfOpenMaxAttempts: 2,
+});
+
+const geminiCircuitBreaker = new CircuitBreaker('Gemini', {
+  failureThreshold: 5,
+  resetTimeoutMs: 60000,
+  halfOpenMaxAttempts: 2,
+});
+
+export function getCircuitBreakerStats() {
+  return {
+    openai: openAICircuitBreaker.getStats(),
+    gemini: geminiCircuitBreaker.getStats(),
+  };
+}
+
+// ============================================
 // API KEY VALIDATION
 // ============================================
 
@@ -569,6 +683,13 @@ function extractGroundingMetadata(response: any): GeminiGroundingMetadata | null
 
 // Gemini client using Replit AI Integrations with Google Search grounding
 async function queryGemini(prompt: string, businessName: string, url?: string, brandAliases?: string[]): Promise<{ found: boolean; response: string; competitors: string[]; citations: ExtractedCitation[]; groundingMetadata: GeminiGroundingMetadata | null }> {
+  // Check circuit breaker before making API call
+  if (geminiCircuitBreaker.isOpen()) {
+    console.log(`[GEMINI] Circuit breaker is OPEN, skipping API call for prompt`);
+    const fallback = simulateResponse(prompt, businessName);
+    return { ...fallback, citations: [], groundingMetadata: null };
+  }
+
   try {
     const { GoogleGenAI } = await import("@google/genai");
     
@@ -614,9 +735,17 @@ async function queryGemini(prompt: string, businessName: string, url?: string, b
       console.log(`[GEMINI] Response preview (first 300 chars): ${text.slice(0, 300).replace(/\n/g, ' ')}`);
     }
 
+    // Record success - circuit breaker will close if in half-open state
+    geminiCircuitBreaker.recordSuccess();
+
     return { found: detection.found, response: text, competitors, citations, groundingMetadata };
   } catch (error) {
     console.error("Gemini API error:", error);
+    
+    // Record failure and check if it's a rate limit
+    const isRateLimit = isRateLimitError(error);
+    geminiCircuitBreaker.recordFailure(isRateLimit);
+    
     const fallback = simulateResponse(prompt, businessName);
     return { ...fallback, citations: [], groundingMetadata: null };
   }
@@ -624,6 +753,13 @@ async function queryGemini(prompt: string, businessName: string, url?: string, b
 
 // ChatGPT client using Responses API with web_search tool for proper grounding
 async function queryChatGPT(prompt: string, businessName: string, url?: string, location?: string, brandAliases?: string[]): Promise<{ found: boolean; response: string; competitors: string[]; citations: ExtractedCitation[] }> {
+  // Check circuit breaker before making API call
+  if (openAICircuitBreaker.isOpen()) {
+    console.log(`[CHATGPT] Circuit breaker is OPEN, skipping API call for prompt`);
+    const fallback = simulateResponse(prompt, businessName);
+    return { ...fallback, citations: [] };
+  }
+
   try {
     // Build web search tool config with location if provided
     const webSearchTool: Record<string, any> = { type: "web_search" };
@@ -673,9 +809,17 @@ async function queryChatGPT(prompt: string, businessName: string, url?: string, 
       console.log(`[CHATGPT] Response preview (first 300 chars): ${text.slice(0, 300).replace(/\n/g, ' ')}`);
     }
 
+    // Record success - circuit breaker will close if in half-open state
+    openAICircuitBreaker.recordSuccess();
+
     return { found: detection.found, response: text, competitors, citations };
   } catch (error) {
     console.error("ChatGPT API error:", error);
+    
+    // Record failure and check if it's a rate limit
+    const isRateLimit = isRateLimitError(error);
+    openAICircuitBreaker.recordFailure(isRateLimit);
+    
     const fallback = simulateResponse(prompt, businessName);
     return { ...fallback, citations: [] };
   }
