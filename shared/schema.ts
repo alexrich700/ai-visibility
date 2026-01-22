@@ -482,6 +482,7 @@ export const scanJobs = pgTable("scan_jobs", {
   errorMessage: text("error_message"), // Error details if failed
   resultScore: integer("result_score"), // Final visibility score when complete
   startedAt: timestamp("started_at"), // When processing began
+  lastProgressAt: timestamp("last_progress_at"), // When progress was last updated (for stuck job detection)
   completedAt: timestamp("completed_at"), // When job finished (success or failure)
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -490,6 +491,7 @@ export const insertScanJobSchema = createInsertSchema(scanJobs).omit({
   id: true,
   createdAt: true,
   startedAt: true,
+  lastProgressAt: true,
   completedAt: true,
 });
 

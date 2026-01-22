@@ -23,6 +23,7 @@ import type { ScanJob, MonitoringClient, MonitoringGroup, MonitoringPrompt } fro
 const JOB_POLL_INTERVAL_MS = 5000;
 const CONCURRENT_PROMPTS = 4;
 const MAX_RUNNING_JOBS = 2;
+const STUCK_JOB_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes without progress = stuck
 
 let isProcessorRunning = false;
 let processorIntervalId: NodeJS.Timeout | null = null;
@@ -38,7 +39,55 @@ async function updateJobProgress(
     progress,
     progressMessage: message,
     completedPrompts,
+    lastProgressAt: new Date(),
   });
+}
+
+async function detectAndFailStuckJobs(): Promise<void> {
+  try {
+    const runningJobs = await storage.getRunningScanJobs();
+    const now = Date.now();
+    
+    for (const job of runningJobs) {
+      // Use lastProgressAt if available, otherwise fall back to startedAt
+      const lastActivity = job.lastProgressAt || job.startedAt;
+      
+      if (!lastActivity) {
+        // Job is running but has no start time - mark as failed immediately
+        log(`[ScanJobProcessor] Job ${job.id} has no start time, marking as failed`, "job-processor");
+        await storage.updateScanJob(job.id, {
+          status: 'failed',
+          completedAt: new Date(),
+          errorMessage: 'Job stuck - no start time recorded',
+          progressMessage: 'Failed: Job stuck - no activity recorded',
+        });
+        continue;
+      }
+      
+      const timeSinceActivity = now - new Date(lastActivity).getTime();
+      
+      if (timeSinceActivity > STUCK_JOB_TIMEOUT_MS) {
+        const minutesStuck = Math.round(timeSinceActivity / 60000);
+        log(`[ScanJobProcessor] Job ${job.id} stuck for ${minutesStuck} minutes, marking as failed`, "job-processor");
+        
+        await storage.updateScanJob(job.id, {
+          status: 'failed',
+          completedAt: new Date(),
+          errorMessage: `Job stuck - no progress for ${minutesStuck} minutes`,
+          progressMessage: `Failed: No progress for ${minutesStuck} minutes`,
+        });
+        
+        // Also mark the session as failed if it exists
+        if (job.sessionId) {
+          await storage.updateCheckSession(job.sessionId, {
+            status: 'failed',
+          } as any);
+        }
+      }
+    }
+  } catch (error) {
+    log(`[ScanJobProcessor] Error detecting stuck jobs: ${error}`, "job-processor");
+  }
 }
 
 async function processScanJob(job: ScanJob): Promise<void> {
@@ -46,9 +95,11 @@ async function processScanJob(job: ScanJob): Promise<void> {
   log(`[ScanJobProcessor] Starting job ${job.id} for client ${job.clientId}`, "job-processor");
 
   try {
+    const now = new Date();
     await storage.updateScanJob(job.id, {
       status: 'running',
-      startedAt: new Date(),
+      startedAt: now,
+      lastProgressAt: now,
       progressMessage: 'Initializing scan...',
     });
 
@@ -396,7 +447,7 @@ async function processScanJob(job: ScanJob): Promise<void> {
       } catch {}
     }
 
-    for (const [competitorName, counts] of allCompetitors.entries()) {
+    for (const [competitorName, counts] of Array.from(allCompetitors.entries())) {
       const totalMentions = counts.chatgpt + counts.google;
       const visibilityPercent = servicePromptCount > 0 
         ? Math.round((totalMentions / (servicePromptCount * 2)) * 100) 
@@ -446,6 +497,9 @@ async function processScanJob(job: ScanJob): Promise<void> {
 
 async function pollAndProcessJobs(): Promise<void> {
   try {
+    // First, detect and fail any stuck jobs
+    await detectAndFailStuckJobs();
+    
     const runningJobs = await storage.getRunningScanJobs();
     if (runningJobs.length >= MAX_RUNNING_JOBS) {
       return;

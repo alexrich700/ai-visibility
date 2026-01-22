@@ -85,7 +85,7 @@ export interface IStorage {
   getQueuedScanJobs(): Promise<ScanJob[]>;
   getRunningScanJobs(): Promise<ScanJob[]>;
   getActiveScanJobForClient(clientId: number): Promise<ScanJob | undefined>;
-  updateScanJob(id: number, data: Partial<InsertScanJob & { startedAt?: Date; completedAt?: Date }>): Promise<ScanJob | undefined>;
+  updateScanJob(id: number, data: Partial<InsertScanJob & { startedAt?: Date; lastProgressAt?: Date; completedAt?: Date }>): Promise<ScanJob | undefined>;
   deleteScanJob(id: number): Promise<void>;
 }
 
@@ -478,7 +478,7 @@ export class DatabaseStorage implements IStorage {
     return job;
   }
 
-  async updateScanJob(id: number, data: Partial<InsertScanJob & { startedAt?: Date; completedAt?: Date }>): Promise<ScanJob | undefined> {
+  async updateScanJob(id: number, data: Partial<InsertScanJob & { startedAt?: Date; lastProgressAt?: Date; completedAt?: Date }>): Promise<ScanJob | undefined> {
     const [job] = await db
       .update(scanJobs)
       .set(data)
