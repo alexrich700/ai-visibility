@@ -537,6 +537,40 @@ async function pollAndProcessJobs(): Promise<void> {
   }
 }
 
+async function cleanupOrphanedJobs(): Promise<void> {
+  try {
+    const runningJobs = await storage.getRunningScanJobs();
+    
+    if (runningJobs.length === 0) {
+      log("[ScanJobProcessor] No orphaned jobs found on startup", "job-processor");
+      return;
+    }
+    
+    log(`[ScanJobProcessor] Found ${runningJobs.length} orphaned 'running' jobs on startup - marking as failed`, "job-processor");
+    
+    for (const job of runningJobs) {
+      log(`[ScanJobProcessor] Marking orphaned job ${job.id} (client ${job.clientId}) as failed`, "job-processor");
+      
+      await storage.updateScanJob(job.id, {
+        status: 'failed',
+        completedAt: new Date(),
+        errorMessage: 'Job interrupted by server restart',
+        progressMessage: 'Failed: Interrupted by server restart',
+      });
+      
+      if (job.sessionId) {
+        await storage.updateCheckSession(job.sessionId, {
+          status: 'failed',
+        });
+      }
+    }
+    
+    log(`[ScanJobProcessor] Cleaned up ${runningJobs.length} orphaned jobs`, "job-processor");
+  } catch (error) {
+    log(`[ScanJobProcessor] Error cleaning up orphaned jobs: ${error instanceof Error ? error.message : String(error)}`, "job-processor");
+  }
+}
+
 export function startScanJobProcessor(): void {
   if (isProcessorRunning) {
     log("[ScanJobProcessor] Already running", "job-processor");
@@ -546,11 +580,13 @@ export function startScanJobProcessor(): void {
   isProcessorRunning = true;
   log("[ScanJobProcessor] Starting background job processor", "job-processor");
 
-  pollAndProcessJobs();
-
-  processorIntervalId = setInterval(() => {
+  cleanupOrphanedJobs().then(() => {
     pollAndProcessJobs();
-  }, JOB_POLL_INTERVAL_MS);
+    
+    processorIntervalId = setInterval(() => {
+      pollAndProcessJobs();
+    }, JOB_POLL_INTERVAL_MS);
+  });
 }
 
 export function stopScanJobProcessor(): void {
