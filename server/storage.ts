@@ -2,14 +2,14 @@ import { db } from "./db";
 import { 
   audits, leads, InsertAudit, InsertLead, Audit, DbLead,
   monitoringClients, monitoringGroups, monitoringPrompts, checkResults, checkSessions,
-  checkGroupMetrics, checkCompetitorMetrics,
+  checkGroupMetrics, checkCompetitorMetrics, scanJobs,
   InsertMonitoringClient, InsertMonitoringGroup, InsertMonitoringPrompt, InsertCheckResult, InsertCheckSession,
-  InsertCheckGroupMetric, InsertCheckCompetitorMetric,
+  InsertCheckGroupMetric, InsertCheckCompetitorMetric, InsertScanJob,
   MonitoringClient, MonitoringGroup, MonitoringPrompt, CheckResult, CheckSession,
-  CheckGroupMetric, CheckCompetitorMetric,
+  CheckGroupMetric, CheckCompetitorMetric, ScanJob,
   adminUsers, InsertAdminUser, AdminUser
 } from "@shared/schema";
-import { eq, desc, and, lte, isNull, or, isNotNull, gte } from "drizzle-orm";
+import { eq, desc, and, lte, isNull, or, isNotNull, gte, asc, inArray } from "drizzle-orm";
 
 export interface IStorage {
   createAudit(audit: InsertAudit): Promise<Audit>;
@@ -77,6 +77,16 @@ export interface IStorage {
   getAdminUserByResetToken(token: string): Promise<AdminUser | undefined>;
   getAdminUsersWithPendingReset(): Promise<AdminUser[]>;
   updateAdminUser(id: number, data: Partial<InsertAdminUser>): Promise<AdminUser | undefined>;
+  
+  // Scan job operations (background job queue)
+  createScanJob(job: InsertScanJob): Promise<ScanJob>;
+  getScanJobById(id: number): Promise<ScanJob | undefined>;
+  getScanJobsByClientId(clientId: number): Promise<ScanJob[]>;
+  getQueuedScanJobs(): Promise<ScanJob[]>;
+  getRunningScanJobs(): Promise<ScanJob[]>;
+  getActiveScanJobForClient(clientId: number): Promise<ScanJob | undefined>;
+  updateScanJob(id: number, data: Partial<InsertScanJob & { startedAt?: Date; completedAt?: Date }>): Promise<ScanJob | undefined>;
+  deleteScanJob(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -424,6 +434,61 @@ export class DatabaseStorage implements IStorage {
       .where(eq(adminUsers.id, id))
       .returning();
     return user;
+  }
+
+  // Scan job operations (background job queue)
+  async createScanJob(jobData: InsertScanJob): Promise<ScanJob> {
+    const [job] = await db.insert(scanJobs).values(jobData).returning();
+    return job;
+  }
+
+  async getScanJobById(id: number): Promise<ScanJob | undefined> {
+    const [job] = await db.select().from(scanJobs).where(eq(scanJobs.id, id));
+    return job;
+  }
+
+  async getScanJobsByClientId(clientId: number): Promise<ScanJob[]> {
+    return await db.select().from(scanJobs)
+      .where(eq(scanJobs.clientId, clientId))
+      .orderBy(desc(scanJobs.createdAt));
+  }
+
+  async getQueuedScanJobs(): Promise<ScanJob[]> {
+    return await db.select().from(scanJobs)
+      .where(eq(scanJobs.status, 'queued'))
+      .orderBy(asc(scanJobs.createdAt)); // FIFO: oldest jobs first
+  }
+
+  async getRunningScanJobs(): Promise<ScanJob[]> {
+    return await db.select().from(scanJobs)
+      .where(eq(scanJobs.status, 'running'))
+      .orderBy(asc(scanJobs.startedAt));
+  }
+
+  async getActiveScanJobForClient(clientId: number): Promise<ScanJob | undefined> {
+    const [job] = await db.select().from(scanJobs)
+      .where(
+        and(
+          eq(scanJobs.clientId, clientId),
+          inArray(scanJobs.status, ['queued', 'running'])
+        )
+      )
+      .orderBy(desc(scanJobs.createdAt))
+      .limit(1);
+    return job;
+  }
+
+  async updateScanJob(id: number, data: Partial<InsertScanJob & { startedAt?: Date; completedAt?: Date }>): Promise<ScanJob | undefined> {
+    const [job] = await db
+      .update(scanJobs)
+      .set(data)
+      .where(eq(scanJobs.id, id))
+      .returning();
+    return job;
+  }
+
+  async deleteScanJob(id: number): Promise<void> {
+    await db.delete(scanJobs).where(eq(scanJobs.id, id));
   }
 }
 

@@ -1180,6 +1180,173 @@ export async function registerRoutes(
     }
   });
 
+  // ============================================
+  // BACKGROUND SCAN JOB API (Queue-based, browser-independent)
+  // ============================================
+
+  // Queue a new scan job - returns immediately, job runs in background
+  app.post("/api/monitoring/scan-job/:clientId", async (req, res) => {
+    try {
+      const clientId = parseInt(req.params.clientId);
+      const { targetCity } = req.body || {};
+      
+      const client = await storage.getMonitoringClientById(clientId);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+      
+      // Check if there's already an active job for this client
+      const existingJob = await storage.getActiveScanJobForClient(clientId);
+      if (existingJob) {
+        return res.status(409).json({ 
+          error: "Scan already in progress",
+          jobId: existingJob.id,
+          status: existingJob.status,
+          progress: existingJob.progress,
+        });
+      }
+      
+      // Validate that there are prompts to scan
+      const groups = await storage.getGroupsByClientId(clientId);
+      const allPrompts = await storage.getPromptsByClientId(clientId);
+      const activeGroups = groups.filter(g => g.isActive);
+      const activeGroupIds = new Set(activeGroups.map(g => g.id));
+      const prompts = allPrompts.filter(p => p.isActive && activeGroupIds.has(p.groupId));
+      
+      if (prompts.length === 0) {
+        return res.status(400).json({ 
+          error: "No prompts to scan",
+          details: "This client has no active prompts configured. Please add prompts in the settings first."
+        });
+      }
+      
+      // Create the job - it will be picked up by the background processor
+      const job = await storage.createScanJob({
+        clientId,
+        targetCity: targetCity || null,
+        status: 'queued',
+        progress: 0,
+        progressMessage: 'Queued for processing...',
+        completedPrompts: 0,
+        totalPrompts: prompts.length,
+      });
+      
+      console.log(`[ScanJob] Created job ${job.id} for client ${clientId} with ${prompts.length} prompts`);
+      
+      res.json({ 
+        jobId: job.id, 
+        status: 'queued',
+        totalPrompts: prompts.length,
+        message: 'Scan queued successfully. You can close this page - the scan will continue in the background.'
+      });
+    } catch (error) {
+      console.error("Scan job creation error:", error);
+      res.status(400).json({ 
+        error: "Failed to queue scan",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Get scan job status by job ID
+  app.get("/api/monitoring/scan-job/:jobId", async (req, res) => {
+    try {
+      const jobId = parseInt(req.params.jobId);
+      
+      const job = await storage.getScanJobById(jobId);
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+      
+      res.json({
+        id: job.id,
+        clientId: job.clientId,
+        targetCity: job.targetCity,
+        status: job.status,
+        progress: job.progress,
+        progressMessage: job.progressMessage,
+        completedPrompts: job.completedPrompts,
+        totalPrompts: job.totalPrompts,
+        sessionId: job.sessionId,
+        resultScore: job.resultScore,
+        errorMessage: job.errorMessage,
+        startedAt: job.startedAt,
+        completedAt: job.completedAt,
+        createdAt: job.createdAt,
+      });
+    } catch (error) {
+      console.error("Scan job status error:", error);
+      res.status(400).json({ error: "Failed to get job status" });
+    }
+  });
+
+  // Get all scan jobs for a client (with optional status filter)
+  app.get("/api/monitoring/scan-jobs/:clientId", async (req, res) => {
+    try {
+      const clientId = parseInt(req.params.clientId);
+      
+      const jobs = await storage.getScanJobsByClientId(clientId);
+      
+      res.json(jobs.map(job => ({
+        id: job.id,
+        clientId: job.clientId,
+        targetCity: job.targetCity,
+        status: job.status,
+        progress: job.progress,
+        progressMessage: job.progressMessage,
+        completedPrompts: job.completedPrompts,
+        totalPrompts: job.totalPrompts,
+        sessionId: job.sessionId,
+        resultScore: job.resultScore,
+        errorMessage: job.errorMessage,
+        startedAt: job.startedAt,
+        completedAt: job.completedAt,
+        createdAt: job.createdAt,
+      })));
+    } catch (error) {
+      console.error("Scan jobs list error:", error);
+      res.status(400).json({ error: "Failed to get jobs" });
+    }
+  });
+
+  // Get active (queued or running) scan job for a client
+  app.get("/api/monitoring/scan-job-active/:clientId", async (req, res) => {
+    try {
+      const clientId = parseInt(req.params.clientId);
+      
+      const job = await storage.getActiveScanJobForClient(clientId);
+      
+      if (!job) {
+        return res.json({ hasActiveJob: false });
+      }
+      
+      res.json({
+        hasActiveJob: true,
+        job: {
+          id: job.id,
+          clientId: job.clientId,
+          targetCity: job.targetCity,
+          status: job.status,
+          progress: job.progress,
+          progressMessage: job.progressMessage,
+          completedPrompts: job.completedPrompts,
+          totalPrompts: job.totalPrompts,
+          sessionId: job.sessionId,
+          resultScore: job.resultScore,
+          startedAt: job.startedAt,
+          createdAt: job.createdAt,
+        }
+      });
+    } catch (error) {
+      console.error("Active scan job check error:", error);
+      res.status(400).json({ error: "Failed to check active job" });
+    }
+  });
+
+  // ============================================
+  // END BACKGROUND SCAN JOB API
+  // ============================================
+
   // Step 2: SSE endpoint for rescan progress
   app.get("/api/monitoring/rescan-stream/:prepareId", async (req, res) => {
     const { prepareId } = req.params;

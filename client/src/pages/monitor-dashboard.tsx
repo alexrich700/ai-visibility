@@ -337,7 +337,7 @@ export default function MonitorDashboard() {
   const [isExporting, setIsExporting] = useState(false);
   const [displayLimit, setDisplayLimit] = useState(20);
   
-  // Rescan state
+  // Rescan state - using background job system
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   const [scanStatus, setScanStatus] = useState("");
@@ -345,413 +345,200 @@ export default function MonitorDashboard() {
   const [selectedScanCity, setSelectedScanCity] = useState<string>("all"); // Selected city for next scan
   const [currentScanCityIndex, setCurrentScanCityIndex] = useState(0); // Multi-city: current city index
   const [totalScanCities, setTotalScanCities] = useState(0); // Multi-city: total cities to scan
-  const eventSourceRef = useRef<EventSource | null>(null);
-  const activeSessionIdRef = useRef<number | null>(null); // Track session for resume
-  const isScanningRef = useRef(false); // Ref to track scanning state for async operations
-  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Track retry timeout for cleanup
+  const [activeJobId, setActiveJobId] = useState<number | null>(null); // Track background job
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef(true); // Track mount state
-  const maxReconnectAttempts = 5;
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
-  // Cleanup EventSource and retries on unmount
+  // Cleanup polling on unmount
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
-      }
-      if (retryTimeoutRef.current) {
-        clearTimeout(retryTimeoutRef.current);
-        retryTimeoutRef.current = null;
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
       }
     };
   }, []);
-  
-  // Function to attempt resuming a paused scan
-  const attemptResume = (sessionId: number, attempt: number) => {
-    // Guard: stop if unmounted, scan cancelled, or max attempts reached
-    if (!isMountedRef.current || !isScanningRef.current) {
-      return;
-    }
+
+  // Check for active background job on mount and restore scan state
+  useEffect(() => {
+    if (!clientId) return;
     
-    if (!sessionId || attempt >= maxReconnectAttempts) {
-      if (isMountedRef.current) {
-        toast({
-          title: "Connection lost",
-          description: "Unable to resume scan after multiple attempts. Your progress has been saved - try resuming later.",
-          variant: "destructive",
-        });
-        isScanningRef.current = false;
-        setIsScanning(false);
-        setScanStatus("Paused - connection lost");
-        // Refetch to show partial results
-        queryClient.invalidateQueries({ queryKey: ["/api/monitoring/dashboard", clientId] });
+    const checkActiveJob = async () => {
+      try {
+        const response = await fetch(`/api/monitoring/scan-job-active/${clientId}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.hasActiveJob && data.job) {
+            // Restore scan state from active job
+            setActiveJobId(data.job.id);
+            setIsScanning(true);
+            setScanProgress(data.job.progress);
+            setScanStatus(data.job.progressMessage || 'Scan in progress...');
+            if (data.job.targetCity) {
+              setScanSubStatus(`Scanning: ${data.job.targetCity}`);
+            }
+            // Start polling for updates
+            startJobPolling(data.job.id);
+          }
+        }
+      } catch (error) {
+        console.error('Error checking active job:', error);
       }
-      return;
+    };
+    
+    checkActiveJob();
+  }, [clientId]);
+
+  // Poll for job status updates
+  const startJobPolling = (jobId: number) => {
+    // Clear any existing poll
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
     }
     
-    // Exponential backoff: 1s, 2s, 4s, 8s, 16s
-    const delay = Math.pow(2, attempt) * 1000;
-    if (isMountedRef.current) {
-      setScanStatus(`Connection lost - reconnecting in ${delay/1000}s... (attempt ${attempt + 1}/${maxReconnectAttempts})`);
-    }
-    
-    // Clear any previous timeout
-    if (retryTimeoutRef.current) {
-      clearTimeout(retryTimeoutRef.current);
-    }
-    
-    retryTimeoutRef.current = setTimeout(() => {
-      // Guard again after delay
-      if (!isMountedRef.current || !isScanningRef.current) {
-        return;
-      }
-      
-      if (isMountedRef.current) {
-        setScanStatus(`Reconnecting to scan...`);
-      }
+    const pollJob = async () => {
+      if (!isMountedRef.current) return;
       
       try {
-        // Close any existing connection
-        if (eventSourceRef.current) {
-          eventSourceRef.current.close();
+        const response = await fetch(`/api/monitoring/scan-job/${jobId}`);
+        if (!response.ok) {
+          throw new Error('Failed to get job status');
         }
         
-        // Connect to resume stream
-        const eventSource = new EventSource(`/api/monitoring/resume-stream/${sessionId}`);
-        eventSourceRef.current = eventSource;
+        const job = await response.json();
         
-        eventSource.onmessage = (event) => {
-          if (!isMountedRef.current) return;
-          
-          try {
-            const data = JSON.parse(event.data);
-            
-            // Extract sessionId from complete event if available
-            if (data.type === "complete" && data.sessionId) {
-              activeSessionIdRef.current = data.sessionId;
-            }
-            
-            handleStreamEvent(data);
-            
-            if (data.type === "complete" || data.type === "error") {
-              eventSource.close();
-              eventSourceRef.current = null;
-              activeSessionIdRef.current = null;
-              isScanningRef.current = false;
-            }
-          } catch (e) {
-            console.error("Failed to parse SSE event:", e);
+        if (!isMountedRef.current) return;
+        
+        setScanProgress(job.progress);
+        setScanStatus(job.progressMessage || 'Processing...');
+        if (job.targetCity) {
+          setScanSubStatus(`Scanning: ${job.targetCity}`);
+        } else {
+          setScanSubStatus(`${job.completedPrompts}/${job.totalPrompts} prompts`);
+        }
+        
+        if (job.status === 'complete') {
+          // Job finished successfully
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current);
+            pollIntervalRef.current = null;
           }
-        };
-        
-        eventSource.onerror = () => {
-          eventSource.close();
-          eventSourceRef.current = null;
-          // Attempt to resume with incremented attempt count
-          attemptResume(sessionId, attempt + 1);
-        };
-      } catch (error) {
-        console.error("Resume attempt failed:", error);
-        attemptResume(sessionId, attempt + 1);
-      }
-    }, delay);
-  };
-  
-  // Run a single city scan - returns Promise that resolves when complete
-  const runSingleCityRescan = (targetCity: string | undefined, cityIndex: number, totalCities: number): Promise<{ overallScore: number }> => {
-    return new Promise((resolve, reject) => {
-      setCurrentScanCityIndex(cityIndex);
-      setTotalScanCities(totalCities);
-      
-      const prepareScan = async () => {
-        try {
-          const prepareResponse = await fetch(`/api/monitoring/rescan-prepare/${clientId}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ targetCity }),
+          setIsScanning(false);
+          setActiveJobId(null);
+          setScanProgress(100);
+          setScanStatus('Scan Complete!');
+          setScanSubStatus(job.resultScore !== null ? `Overall Score: ${job.resultScore}%` : '');
+          
+          toast({
+            title: "Scan Complete",
+            description: `Visibility scan finished with ${job.resultScore}% score.`,
           });
           
-          if (!prepareResponse.ok) {
-            let errorMessage = "Failed to prepare scan";
-            try {
-              const errorData = await prepareResponse.json();
-              errorMessage = errorData.details || errorData.error || errorMessage;
-            } catch {
-              errorMessage = prepareResponse.statusText || errorMessage;
-            }
-            throw new Error(errorMessage);
+          // Refresh dashboard data
+          queryClient.invalidateQueries({ queryKey: ["/api/monitoring/dashboard", clientId] });
+          
+        } else if (job.status === 'failed') {
+          // Job failed
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current);
+            pollIntervalRef.current = null;
           }
+          setIsScanning(false);
+          setActiveJobId(null);
+          setScanProgress(0);
+          setScanStatus('Scan Failed');
+          setScanSubStatus(job.errorMessage || 'Unknown error');
           
-          const { prepareId, totalPrompts } = await prepareResponse.json();
-          
-          if (totalPrompts === 0) {
-            throw new Error("No prompts configured. Please add prompts in the settings first.");
-          }
-          
-          if (eventSourceRef.current) {
-            eventSourceRef.current.close();
-          }
-          
-          const eventSource = new EventSource(`/api/monitoring/rescan-stream/${prepareId}`);
-          eventSourceRef.current = eventSource;
-          
-          eventSource.onmessage = (event) => {
-            try {
-              const data = JSON.parse(event.data);
-              
-              if (data.sessionId && typeof data.sessionId === 'number') {
-                activeSessionIdRef.current = data.sessionId;
-              }
-              
-              // Handle events for this city scan
-              switch (data.type) {
-                case "heartbeat":
-                  break;
-                case "session_created":
-                  if (data.sessionId) {
-                    activeSessionIdRef.current = data.sessionId;
-                  }
-                  break;
-                case "status":
-                  setScanStatus(data.message || "");
-                  setScanSubStatus("");
-                  if (data.progress !== undefined) {
-                    const cityProgress = data.progress;
-                    const overallProgress = Math.round(((cityIndex - 1) / totalCities) * 100 + (cityProgress / totalCities));
-                    setScanProgress(overallProgress);
-                  }
-                  break;
-                case "testing":
-                  setScanStatus(`Testing ${data.groupName}`);
-                  setScanSubStatus(data.promptText || "");
-                  if (data.progress !== undefined) {
-                    const cityProgress = data.progress;
-                    const overallProgress = Math.round(((cityIndex - 1) / totalCities) * 100 + (cityProgress / totalCities));
-                    setScanProgress(overallProgress);
-                  }
-                  break;
-                case "prompt_complete":
-                  if (data.progress !== undefined) {
-                    const cityProgress = data.progress;
-                    const overallProgress = Math.round(((cityIndex - 1) / totalCities) * 100 + (cityProgress / totalCities));
-                    setScanProgress(overallProgress);
-                  }
-                  break;
-                case "group_complete":
-                  break;
-                case "complete":
-                  eventSource.close();
-                  eventSourceRef.current = null;
-                  activeSessionIdRef.current = null;
-                  resolve({ overallScore: data.overallScore || 0 });
-                  break;
-                case "error":
-                  eventSource.close();
-                  eventSourceRef.current = null;
-                  activeSessionIdRef.current = null;
-                  reject(new Error(data.message || "Scan error"));
-                  break;
-              }
-            } catch (e) {
-              console.error("Failed to parse SSE event:", e);
-            }
-          };
-          
-          eventSource.onerror = () => {
-            eventSource.close();
-            eventSourceRef.current = null;
-            activeSessionIdRef.current = null;
-            // For multi-city scans, connection loss fails the current city
-            // User can retry the scan for remaining cities
-            reject(new Error("Connection lost during scan. Please try again."));
-          };
-        } catch (error) {
-          reject(error);
+          toast({
+            title: "Scan Failed",
+            description: job.errorMessage || 'Unknown error occurred',
+            variant: "destructive",
+          });
         }
-      };
-      
-      prepareScan();
-    });
+        // If still queued or running, continue polling
+        
+      } catch (error) {
+        console.error('Error polling job status:', error);
+      }
+    };
+    
+    // Poll immediately, then every 3 seconds
+    pollJob();
+    pollIntervalRef.current = setInterval(pollJob, 3000);
   };
   
-  // Function to run a fresh scan (supports all cities or single city)
+  // Function to queue a background scan job (browser-independent)
   const runRescan = async () => {
     if (!clientId || !data) return;
     
-    // Clear any pending retry timeouts
-    if (retryTimeoutRef.current) {
-      clearTimeout(retryTimeoutRef.current);
-      retryTimeoutRef.current = null;
+    // Prevent starting if already scanning
+    if (isScanning || activeJobId) {
+      toast({
+        title: "Scan in progress",
+        description: "Please wait for the current scan to complete.",
+        variant: "default",
+      });
+      return;
     }
     
-    isScanningRef.current = true;
     setIsScanning(true);
     setScanProgress(0);
-    setScanStatus("Preparing scan...");
+    setScanStatus("Queueing scan...");
     setScanSubStatus("");
     
     try {
-      // Determine which cities to scan
-      // If "all" selected and client has multiple cities, scan all of them
-      // Otherwise scan the single selected city (or undefined for national/single-city clients)
-      let citiesToScan: (string | undefined)[];
-      if (selectedScanCity === "all") {
-        if (data.client.cities && data.client.cities.length > 0) {
-          citiesToScan = data.client.cities;
-        } else if (data.client.city) {
-          citiesToScan = [data.client.city];
-        } else {
-          citiesToScan = [undefined]; // National scope or no city configured
-        }
-      } else {
-        citiesToScan = [selectedScanCity];
-      }
+      // Determine target city for the job
+      const targetCity = selectedScanCity === "all" ? null : selectedScanCity;
       
-      const totalCities = citiesToScan.length;
-      let totalScore = 0;
+      const response = await fetch(`/api/monitoring/scan-job/${clientId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetCity }),
+      });
       
-      // Scan each city sequentially with individual error handling
-      const cityResults: { city: string | undefined; success: boolean; score: number }[] = [];
-      
-      for (let i = 0; i < citiesToScan.length; i++) {
-        const targetCity = citiesToScan[i];
-        const cityIndex = i + 1;
+      if (!response.ok) {
+        const errorData = await response.json();
         
-        // Update status to show which city we're scanning
-        if (totalCities > 1 && targetCity) {
-          setScanStatus(`Scanning ${targetCity} (${cityIndex}/${totalCities})`);
+        // Handle case where scan is already in progress
+        if (response.status === 409 && errorData.jobId) {
+          setActiveJobId(errorData.jobId);
+          setScanProgress(errorData.progress || 0);
+          setScanStatus("Scan already in progress");
+          startJobPolling(errorData.jobId);
+          return;
         }
         
-        try {
-          const result = await runSingleCityRescan(targetCity, cityIndex, totalCities);
-          totalScore += result.overallScore;
-          cityResults.push({ city: targetCity, success: true, score: result.overallScore });
-        } catch (cityError) {
-          // Log error but continue to next city
-          console.error(`Scan failed for city ${targetCity}:`, cityError);
-          cityResults.push({ city: targetCity, success: false, score: 0 });
-          // Brief pause before next city to avoid rapid reconnection
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
+        throw new Error(errorData.details || errorData.error || "Failed to queue scan");
       }
       
-      // Check if any cities failed
-      const failedCities = cityResults.filter(r => !r.success);
-      const successCities = cityResults.filter(r => r.success);
+      const result = await response.json();
       
-      if (failedCities.length > 0 && failedCities.length < totalCities) {
-        // Some cities failed, some succeeded - show partial success message
-        toast({
-          title: "Partial Scan Complete",
-          description: `${successCities.length}/${totalCities} cities scanned successfully. Failed: ${failedCities.map(c => c.city || 'National').join(', ')}`,
-          variant: "default",
-        });
-      } else if (failedCities.length === totalCities) {
-        // All cities failed - throw error to trigger the catch block
-        throw new Error("All city scans failed. Please check your connection and try again.");
-      }
+      setActiveJobId(result.jobId);
+      setScanStatus("Scan queued - processing...");
+      setScanSubStatus(`${result.totalPrompts} prompts to scan`);
       
-      // All cities scanned (or at least some succeeded)
-      setScanProgress(100);
-      setScanStatus(failedCities.length > 0 ? "Scan Partially Complete" : "Scan Complete!");
-      // Calculate average score only from successful cities
-      const avgScore = successCities.length > 0 ? Math.round(totalScore / successCities.length) : 0;
-      setScanSubStatus(successCities.length > 1 
-        ? `Scanned ${successCities.length} cities. Average Score: ${avgScore}%`
-        : `Overall Score: ${avgScore}%`
-      );
-      isScanningRef.current = false;
-      setIsScanning(false);
-      setCurrentScanCityIndex(0);
-      setTotalScanCities(0);
+      toast({
+        title: "Scan Started",
+        description: "Your scan is running in the background. You can close this page - it will continue running.",
+      });
       
-      // Refresh data after a short delay
-      setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: ["/api/monitoring/dashboard", clientId] });
-      }, 1000);
+      // Start polling for job status
+      startJobPolling(result.jobId);
       
     } catch (error) {
       toast({
-        title: "Error running scan",
+        title: "Error starting scan",
         description: error instanceof Error ? error.message : "Unknown error",
         variant: "destructive",
       });
-      isScanningRef.current = false;
       setScanProgress(0);
-      setScanStatus("Failed");
+      setScanStatus("Failed to start");
       setIsScanning(false);
-      setCurrentScanCityIndex(0);
-      setTotalScanCities(0);
-    }
-  };
-  
-  // Handle SSE events from rescan
-  const handleStreamEvent = (event: {
-    type: string;
-    message?: string;
-    progress?: number;
-    groupName?: string;
-    promptIndex?: number;
-    totalPrompts?: number;
-    promptText?: string;
-    overallScore?: number;
-    sessionId?: number;
-    clientId?: number;
-  }) => {
-    switch (event.type) {
-      case "heartbeat":
-        console.log("Rescan stream connected");
-        break;
-      case "session_created":
-        // Capture sessionId for potential resume on disconnect
-        if (event.sessionId) {
-          activeSessionIdRef.current = event.sessionId;
-          console.log(`Scan session created: ${event.sessionId}`);
-        }
-        break;
-      case "status":
-        setScanStatus(event.message || "");
-        setScanSubStatus("");
-        if (event.progress !== undefined) setScanProgress(event.progress);
-        break;
-      case "testing":
-        setScanStatus(`Testing ${event.groupName}`);
-        setScanSubStatus(event.promptText || "");
-        if (event.progress !== undefined) setScanProgress(event.progress);
-        break;
-      case "prompt_complete":
-        if (event.progress !== undefined) setScanProgress(event.progress);
-        break;
-      case "group_complete":
-        break;
-      case "complete":
-        setScanProgress(100);
-        setScanStatus("Scan Complete!");
-        setScanSubStatus(`Overall Score: ${event.overallScore}%`);
-        isScanningRef.current = false;
-        activeSessionIdRef.current = null;
-        setIsScanning(false);
-        toast({
-          title: "Scan Complete",
-          description: `New visibility data collected. Overall score: ${event.overallScore}%`,
-        });
-        // Refetch dashboard data to show new results
-        queryClient.invalidateQueries({ queryKey: ["/api/monitoring/dashboard", clientId] });
-        break;
-      case "error":
-        toast({
-          title: "Scan Error",
-          description: event.message || "Unknown error occurred",
-          variant: "destructive",
-        });
-        isScanningRef.current = false;
-        activeSessionIdRef.current = null;
-        setIsScanning(false);
-        break;
+      setActiveJobId(null);
     }
   };
 

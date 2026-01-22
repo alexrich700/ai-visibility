@@ -3,6 +3,7 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { startScheduler } from "./services/scheduler";
+import { startScanJobProcessor } from "./services/scan-job-processor";
 import { validateOpenAIKey } from "./ai-services";
 
 const app = express();
@@ -139,6 +140,9 @@ app.use((req, res, next) => {
       
       // Start the background scheduler for automated visibility checks
       startScheduler();
+      
+      // Start the background scan job processor for async scan processing
+      startScanJobProcessor();
     },
   );
 })();

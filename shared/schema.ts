@@ -458,6 +458,45 @@ export type InsertPromptFallbackLog = z.infer<typeof insertPromptFallbackLogSche
 export type PromptFallbackLog = typeof promptFallbackLogs.$inferSelect;
 
 // ============================================
+// SCAN JOBS - Background job queue for async scans
+// ============================================
+
+export const SCAN_JOB_STATUS = {
+  QUEUED: 'queued',       // Job is waiting to be processed
+  RUNNING: 'running',     // Job is currently being processed
+  COMPLETE: 'complete',   // Job finished successfully
+  FAILED: 'failed',       // Job failed with error
+} as const;
+export type ScanJobStatus = typeof SCAN_JOB_STATUS[keyof typeof SCAN_JOB_STATUS];
+
+export const scanJobs = pgTable("scan_jobs", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").references(() => monitoringClients.id).notNull(),
+  targetCity: text("target_city"), // Which city to scan (null = national or single city from client)
+  status: text("status").notNull().default('queued'), // queued, running, complete, failed
+  progress: integer("progress").notNull().default(0), // 0-100 percentage
+  progressMessage: text("progress_message"), // Human-readable status message
+  completedPrompts: integer("completed_prompts").notNull().default(0),
+  totalPrompts: integer("total_prompts").notNull().default(0),
+  sessionId: integer("session_id").references(() => checkSessions.id), // Created when job starts running
+  errorMessage: text("error_message"), // Error details if failed
+  resultScore: integer("result_score"), // Final visibility score when complete
+  startedAt: timestamp("started_at"), // When processing began
+  completedAt: timestamp("completed_at"), // When job finished (success or failure)
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertScanJobSchema = createInsertSchema(scanJobs).omit({
+  id: true,
+  createdAt: true,
+  startedAt: true,
+  completedAt: true,
+});
+
+export type InsertScanJob = z.infer<typeof insertScanJobSchema>;
+export type ScanJob = typeof scanJobs.$inferSelect;
+
+// ============================================
 // Frontend Request Schemas
 // ============================================
 
