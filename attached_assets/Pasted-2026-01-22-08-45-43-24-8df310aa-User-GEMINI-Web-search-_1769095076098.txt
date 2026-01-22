@@ -1,0 +1,144 @@
+2026-01-22 08:45:43.24
+8df310aa
+User
+[GEMINI] Web search queries used: residential drain cleaning Saint Paul MN business names phone numbers service areas, drain cleaning companies Saint Paul MN reviews, plumbers Saint Paul MN drain cleaning
+2026-01-22 08:45:43.24
+8df310aa
+User
+[queryGoogleAI] Result - found: false, response length: 1569, citations: 6, has grounding: true
+2026-01-22 08:45:43.24
+8df310aa
+User
+[GEMINI] Response preview (first 300 chars): Here are several local businesses that offer residential drain cleaning services in Saint Paul, MN: * **Ultimate Drain Services, Inc.** * **Phone Number:** (651) 436-4700 * **Service Areas:** St. Paul, MN, Minneapolis, MN, and Western Wisconsin. * **Additional Info:** They are a
+2026-01-22 08:45:43.24
+8df310aa
+User
+[GEMINI DETECTION] Business: "MSP Plumbing Heating Air" | URL: "https://mspplumbingheatingair.com/" | Aliases: 0 | Search terms: ["msp plumbing heating air","mspplumbingheatingair","mspplumbingheatingair","mspplumbingheatingair.com"] | Found: false
+2026-01-22 08:45:55.76
+8df310aa
+User
+[GEMINI] Web search queries used: affordable HVAC companies Saint Paul MN, low-cost HVAC maintenance Saint Paul MN, budget HVAC installation Saint Paul MN, HVAC financing programs Saint Paul MN, HVAC tune-up cost Saint Paul MN, furnace replacement cost Saint Paul MN, AC replacement cost Saint Paul MN
+2026-01-22 08:45:55.96
+8df310aa
+User
+[GEMINI DETECTION] Business: "MSP Plumbing Heating Air" | URL: "https://mspplumbingheatingair.com/" | Aliases: 0 | Search terms: ["msp plumbing heating air","mspplumbingheatingair","mspplumbingheatingair","mspplumbingheatingair.com"] | Found: false
+2026-01-22 08:45:55.96
+8df310aa
+User
+[queryGoogleAI] Result - found: false, response length: 5430, citations: 23, has grounding: true
+2026-01-22 08:45:55.96
+8df310aa
+User
+[GEMINI] Extracted 23 citations
+2026-01-22 08:45:55.96
+8df310aa
+User
+[GEMINI] Response preview (first 300 chars): Finding affordable HVAC options in Saint Paul, MN, involves looking for companies that offer competitive pricing, special deals, and flexible financing. Several local businesses aim to make HVAC services more accessible through these avenues. Here are some HVAC companies in Saint Paul, MN, known fo
+2026-01-22 08:46:01.96
+8df310aa
+User
+[queryGoogleAI] Result - found: false, response length: 7791, citations: 25, has grounding: true
+2026-01-22 08:46:01.96
+8df310aa
+User
+[GEMINI] Web search queries used: HVAC companies Saint Paul MN highest customer ratings Google, HVAC companies Saint Paul MN best reviews Yelp, HVAC companies Saint Paul MN top rated Angi, Aquarius Home Services Saint Paul MN Google reviews, Aquarius Home Services Saint Paul MN Yelp reviews, Aquarius Home Services Saint Paul MN Angi reviews, Standard Heating & Air Conditioning Saint Paul MN Google reviews, Standard Heating & Air Conditioning Saint Paul MN Yelp reviews, Standard Heating & Air Conditioning Saint Paul MN Angi reviews, Metro Heating & Cooling Saint Paul MN Google reviews, Metro Heating & Cooling Saint Paul MN Yelp reviews, Metro Heating & Cooling Saint Paul MN Angi reviews, Pronto Heating & Air Conditioning Saint Paul MN Google reviews, Pronto Heating & Air Conditioning Saint Paul MN Yelp reviews, Pronto Heating & Air Conditioning Saint Paul MN Angi reviews, Boehm Heating & Air Conditioning Saint Paul MN Google reviews, Boehm Heating & Air Conditioning Saint Paul MN Yelp reviews, Boehm Heating & Air Conditioning Saint Paul MN Angi reviews, Snelling Heating Cooling and Electrical Saint Paul MN Google reviews, Snelling Heating Cooling and Electrical Saint Paul MN Yelp reviews, Snelling Heating Cooling and Electrical Saint Paul MN Angi reviews, Residential Heating and Air Conditioning Saint Paul MN Google reviews, Residential Heating and Air Conditioning Saint Paul MN Yelp reviews, Residential Heating and Air Conditioning Saint Paul MN Angi reviews, Furnace Doctors Heating & Air Conditioning Saint Paul MN Google reviews, Furnace Doctors Heating & Air Conditioning Saint Paul MN Yelp reviews, Furnace Doctors Heating & Air Conditioning Saint Paul MN Angi reviews, Culpepper Heating and Cooling LLC Saint Paul MN Google reviews, Culpepper Heating and Cooling LLC Saint Paul MN Yelp reviews, Culpepper Heating and Cooling LLC Saint Paul MN Angi reviews
+2026-01-22 08:46:01.96
+8df310aa
+User
+[GEMINI] Extracted 25 citations
+2026-01-22 08:46:01.96
+8df310aa
+User
+[GEMINI] Response preview (first 300 chars): When seeking top-rated HVAC providers in Saint Paul, MN, several companies consistently receive high praise and positive customer feedback across various platforms. While specific numerical ratings can fluctuate, the following businesses are frequently highlighted for their excellent service and str
+2026-01-22 08:46:01.96
+8df310aa
+User
+[GEMINI DETECTION] Business: "MSP Plumbing Heating Air" | URL: "https://mspplumbingheatingair.com/" | Aliases: 0 | Search terms: ["msp plumbing heating air","mspplumbingheatingair","mspplumbingheatingair","mspplumbingheatingair.com"] | Found: false
+2026-01-22 08:46:03.46
+8df310aa
+User
+[GEMINI] Web search queries used: top drain cleaning companies Saint Paul MN, best rated drain cleaning Saint Paul MN reviews, drain cleaning services Saint Paul MN comparison, Residential Drain Cleaning Saint Paul MN, Emergency Drain Cleaning Saint Paul MN, drain cleaning warranties Saint Paul MN, drain cleaning pricing Saint Paul MN, American Sewer Saint Paul MN drain cleaning services warranties pricing response time, St Paul Pipeworks drain cleaning services warranties pricing response time, McQuillan Home Services Saint Paul MN drain cleaning services warranties pricing response time, Ultimate Drain Services Saint Paul MN drain cleaning services warranties pricing response time, Rascher Plumbing & Heating Saint Paul MN drain cleaning services warranties pricing response time, General Rooter Saint Paul MN drain cleaning services warranties pricing response time, Cutting Edge Sewer & Drain Saint Paul MN services warranties pricing response time, Ron the Sewer Rat Saint Paul MN services warranties pricing response time, Roto-Rooter Saint Paul MN drain cleaning services warranties pricing response time, Discount Plumbing and Drain Cleaning Saint Paul MN services warranties pricing response time, John's Sewer & Drain Cleaning Saint Paul MN services warranties pricing response time, Ken's Sewer Service Saint Paul MN services warranties pricing response time, Guy's Sewer & Drain Saint Paul MN services warranties pricing response time
+2026-01-22 08:46:03.66
+8df310aa
+User
+[GEMINI DETECTION] Business: "MSP Plumbing Heating Air" | URL: "https://mspplumbingheatingair.com/" | Aliases: 0 | Search terms: ["msp plumbing heating air","mspplumbingheatingair","mspplumbingheatingair","mspplumbingheatingair.com"] | Found: false
+2026-01-22 08:46:03.86
+8df310aa
+User
+[queryGoogleAI] Result - found: false, response length: 9256, citations: 34, has grounding: true
+2026-01-22 08:46:03.86
+8df310aa
+User
+[GEMINI] Extracted 34 citations
+2026-01-22 08:46:03.86
+8df310aa
+User
+[GEMINI] Response preview (first 300 chars): Below is a comparison of top drain cleaning companies in Saint Paul, MN, detailing their services, warranties, pricing transparency, and typical response times: **1. American Sewer** * **Services Offered**: American Sewer provides comprehensive plumbing and drain cleaning services for residential
+2026-01-22 08:47:01.76
+8df310aa
+User
+[NO MATCH] AI cited these domains: rotorooter.com, mrrooter.com, mcquillanbros.com, general-rooter.com, guysseweranddrain.com
+2026-01-22 08:47:01.76
+8df310aa
+User
+[CHATGPT] Response preview (first 300 chars): Here are local companies you can call for residential drain cleaning in Saint Paul, MN. I list the company name, phone number, service area (short), and a website when available. - Roto-Rooter Plumbing & Water Cleanup — (651) 227-0098 Service area: St. Paul and the Twin Cities metro (same-day a
+2026-01-22 08:47:01.76
+8df310aa
+User
+[CHATGPT] Extracted 17 citations
+2026-01-22 08:47:01.76
+8df310aa
+User
+[queryOpenAI] Result - found: false, response length: 4604, citations: 17
+2026-01-22 08:47:01.76
+8df310aa
+User
+[CHATGPT DETECTION] Business: "MSP Plumbing Heating Air" | URL: "https://mspplumbingheatingair.com/" | Aliases: 0 | Search terms: ["msp plumbing heating air","mspplumbingheatingair","mspplumbingheatingair","mspplumbingheatingair.com"] | Found: false
+2026-01-22 08:47:21.46
+8df310aa
+User
+[NO MATCH] AI cited these domains: boehmheatingco.com, expertise.com, priorityheatingcooling.com, standardheating.com, prontoheat.com
+2026-01-22 08:47:21.86
+8df310aa
+User
+[queryOpenAI] Result - found: false, response length: 2853, citations: 8
+2026-01-22 08:47:21.86
+8df310aa
+User
+[CHATGPT] Extracted 8 citations
+2026-01-22 08:47:21.86
+8df310aa
+User
+[CHATGPT] Response preview (first 300 chars): I checked current review sites (Google, Yelp and Angi) for HVAC companies that serve Saint Paul, MN. Below are five local providers that consistently rank at or near the top across those platforms — each entry shows the platform ratings I found and the source(s). Ratings were checked on January 22,
+2026-01-22 08:47:21.86
+8df310aa
+User
+[CHATGPT DETECTION] Business: "MSP Plumbing Heating Air" | URL: "https://mspplumbingheatingair.com/" | Aliases: 0 | Search terms: ["msp plumbing heating air","mspplumbingheatingair","mspplumbingheatingair","mspplumbingheatingair.com"] | Found: false
+2026-01-22 08:47:38.36
+8df310aa
+User
+[NO MATCH] AI cited these domains: stpaul.gov, rotorooter.com, mrrooter.com, benjaminfranklinplumbing.com, allwaysdrains.com
+2026-01-22 08:47:38.36
+8df310aa
+User
+[CHATGPT] Extracted 17 citations
+2026-01-22 08:47:38.36
+8df310aa
+User
+[CHATGPT DETECTION] Business: "MSP Plumbing Heating Air" | URL: "https://mspplumbingheatingair.com/" | Aliases: 0 | Search terms: ["msp plumbing heating air","mspplumbingheatingair","mspplumbingheatingair","mspplumbingheatingair.com"] | Found: false
+2026-01-22 08:47:38.36
+8df310aa
+User
+[CHATGPT] Response preview (first 300 chars): Below are short, side-by-side summaries of eight well-known drain-cleaning / sewer contractors that serve Saint Paul, MN. For each company I list: core drain services, what their website says (or does not say) about warranties, how transparent their pricing practices appear on their site, and typica
+2026-01-22 08:47:38.36
+8df310aa
+User
+[queryOpenAI] Result - found: false, response length: 11595, citations: 17
+2026-01-22 08:47:57.46
+8df310aa
+User
+[CHATGPT] Extracted 16 citations
+2026-01-22 08:47:57.46
+8df310aa
+User
+Scan cancelled - client disconnected during batch
