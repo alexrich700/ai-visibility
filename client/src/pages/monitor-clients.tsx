@@ -20,7 +20,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, getAdminQueryFn } from "@/lib/queryClient";
 import { format } from "date-fns";
 import {
   Building2, Globe, MapPin, Calendar, TrendingUp, Settings, Trash2,
@@ -62,11 +62,12 @@ export default function MonitorClients() {
 
   const { data: clients = [], isLoading } = useQuery<ClientWithLatestSession[]>({
     queryKey: ["/api/monitoring/clients-with-stats"],
+    queryFn: getAdminQueryFn({ on401: "throw" }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (clientId: number) => {
-      await apiRequest("DELETE", `/api/monitoring/clients/${clientId}`);
+      await apiRequest("DELETE", `/api/monitoring/clients/${clientId}`, undefined, { useAdminAuth: true });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/monitoring/clients-with-stats"] });

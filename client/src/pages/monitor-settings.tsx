@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { getAdminToken } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -102,17 +103,21 @@ export default function MonitorSettings() {
     queryFn: async () => {
       if (!clientId) throw new Error("No client ID");
       
-      const clientRes = await fetch(`/api/monitoring/dashboard/${clientId}`);
+      const token = getAdminToken();
+      const headers: Record<string, string> = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      
+      const clientRes = await fetch(`/api/monitoring/dashboard/${clientId}`, { headers });
       if (!clientRes.ok) throw new Error("Failed to fetch client");
       const dashboardData = await clientRes.json();
       
-      const groupsRes = await fetch(`/api/monitoring/clients/${clientId}/groups`);
+      const groupsRes = await fetch(`/api/monitoring/clients/${clientId}/groups`, { headers });
       if (!groupsRes.ok) throw new Error("Failed to fetch groups");
       const groups: MonitoringGroup[] = await groupsRes.json();
       
       const groupsWithPrompts: GroupWithPrompts[] = await Promise.all(
         groups.map(async (group) => {
-          const promptsRes = await fetch(`/api/monitoring/groups/${group.id}/prompts`);
+          const promptsRes = await fetch(`/api/monitoring/groups/${group.id}/prompts`, { headers });
           const prompts: MonitoringPrompt[] = promptsRes.ok ? await promptsRes.json() : [];
           return { ...group, prompts };
         })
@@ -141,7 +146,7 @@ export default function MonitorSettings() {
 
   const updateClientMutation = useMutation({
     mutationFn: async (updates: Partial<MonitoringClient>) => {
-      const res = await apiRequest("PATCH", `/api/monitoring/clients/${clientId}`, updates);
+      const res = await apiRequest("PATCH", `/api/monitoring/clients/${clientId}`, updates, { useAdminAuth: true });
       return res.json();
     },
     onSuccess: () => {
@@ -157,7 +162,7 @@ export default function MonitorSettings() {
 
   const createGroupMutation = useMutation({
     mutationFn: async (groupData: { name: string; description: string; isHighLevelCategory: boolean }) => {
-      const res = await apiRequest("POST", `/api/monitoring/clients/${clientId}/groups`, groupData);
+      const res = await apiRequest("POST", `/api/monitoring/clients/${clientId}/groups`, groupData, { useAdminAuth: true });
       return res.json();
     },
     onSuccess: () => {
@@ -175,7 +180,7 @@ export default function MonitorSettings() {
 
   const updateGroupMutation = useMutation({
     mutationFn: async ({ id, ...data }: { id: number; name?: string; description?: string; isHighLevelCategory?: boolean }) => {
-      const res = await apiRequest("PATCH", `/api/monitoring/groups/${id}`, data);
+      const res = await apiRequest("PATCH", `/api/monitoring/groups/${id}`, data, { useAdminAuth: true });
       return res.json();
     },
     onSuccess: () => {
@@ -190,7 +195,7 @@ export default function MonitorSettings() {
 
   const deleteGroupMutation = useMutation({
     mutationFn: async (groupId: number) => {
-      const res = await apiRequest("DELETE", `/api/monitoring/groups/${groupId}`);
+      const res = await apiRequest("DELETE", `/api/monitoring/groups/${groupId}`, undefined, { useAdminAuth: true });
       return res.json();
     },
     onSuccess: () => {
@@ -205,7 +210,7 @@ export default function MonitorSettings() {
 
   const createPromptMutation = useMutation({
     mutationFn: async ({ groupId, promptText }: { groupId: number; promptText: string }) => {
-      const res = await apiRequest("POST", `/api/monitoring/groups/${groupId}/prompts`, { promptText });
+      const res = await apiRequest("POST", `/api/monitoring/groups/${groupId}/prompts`, { promptText }, { useAdminAuth: true });
       return res.json();
     },
     onSuccess: () => {
@@ -221,7 +226,7 @@ export default function MonitorSettings() {
 
   const updatePromptMutation = useMutation({
     mutationFn: async ({ id, promptText }: { id: number; promptText: string }) => {
-      const res = await apiRequest("PATCH", `/api/monitoring/prompts/${id}`, { promptText });
+      const res = await apiRequest("PATCH", `/api/monitoring/prompts/${id}`, { promptText }, { useAdminAuth: true });
       return res.json();
     },
     onSuccess: () => {
@@ -236,7 +241,7 @@ export default function MonitorSettings() {
 
   const deletePromptMutation = useMutation({
     mutationFn: async (promptId: number) => {
-      const res = await apiRequest("DELETE", `/api/monitoring/prompts/${promptId}`);
+      const res = await apiRequest("DELETE", `/api/monitoring/prompts/${promptId}`, undefined, { useAdminAuth: true });
       return res.json();
     },
     onSuccess: () => {

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { getAdminQueryFn, getAdminToken } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -369,7 +370,11 @@ export default function MonitorDashboard() {
     
     const checkActiveJob = async () => {
       try {
-        const response = await fetch(`/api/monitoring/scan-job-active/${clientId}`);
+        const token = getAdminToken();
+        const headers: Record<string, string> = {};
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+        
+        const response = await fetch(`/api/monitoring/scan-job-active/${clientId}`, { headers });
         if (response.ok) {
           const data = await response.json();
           if (data.hasActiveJob && data.job) {
@@ -404,7 +409,11 @@ export default function MonitorDashboard() {
       if (!isMountedRef.current) return;
       
       try {
-        const response = await fetch(`/api/monitoring/scan-job/${jobId}`);
+        const token = getAdminToken();
+        const headers: Record<string, string> = {};
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+        
+        const response = await fetch(`/api/monitoring/scan-job/${jobId}`, { headers });
         if (!response.ok) {
           throw new Error('Failed to get job status');
         }
@@ -494,9 +503,13 @@ export default function MonitorDashboard() {
       // Determine target city for the job
       const targetCity = selectedScanCity === "all" ? null : selectedScanCity;
       
+      const token = getAdminToken();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      
       const response = await fetch(`/api/monitoring/scan-job/${clientId}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ targetCity }),
       });
       
@@ -544,24 +557,28 @@ export default function MonitorDashboard() {
 
   const { data, isLoading, refetch, isRefetching } = useQuery<DashboardData>({
     queryKey: ["/api/monitoring/dashboard", clientId],
+    queryFn: getAdminQueryFn({ on401: "throw" }),
     enabled: !!clientId,
   });
 
   // Fetch group trends when "groups" view is selected
   const { data: groupTrendsData } = useQuery<{ groupTrends: GroupTrendData[] }>({
     queryKey: ["/api/monitoring/trends/groups", clientId],
+    queryFn: getAdminQueryFn({ on401: "throw" }),
     enabled: !!clientId && trendView === "groups",
   });
 
   // Fetch competitor trends when "competitors" view is selected
   const { data: competitorTrendsData } = useQuery<{ competitorTrends: CompetitorTrendData[] }>({
     queryKey: ["/api/monitoring/trends/competitors", clientId],
+    queryFn: getAdminQueryFn({ on401: "throw" }),
     enabled: !!clientId && trendView === "competitors",
   });
 
   // Fetch available scan dates for export dropdown
   const { data: scanDatesData } = useQuery<{ scanDates: { date: string; cities: string[]; sessionIds: number[] }[] }>({
     queryKey: ["/api/monitoring/scan-dates", clientId],
+    queryFn: getAdminQueryFn({ on401: "throw" }),
     enabled: !!clientId && exportDialogOpen,
   });
 
@@ -2025,7 +2042,10 @@ export default function MonitorDashboard() {
                 setIsExporting(true);
                 try {
                   const url = `/api/monitoring/export-by-date/${clientId}?scanDate=${selectedExportDate}`;
-                  const response = await fetch(url);
+                  const token = getAdminToken();
+                  const headers: Record<string, string> = {};
+                  if (token) headers["Authorization"] = `Bearer ${token}`;
+                  const response = await fetch(url, { headers });
                   if (!response.ok) {
                     const error = await response.json();
                     throw new Error(error.error || "Export failed");

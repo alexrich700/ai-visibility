@@ -23,6 +23,7 @@ import {
 } from "./services/scan-analytics";
 import { streamExportZip, streamSessionExportZip } from "./services/export-generator";
 import apiRouter from "./routes/index";
+import { requireAdminAuth } from "./middleware/auth";
 
 
 // Temporary cache for pending scan configurations (for SSE handshake only)
@@ -1128,9 +1129,9 @@ export async function registerRoutes(
   });
 
   // Rescan endpoint for existing clients - creates new session with fresh data
-  // Step 1: Prepare rescan (returns prepareId)
+  // Step 1: Prepare rescan (returns prepareId) (admin only)
   // Accepts optional targetCity in request body for multi-city rescans
-  app.post("/api/monitoring/rescan-prepare/:clientId", async (req, res) => {
+  app.post("/api/monitoring/rescan-prepare/:clientId", requireAdminAuth, async (req, res) => {
     try {
       const clientId = parseInt(req.params.clientId);
       const { targetCity } = req.body || {};
@@ -1184,8 +1185,8 @@ export async function registerRoutes(
   // BACKGROUND SCAN JOB API (Queue-based, browser-independent)
   // ============================================
 
-  // Queue a new scan job - returns immediately, job runs in background
-  app.post("/api/monitoring/scan-job/:clientId", async (req, res) => {
+  // Queue a new scan job - returns immediately, job runs in background (admin only)
+  app.post("/api/monitoring/scan-job/:clientId", requireAdminAuth, async (req, res) => {
     try {
       const clientId = parseInt(req.params.clientId);
       const { targetCity } = req.body || {};
@@ -1248,8 +1249,8 @@ export async function registerRoutes(
     }
   });
 
-  // Get scan job status by job ID
-  app.get("/api/monitoring/scan-job/:jobId", async (req, res) => {
+  // Get scan job status by job ID (admin only)
+  app.get("/api/monitoring/scan-job/:jobId", requireAdminAuth, async (req, res) => {
     try {
       const jobId = parseInt(req.params.jobId);
       
@@ -1280,8 +1281,8 @@ export async function registerRoutes(
     }
   });
 
-  // Get all scan jobs for a client (with optional status filter)
-  app.get("/api/monitoring/scan-jobs/:clientId", async (req, res) => {
+  // Get all scan jobs for a client (with optional status filter) (admin only)
+  app.get("/api/monitoring/scan-jobs/:clientId", requireAdminAuth, async (req, res) => {
     try {
       const clientId = parseInt(req.params.clientId);
       
@@ -1309,8 +1310,8 @@ export async function registerRoutes(
     }
   });
 
-  // Get active (queued or running) scan job for a client
-  app.get("/api/monitoring/scan-job-active/:clientId", async (req, res) => {
+  // Get active (queued or running) scan job for a client (admin only)
+  app.get("/api/monitoring/scan-job-active/:clientId", requireAdminAuth, async (req, res) => {
     try {
       const clientId = parseInt(req.params.clientId);
       
@@ -2340,7 +2341,8 @@ export async function registerRoutes(
   });
 
   // Get dashboard data for a client
-  app.get("/api/monitoring/dashboard/:id", async (req, res) => {
+  // Dashboard endpoint (admin only)
+  app.get("/api/monitoring/dashboard/:id", requireAdminAuth, async (req, res) => {
     try {
       const clientId = parseInt(req.params.id);
       
@@ -2451,8 +2453,8 @@ export async function registerRoutes(
     }
   });
 
-  // Get group visibility trends over time
-  app.get("/api/monitoring/trends/groups/:clientId", async (req, res) => {
+  // Get group visibility trends over time (admin only)
+  app.get("/api/monitoring/trends/groups/:clientId", requireAdminAuth, async (req, res) => {
     try {
       const clientId = parseInt(req.params.clientId);
       
@@ -2508,8 +2510,8 @@ export async function registerRoutes(
     }
   });
 
-  // Get competitor visibility trends over time
-  app.get("/api/monitoring/trends/competitors/:clientId", async (req, res) => {
+  // Get competitor visibility trends over time (admin only)
+  app.get("/api/monitoring/trends/competitors/:clientId", requireAdminAuth, async (req, res) => {
     try {
       const clientId = parseInt(req.params.clientId);
       
@@ -2571,8 +2573,8 @@ export async function registerRoutes(
     }
   });
 
-  // Get available scan dates for export dropdown
-  app.get("/api/monitoring/scan-dates/:id", async (req, res) => {
+  // Get available scan dates for export dropdown (admin only)
+  app.get("/api/monitoring/scan-dates/:id", requireAdminAuth, async (req, res) => {
     try {
       const clientId = parseInt(req.params.id);
       const allSessions = await storage.getCheckSessionsByClientId(clientId);
@@ -2610,8 +2612,8 @@ export async function registerRoutes(
     }
   });
 
-  // Export by specific scan date (new format with per-city Excel files)
-  app.get("/api/monitoring/export-by-date/:id", async (req, res) => {
+  // Export by specific scan date (new format with per-city Excel files) (admin only)
+  app.get("/api/monitoring/export-by-date/:id", requireAdminAuth, async (req, res) => {
     try {
       const clientId = parseInt(req.params.id);
       const { scanDate } = req.query;
@@ -2662,7 +2664,8 @@ export async function registerRoutes(
   });
 
   // Export monitoring data as ZIP (legacy date range format)
-  app.get("/api/monitoring/exports/:id", async (req, res) => {
+  // Export endpoint (admin only)
+  app.get("/api/monitoring/exports/:id", requireAdminAuth, async (req, res) => {
     try {
       const clientId = parseInt(req.params.id);
       const { startDate, endDate } = req.query;
@@ -2823,8 +2826,8 @@ export async function registerRoutes(
     }
   });
 
-  // Get all monitoring clients
-  app.get("/api/monitoring/clients", async (req, res) => {
+  // Get all monitoring clients (admin only)
+  app.get("/api/monitoring/clients", requireAdminAuth, async (req, res) => {
     try {
       const clients = await storage.getMonitoringClients();
       res.json(clients);
@@ -2834,8 +2837,8 @@ export async function registerRoutes(
     }
   });
 
-  // Get all monitoring clients with stats (for clients list page)
-  app.get("/api/monitoring/clients-with-stats", async (req, res) => {
+  // Get all monitoring clients with stats (for clients list page) (admin only)
+  app.get("/api/monitoring/clients-with-stats", requireAdminAuth, async (req, res) => {
     try {
       const clients = await storage.getMonitoringClients();
       
@@ -2871,7 +2874,8 @@ export async function registerRoutes(
   });
 
   // Delete a monitoring client
-  app.delete("/api/monitoring/clients/:id", async (req, res) => {
+  // Delete client (admin only)
+  app.delete("/api/monitoring/clients/:id", requireAdminAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       
@@ -2896,7 +2900,8 @@ export async function registerRoutes(
   // ============================================
 
   // Update monitoring client (for settings page)
-  app.patch("/api/monitoring/clients/:id", async (req, res) => {
+  // Update client (admin only)
+  app.patch("/api/monitoring/clients/:id", requireAdminAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const { businessName, domain, industry, scope, city, brandAliases, checkFrequencyDays, isActive } = req.body;
@@ -2927,8 +2932,8 @@ export async function registerRoutes(
   // GROUPS CRUD ENDPOINTS
   // ============================================
 
-  // Get groups for a client
-  app.get("/api/monitoring/clients/:id/groups", async (req, res) => {
+  // Get groups for a client (admin only)
+  app.get("/api/monitoring/clients/:id/groups", requireAdminAuth, async (req, res) => {
     try {
       const clientId = parseInt(req.params.id);
       const groups = await storage.getGroupsByClientId(clientId);
@@ -2939,8 +2944,8 @@ export async function registerRoutes(
     }
   });
 
-  // Create a new group
-  app.post("/api/monitoring/clients/:id/groups", async (req, res) => {
+  // Create a new group (admin only)
+  app.post("/api/monitoring/clients/:id/groups", requireAdminAuth, async (req, res) => {
     try {
       const clientId = parseInt(req.params.id);
       const { name, description, isHighLevelCategory } = req.body;
@@ -2964,8 +2969,8 @@ export async function registerRoutes(
     }
   });
 
-  // Update a group
-  app.patch("/api/monitoring/groups/:id", async (req, res) => {
+  // Update a group (admin only)
+  app.patch("/api/monitoring/groups/:id", requireAdminAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const { name, description, isHighLevelCategory, isActive } = req.body;
@@ -2988,8 +2993,8 @@ export async function registerRoutes(
     }
   });
 
-  // Delete a group (and its prompts)
-  app.delete("/api/monitoring/groups/:id", async (req, res) => {
+  // Delete a group (and its prompts) (admin only)
+  app.delete("/api/monitoring/groups/:id", requireAdminAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       await storage.deleteGroup(id);
@@ -3004,8 +3009,8 @@ export async function registerRoutes(
   // PROMPTS CRUD ENDPOINTS
   // ============================================
 
-  // Get prompts for a group
-  app.get("/api/monitoring/groups/:id/prompts", async (req, res) => {
+  // Get prompts for a group (admin only)
+  app.get("/api/monitoring/groups/:id/prompts", requireAdminAuth, async (req, res) => {
     try {
       const groupId = parseInt(req.params.id);
       const prompts = await storage.getPromptsByGroupId(groupId);
@@ -3016,8 +3021,8 @@ export async function registerRoutes(
     }
   });
 
-  // Create a new prompt
-  app.post("/api/monitoring/groups/:id/prompts", async (req, res) => {
+  // Create a new prompt (admin only)
+  app.post("/api/monitoring/groups/:id/prompts", requireAdminAuth, async (req, res) => {
     try {
       const groupId = parseInt(req.params.id);
       const { promptText } = req.body;
@@ -3039,8 +3044,8 @@ export async function registerRoutes(
     }
   });
 
-  // Update a prompt
-  app.patch("/api/monitoring/prompts/:id", async (req, res) => {
+  // Update a prompt (admin only)
+  app.patch("/api/monitoring/prompts/:id", requireAdminAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const { promptText, isActive } = req.body;
@@ -3061,8 +3066,8 @@ export async function registerRoutes(
     }
   });
 
-  // Delete a prompt
-  app.delete("/api/monitoring/prompts/:id", async (req, res) => {
+  // Delete a prompt (admin only)
+  app.delete("/api/monitoring/prompts/:id", requireAdminAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       await storage.deletePrompt(id);
