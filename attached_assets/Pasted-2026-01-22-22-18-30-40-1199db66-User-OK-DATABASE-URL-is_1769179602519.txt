@@ -1,0 +1,116 @@
+2026-01-22 22:18:30.40
+1199db66
+User
+[OK] DATABASE_URL is configured
+2026-01-22 22:18:30.40
+1199db66
+User
+ENVIRONMENT VALIDATION
+2026-01-22 22:18:30.40
+1199db66
+User
+========================================
+2026-01-22 22:18:30.40
+1199db66
+User
+========================================
+2026-01-22 22:18:30.40
+1199db66
+User
+[INFO] PERPLEXITY_API_KEY not set - Perplexity checks will be skipped
+2026-01-22 22:18:30.40
+1199db66
+User
+[OK] ADMIN_PASSWORD is configured
+2026-01-22 22:18:30.47
+1199db66
+User
+4:18:30 AM [express] serving on port 5000
+2026-01-22 22:18:30.47
+1199db66
+User
+4:18:30 AM [scheduler] Starting visibility check scheduler
+2026-01-22 22:18:30.47
+1199db66
+User
+4:18:30 AM [job-processor] [ScanJobProcessor] Starting background job processor
+2026-01-22 22:18:31.22
+1199db66
+User
+4:18:31 AM [job-processor] [ScanJobProcessor] No orphaned jobs found on startup
+2026-01-22 22:41:02.53
+1199db66
+System
+system: received signal terminated
+2026-01-22 22:49:56.00
+1199db66
+System
+starting up user application
+2026-01-22 22:49:56.00
+1199db66
+System
+metasidecar: loaded enterprise status from environment is_enterprise=false
+2026-01-22 22:49:56.00
+1199db66
+System
+forwarding local port 5000 to external port 80 (mapped as 1104)
+2026-01-22 22:49:56.82
+1199db66
+User
+> rest-express@1.0.0 start
+2026-01-22 22:49:56.82
+1199db66
+User
+> NODE_ENV=production node dist/index.cjs
+2026-01-22 22:49:57.55
+1199db66
+User
+========================================
+2026-01-22 22:49:57.56
+1199db66
+User
+[OK] ADMIN_PASSWORD is configured
+2026-01-22 22:49:57.56
+1199db66
+User
+[OK] DATABASE_URL is configured
+2026-01-22 22:49:57.56
+1199db66
+User
+========================================
+2026-01-22 22:49:57.56
+1199db66
+User
+[INFO] PERPLEXITY_API_KEY not set - Perplexity checks will be skipped
+2026-01-22 22:49:57.56
+1199db66
+User
+========================================
+2026-01-22 22:49:57.56
+1199db66
+User
+[OK] MY_OPENAI_API_KEY is configured
+2026-01-22 22:49:57.56
+1199db66
+User
+ENVIRONMENT VALIDATION
+2026-01-22 22:49:57.62
+1199db66
+User
+4:49:57 AM [scheduler] Starting visibility check scheduler
+2026-01-22 22:49:57.62
+1199db66
+User
+4:49:57 AM [express] serving on port 5000
+2026-01-22 22:49:57.63
+1199db66
+User
+4:49:57 AM [job-processor] [ScanJobProcessor] Starting background job processor
+2026-01-22 22:49:58.37
+1199db66
+User
+4:49:58 AM [job-processor] [ScanJobProcessor] No orphaned jobs found on startup
+2026-01-22 23:14:12.54
+1199db66
+System
+system: received signal terminated
