@@ -9,7 +9,7 @@ import {
   CheckGroupMetric, CheckCompetitorMetric, ScanJob, ClientSession as DbClientSession, AdminSession as DbAdminSession,
   adminUsers, InsertAdminUser, AdminUser
 } from "@shared/schema";
-import { eq, desc, and, lte, isNull, or, isNotNull, gte, asc, inArray } from "drizzle-orm";
+import { eq, desc, and, lte, lt, isNull, or, isNotNull, gte, asc, inArray } from "drizzle-orm";
 
 export interface IStorage {
   createAudit(audit: InsertAudit): Promise<Audit>;
@@ -85,6 +85,7 @@ export interface IStorage {
   getScanJobsByClientId(clientId: number): Promise<ScanJob[]>;
   getQueuedScanJobs(): Promise<ScanJob[]>;
   getRunningScanJobs(): Promise<ScanJob[]>;
+  getOrphanedJobs(staleQueuedThresholdMs: number): Promise<ScanJob[]>; // Get running jobs + stale queued jobs
   getActiveScanJobForClient(clientId: number): Promise<ScanJob | undefined>;
   claimQueuedJob(): Promise<ScanJob | null>; // Atomically claim a queued job for processing
   updateScanJob(id: number, data: Partial<InsertScanJob & { startedAt?: Date; lastProgressAt?: Date; completedAt?: Date }>): Promise<ScanJob | undefined>;
@@ -483,6 +484,25 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(scanJobs)
       .where(eq(scanJobs.status, 'running'))
       .orderBy(asc(scanJobs.startedAt));
+  }
+
+  async getOrphanedJobs(staleQueuedThresholdMs: number): Promise<ScanJob[]> {
+    // Get all running jobs (always considered potentially orphaned after restart)
+    // AND queued jobs older than threshold (stuck in queue)
+    const staleThreshold = new Date(Date.now() - staleQueuedThresholdMs);
+    
+    const runningJobs = await db.select().from(scanJobs)
+      .where(eq(scanJobs.status, 'running'));
+    
+    const staleQueuedJobs = await db.select().from(scanJobs)
+      .where(
+        and(
+          eq(scanJobs.status, 'queued'),
+          lt(scanJobs.createdAt, staleThreshold)
+        )
+      );
+    
+    return [...runningJobs, ...staleQueuedJobs];
   }
 
   async getActiveScanJobForClient(clientId: number): Promise<ScanJob | undefined> {

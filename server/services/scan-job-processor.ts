@@ -24,9 +24,11 @@ const JOB_POLL_INTERVAL_MS = 5000;
 const CONCURRENT_PROMPTS = 4;
 const MAX_RUNNING_JOBS = 2;
 const STUCK_JOB_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes without progress = stuck
+const STALE_QUEUED_THRESHOLD_MS = 60 * 1000; // 1 minute in queue without being claimed = orphaned
 
 let isProcessorRunning = false;
 let processorIntervalId: NodeJS.Timeout | null = null;
+let isShuttingDown = false;
 
 async function updateJobProgress(
   jobId: number, 
@@ -539,23 +541,31 @@ async function pollAndProcessJobs(): Promise<void> {
 
 async function cleanupOrphanedJobs(): Promise<void> {
   try {
-    const runningJobs = await storage.getRunningScanJobs();
+    // Get both running jobs (always orphaned after restart) and stale queued jobs
+    const orphanedJobs = await storage.getOrphanedJobs(STALE_QUEUED_THRESHOLD_MS);
     
-    if (runningJobs.length === 0) {
+    if (orphanedJobs.length === 0) {
       log("[ScanJobProcessor] No orphaned jobs found on startup", "job-processor");
       return;
     }
     
-    log(`[ScanJobProcessor] Found ${runningJobs.length} orphaned 'running' jobs on startup - marking as failed`, "job-processor");
+    const runningCount = orphanedJobs.filter(j => j.status === 'running').length;
+    const staleQueuedCount = orphanedJobs.filter(j => j.status === 'queued').length;
     
-    for (const job of runningJobs) {
-      log(`[ScanJobProcessor] Marking orphaned job ${job.id} (client ${job.clientId}) as failed`, "job-processor");
+    log(`[ScanJobProcessor] Found ${orphanedJobs.length} orphaned jobs on startup (${runningCount} running, ${staleQueuedCount} stale queued) - marking as failed`, "job-processor");
+    
+    for (const job of orphanedJobs) {
+      const reason = job.status === 'running' 
+        ? 'Interrupted by server restart'
+        : 'Job stuck in queue - never started processing';
+      
+      log(`[ScanJobProcessor] Marking orphaned job ${job.id} (client ${job.clientId}, status: ${job.status}) as failed: ${reason}`, "job-processor");
       
       await storage.updateScanJob(job.id, {
         status: 'failed',
         completedAt: new Date(),
-        errorMessage: 'Job interrupted by server restart',
-        progressMessage: 'Failed: Interrupted by server restart',
+        errorMessage: reason,
+        progressMessage: `Failed: ${reason}`,
       });
       
       if (job.sessionId) {
@@ -565,7 +575,7 @@ async function cleanupOrphanedJobs(): Promise<void> {
       }
     }
     
-    log(`[ScanJobProcessor] Cleaned up ${runningJobs.length} orphaned jobs`, "job-processor");
+    log(`[ScanJobProcessor] Cleaned up ${orphanedJobs.length} orphaned jobs`, "job-processor");
   } catch (error) {
     log(`[ScanJobProcessor] Error cleaning up orphaned jobs: ${error instanceof Error ? error.message : String(error)}`, "job-processor");
   }
@@ -605,4 +615,62 @@ export function stopScanJobProcessor(): void {
 
 export function isJobProcessorRunning(): boolean {
   return isProcessorRunning;
+}
+
+// Graceful shutdown - marks all running jobs as interrupted before server terminates
+export async function gracefulShutdown(): Promise<void> {
+  if (isShuttingDown) {
+    return; // Already shutting down
+  }
+  
+  isShuttingDown = true;
+  log("[ScanJobProcessor] Graceful shutdown initiated - marking running jobs as interrupted", "job-processor");
+  
+  try {
+    const runningJobs = await storage.getRunningScanJobs();
+    
+    if (runningJobs.length === 0) {
+      log("[ScanJobProcessor] No running jobs to interrupt", "job-processor");
+      return;
+    }
+    
+    log(`[ScanJobProcessor] Marking ${runningJobs.length} running jobs as interrupted`, "job-processor");
+    
+    for (const job of runningJobs) {
+      await storage.updateScanJob(job.id, {
+        status: 'failed',
+        completedAt: new Date(),
+        errorMessage: 'Job interrupted by server shutdown',
+        progressMessage: 'Failed: Interrupted by server shutdown',
+      });
+      
+      if (job.sessionId) {
+        await storage.updateCheckSession(job.sessionId, {
+          status: 'failed',
+        } as any);
+      }
+      
+      log(`[ScanJobProcessor] Marked job ${job.id} as interrupted`, "job-processor");
+    }
+    
+    log(`[ScanJobProcessor] Graceful shutdown complete - ${runningJobs.length} jobs marked as interrupted`, "job-processor");
+  } catch (error) {
+    log(`[ScanJobProcessor] Error during graceful shutdown: ${error instanceof Error ? error.message : String(error)}`, "job-processor");
+  }
+}
+
+// Register signal handlers for graceful shutdown
+export function registerShutdownHandlers(): void {
+  const handleSignal = async (signal: string) => {
+    log(`[ScanJobProcessor] Received ${signal} signal, initiating graceful shutdown`, "job-processor");
+    await gracefulShutdown();
+    stopScanJobProcessor();
+    // Give a moment for cleanup to complete before process exits
+    setTimeout(() => process.exit(0), 1000);
+  };
+  
+  process.on('SIGTERM', () => handleSignal('SIGTERM'));
+  process.on('SIGINT', () => handleSignal('SIGINT'));
+  
+  log("[ScanJobProcessor] Registered shutdown signal handlers (SIGTERM, SIGINT)", "job-processor");
 }

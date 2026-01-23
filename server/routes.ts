@@ -2912,8 +2912,8 @@ export async function registerRoutes(
   // Client session status check - for frontend to know if user is logged in as client
   app.get("/api/monitoring/client-session", async (req, res) => {
     try {
-      const clientId = getClientIdFromRequest(req);
-      const isAdmin = isAdminRequest(req);
+      const clientId = await getClientIdFromRequest(req);
+      const isAdmin = await isAdminRequest(req);
       
       if (clientId !== null) {
         const client = await storage.getMonitoringClientById(clientId);
