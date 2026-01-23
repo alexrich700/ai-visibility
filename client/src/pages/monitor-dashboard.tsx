@@ -28,7 +28,8 @@ import {
 import {
   TrendingUp, TrendingDown, Eye, Target, Calendar, Clock, Settings,
   ArrowLeft, RefreshCw, Loader2, CheckCircle2, XCircle, Minus, Building2,
-  Users, Link2, Award, ThumbsUp, ThumbsDown, Meh, ExternalLink, Download, HelpCircle, AlertTriangle
+  Users, Link2, Award, ThumbsUp, ThumbsDown, Meh, ExternalLink, Download, HelpCircle, AlertTriangle,
+  Share2, Copy, Check
 } from "lucide-react";
 import {
   Tooltip as InfoTooltip,
@@ -338,6 +339,10 @@ export default function MonitorDashboard() {
   const [isExporting, setIsExporting] = useState(false);
   const [displayLimit, setDisplayLimit] = useState(20);
   
+  // Client share link state
+  const [isGeneratingLink, setIsGeneratingLink] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+  
   // Rescan state - using background job system
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
@@ -478,6 +483,67 @@ export default function MonitorDashboard() {
     // Poll immediately, then every 3 seconds
     pollJob();
     pollIntervalRef.current = setInterval(pollJob, 3000);
+  };
+  
+  // Generate and copy client share link (admin only)
+  const copyClientShareLink = async () => {
+    if (!clientId) return;
+    
+    const token = getAdminToken();
+    if (!token) {
+      toast({
+        title: "Admin access required",
+        description: "Only admins can generate client share links.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setIsGeneratingLink(true);
+    
+    try {
+      // First try to get existing token
+      let response = await fetch(`/api/monitoring/clients/${clientId}/access-token`, {
+        headers: { "Authorization": `Bearer ${token}` },
+      });
+      
+      let data = await response.json();
+      
+      // If no token exists, generate one
+      if (!data.accessToken) {
+        response = await fetch(`/api/monitoring/clients/${clientId}/access-token`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${token}` },
+        });
+        data = await response.json();
+      }
+      
+      if (!response.ok || !data.accessToken) {
+        throw new Error("Failed to get access token");
+      }
+      
+      // Build full URL and copy to clipboard
+      const shareUrl = `${window.location.origin}${data.accessUrl}`;
+      await navigator.clipboard.writeText(shareUrl);
+      
+      setLinkCopied(true);
+      toast({
+        title: "Link copied!",
+        description: "Client access link has been copied to clipboard.",
+      });
+      
+      // Reset the copied state after 3 seconds
+      setTimeout(() => setLinkCopied(false), 3000);
+      
+    } catch (error) {
+      toast({
+        title: "Failed to generate link",
+        description: "Could not generate client access link.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingLink(false);
+    }
   };
   
   // Function to queue a background scan job (browser-independent)
@@ -936,6 +1002,25 @@ export default function MonitorDashboard() {
               <Settings className="w-4 h-4" />
               Settings
             </Button>
+            {getAdminToken() && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={copyClientShareLink}
+                disabled={isGeneratingLink}
+                className="flex items-center gap-2"
+                data-testid="button-share-client-link"
+              >
+                {isGeneratingLink ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : linkCopied ? (
+                  <Check className="w-4 h-4 text-green-500" />
+                ) : (
+                  <Share2 className="w-4 h-4" />
+                )}
+                {linkCopied ? "Copied!" : "Share Link"}
+              </Button>
+            )}
           </div>
         </div>
       </header>

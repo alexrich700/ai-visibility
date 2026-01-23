@@ -223,6 +223,8 @@ export const monitoringClients = pgTable("monitoring_clients", {
   lastCheckAt: timestamp("last_check_at"),
   nextCheckAt: timestamp("next_check_at"),
   isActive: boolean("is_active").notNull().default(true),
+  // Client access authentication
+  clientAccessToken: text("client_access_token").unique(), // 32-char hex token for client-only dashboard access
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -497,6 +499,20 @@ export const insertScanJobSchema = createInsertSchema(scanJobs).omit({
 
 export type InsertScanJob = z.infer<typeof insertScanJobSchema>;
 export type ScanJob = typeof scanJobs.$inferSelect;
+
+// ============================================
+// CLIENT SESSIONS - For client portal authentication
+// ============================================
+
+export const clientSessions = pgTable("client_sessions", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").references(() => monitoringClients.id, { onDelete: "cascade" }).notNull(),
+  sessionToken: text("session_token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type ClientSession = typeof clientSessions.$inferSelect;
 
 // ============================================
 // Frontend Request Schemas

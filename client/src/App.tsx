@@ -12,6 +12,7 @@ import MonitorClients from "@/pages/monitor-clients";
 import MonitorSetup from "@/pages/monitor-setup";
 import MonitorDashboard from "@/pages/monitor-dashboard";
 import MonitorSettings from "@/pages/monitor-settings";
+import MonitorClientAccess from "@/pages/monitor-client-access";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -27,6 +28,7 @@ function Router() {
       <Route path="/monitor/setup" component={MonitorSetup} />
       <Route path="/monitor/dashboard/:id" component={MonitorDashboard} />
       <Route path="/monitor/settings/:id" component={MonitorSettings} />
+      <Route path="/monitor/client-access/:token" component={MonitorClientAccess} />
       <Route component={NotFound} />
     </Switch>
   );

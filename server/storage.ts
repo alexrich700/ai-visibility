@@ -2,11 +2,11 @@ import { db, pool } from "./db";
 import { 
   audits, leads, InsertAudit, InsertLead, Audit, DbLead,
   monitoringClients, monitoringGroups, monitoringPrompts, checkResults, checkSessions,
-  checkGroupMetrics, checkCompetitorMetrics, scanJobs,
+  checkGroupMetrics, checkCompetitorMetrics, scanJobs, clientSessions,
   InsertMonitoringClient, InsertMonitoringGroup, InsertMonitoringPrompt, InsertCheckResult, InsertCheckSession,
   InsertCheckGroupMetric, InsertCheckCompetitorMetric, InsertScanJob,
   MonitoringClient, MonitoringGroup, MonitoringPrompt, CheckResult, CheckSession,
-  CheckGroupMetric, CheckCompetitorMetric, ScanJob,
+  CheckGroupMetric, CheckCompetitorMetric, ScanJob, ClientSession as DbClientSession,
   adminUsers, InsertAdminUser, AdminUser
 } from "@shared/schema";
 import { eq, desc, and, lte, isNull, or, isNotNull, gte, asc, inArray } from "drizzle-orm";
@@ -27,6 +27,7 @@ export interface IStorage {
   createMonitoringClient(client: InsertMonitoringClient): Promise<MonitoringClient>;
   getMonitoringClients(): Promise<MonitoringClient[]>;
   getMonitoringClientById(id: number): Promise<MonitoringClient | undefined>;
+  getMonitoringClientByAccessToken(token: string): Promise<MonitoringClient | undefined>;
   updateMonitoringClient(id: number, data: Partial<InsertMonitoringClient>): Promise<MonitoringClient | undefined>;
   deleteMonitoringClient(id: number): Promise<void>;
   
@@ -88,6 +89,12 @@ export interface IStorage {
   claimQueuedJob(): Promise<ScanJob | null>; // Atomically claim a queued job for processing
   updateScanJob(id: number, data: Partial<InsertScanJob & { startedAt?: Date; lastProgressAt?: Date; completedAt?: Date }>): Promise<ScanJob | undefined>;
   deleteScanJob(id: number): Promise<void>;
+  
+  // Client session operations (for client portal auth)
+  createClientSession(clientId: number, sessionToken: string, expiresAt: Date): Promise<DbClientSession>;
+  getClientSessionByToken(token: string): Promise<DbClientSession | undefined>;
+  deleteClientSession(token: string): Promise<void>;
+  deleteExpiredClientSessions(): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -176,6 +183,12 @@ export class DatabaseStorage implements IStorage {
 
   async getMonitoringClientById(id: number): Promise<MonitoringClient | undefined> {
     const [client] = await db.select().from(monitoringClients).where(eq(monitoringClients.id, id));
+    return client;
+  }
+
+  async getMonitoringClientByAccessToken(token: string): Promise<MonitoringClient | undefined> {
+    if (!token) return undefined;
+    const [client] = await db.select().from(monitoringClients).where(eq(monitoringClients.clientAccessToken, token));
     return client;
   }
 
@@ -562,6 +575,36 @@ export class DatabaseStorage implements IStorage {
 
   async deleteScanJob(id: number): Promise<void> {
     await db.delete(scanJobs).where(eq(scanJobs.id, id));
+  }
+
+  // Client session operations
+  async createClientSession(clientId: number, sessionToken: string, expiresAt: Date): Promise<DbClientSession> {
+    const [session] = await db.insert(clientSessions).values({
+      clientId,
+      sessionToken,
+      expiresAt,
+    }).returning();
+    return session;
+  }
+
+  async getClientSessionByToken(token: string): Promise<DbClientSession | undefined> {
+    const [session] = await db.select().from(clientSessions)
+      .where(and(
+        eq(clientSessions.sessionToken, token),
+        gte(clientSessions.expiresAt, new Date())
+      ));
+    return session;
+  }
+
+  async deleteClientSession(token: string): Promise<void> {
+    await db.delete(clientSessions).where(eq(clientSessions.sessionToken, token));
+  }
+
+  async deleteExpiredClientSessions(): Promise<number> {
+    const result = await db.delete(clientSessions)
+      .where(lte(clientSessions.expiresAt, new Date()))
+      .returning();
+    return result.length;
   }
 }
 
