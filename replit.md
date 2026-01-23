@@ -105,7 +105,8 @@ The monitoring dashboard provides a 3-column analytics grid:
 -   **Authentication**: Email/password-based authentication with secure bcrypt password hashing:
     - Admin users stored in `admin_users` table with hashed passwords
     - Login via POST `/api/admin/login` with email and password
-    - Token-based sessions with 24-hour expiry
+    - Database-backed sessions stored in `admin_sessions` table (persists across server restarts)
+    - Token-based sessions with 24-hour expiry, validated against database
     - Rate limiting (5 attempts per 15 minutes, then 15-minute lockout)
 -   **Password Reset Flow**:
     - Request reset via POST `/api/admin/forgot-password` with email
