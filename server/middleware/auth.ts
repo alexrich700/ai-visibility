@@ -123,13 +123,13 @@ const BLOCK_DURATION_MS = 15 * 60 * 1000;
 
 setInterval(() => {
   const now = Date.now();
-  for (const [ip, entry] of loginAttempts.entries()) {
+  Array.from(loginAttempts.entries()).forEach(([ip, entry]) => {
     if (entry.blockedUntil && now > entry.blockedUntil) {
       loginAttempts.delete(ip);
     } else if (now - entry.firstAttempt > WINDOW_MS) {
       loginAttempts.delete(ip);
     }
-  }
+  });
 }, 60 * 1000);
 
 export function loginRateLimiter(req: Request, res: Response, next: NextFunction): void {
