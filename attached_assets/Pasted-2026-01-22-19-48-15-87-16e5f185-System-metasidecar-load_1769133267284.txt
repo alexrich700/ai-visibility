@@ -1,0 +1,108 @@
+2026-01-22 19:48:15.87
+16e5f185
+System
+metasidecar: loaded enterprise status from environment is_enterprise=false
+2026-01-22 19:48:15.87
+16e5f185
+System
+forwarding local port 5000 to external port 80 (mapped as 1104)
+2026-01-22 19:48:16.98
+16e5f185
+User
+> NODE_ENV=production node dist/index.cjs
+2026-01-22 19:48:16.98
+16e5f185
+User
+> rest-express@1.0.0 start
+2026-01-22 19:48:17.83
+16e5f185
+User
+========================================
+2026-01-22 19:48:17.83
+16e5f185
+User
+[OK] ADMIN_PASSWORD is configured
+2026-01-22 19:48:17.83
+16e5f185
+User
+========================================
+2026-01-22 19:48:17.83
+16e5f185
+User
+[OK] DATABASE_URL is configured
+2026-01-22 19:48:17.83
+16e5f185
+User
+[INFO] PERPLEXITY_API_KEY not set - Perplexity checks will be skipped
+2026-01-22 19:48:17.83
+16e5f185
+User
+========================================
+2026-01-22 19:48:17.83
+16e5f185
+User
+[OK] MY_OPENAI_API_KEY is configured
+2026-01-22 19:48:17.83
+16e5f185
+User
+ENVIRONMENT VALIDATION
+2026-01-22 19:48:17.88
+16e5f185
+User
+1:48:17 AM [express] serving on port 5000
+2026-01-22 19:48:17.89
+16e5f185
+User
+1:48:17 AM [scheduler] Starting visibility check scheduler
+2026-01-22 19:48:17.89
+16e5f185
+User
+1:48:17 AM [job-processor] [ScanJobProcessor] Starting background job processor
+2026-01-22 19:48:18.14
+16e5f185
+User
+1:48:18 AM [job-processor] [ScanJobProcessor] No orphaned jobs found on startup
+2026-01-22 19:48:37.02
+16e5f185
+User
+1:48:37 AM [express] GET /api/monitoring/scan-job-active/14 401 in 2ms :: {"error":"Authorization required"}
+2026-01-22 19:48:37.03
+16e5f185
+User
+1:48:37 AM [express] GET /api/monitoring/dashboard/14 401 in 2ms :: {"error":"Authorization required"}
+2026-01-22 19:48:45.33
+16e5f185
+User
+1:48:45 AM [express] GET /api/monitoring/clients-with-stats 401 in 1ms :: {"error":"Authorization required"}
+2026-01-22 19:49:24.87
+16e5f185
+User
+1:49:24 AM [express] GET /api/monitoring/clients-with-stats 401 in 1ms :: {"error":"Authorization required"}
+2026-01-22 19:49:30.28
+8df310aa
+System
+system: received signal terminated
+2026-01-22 19:49:35.25
+16e5f185
+User
+1:49:35 AM [express] GET /api/monitoring/dashboard/14 401 in 0ms :: {"error":"Authorization required"}
+2026-01-22 19:49:35.25
+16e5f185
+User
+1:49:35 AM [express] GET /api/monitoring/scan-job-active/14 401 in 0ms :: {"error":"Authorization required"}
+2026-01-22 19:49:37.54
+16e5f185
+User
+1:49:37 AM [express] GET /api/monitoring/scan-job-active/1 401 in 1ms :: {"error":"Authorization required"}
+2026-01-22 19:49:37.54
+16e5f185
+User
+1:49:37 AM [express] GET /api/monitoring/dashboard/1 401 in 1ms :: {"error":"Authorization required"}
+2026-01-22 19:50:48.47
+16e5f185
+User
+1:50:48 AM [express] GET /api/monitoring/scan-job-active/1 401 in 1ms :: {"error":"Authorization required"}
+2026-01-22 19:50:48.48
+16e5f185
+User
+1:50:48 AM [express] GET /api/monitoring/dashboard/1 401 in 1ms :: {"error":"Authorization required"}
