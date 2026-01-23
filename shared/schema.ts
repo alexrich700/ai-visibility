@@ -515,6 +515,19 @@ export const clientSessions = pgTable("client_sessions", {
 export type ClientSession = typeof clientSessions.$inferSelect;
 
 // ============================================
+// ADMIN SESSIONS - For admin portal authentication (database-backed for persistence)
+// ============================================
+
+export const adminSessions = pgTable("admin_sessions", {
+  id: serial("id").primaryKey(),
+  sessionToken: text("session_token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type AdminSession = typeof adminSessions.$inferSelect;
+
+// ============================================
 // Frontend Request Schemas
 // ============================================
 

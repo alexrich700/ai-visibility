@@ -35,7 +35,7 @@ router.post("/login", loginRateLimiter, async (req, res) => {
     const ip = req.ip || req.socket.remoteAddress || "unknown";
     resetLoginAttempts(ip);
     
-    const token = generateAdminToken();
+    const token = await generateAdminToken();
     res.json({ 
       success: true, 
       token,

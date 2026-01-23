@@ -2,11 +2,11 @@ import { db, pool } from "./db";
 import { 
   audits, leads, InsertAudit, InsertLead, Audit, DbLead,
   monitoringClients, monitoringGroups, monitoringPrompts, checkResults, checkSessions,
-  checkGroupMetrics, checkCompetitorMetrics, scanJobs, clientSessions,
+  checkGroupMetrics, checkCompetitorMetrics, scanJobs, clientSessions, adminSessions,
   InsertMonitoringClient, InsertMonitoringGroup, InsertMonitoringPrompt, InsertCheckResult, InsertCheckSession,
   InsertCheckGroupMetric, InsertCheckCompetitorMetric, InsertScanJob,
   MonitoringClient, MonitoringGroup, MonitoringPrompt, CheckResult, CheckSession,
-  CheckGroupMetric, CheckCompetitorMetric, ScanJob, ClientSession as DbClientSession,
+  CheckGroupMetric, CheckCompetitorMetric, ScanJob, ClientSession as DbClientSession, AdminSession as DbAdminSession,
   adminUsers, InsertAdminUser, AdminUser
 } from "@shared/schema";
 import { eq, desc, and, lte, isNull, or, isNotNull, gte, asc, inArray } from "drizzle-orm";
@@ -95,6 +95,12 @@ export interface IStorage {
   getClientSessionByToken(token: string): Promise<DbClientSession | undefined>;
   deleteClientSession(token: string): Promise<void>;
   deleteExpiredClientSessions(): Promise<number>;
+  
+  // Admin session operations (for admin portal auth - database-backed for persistence)
+  createAdminSession(sessionToken: string, expiresAt: Date): Promise<DbAdminSession>;
+  getAdminSessionByToken(token: string): Promise<DbAdminSession | undefined>;
+  deleteAdminSession(token: string): Promise<void>;
+  deleteExpiredAdminSessions(): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -603,6 +609,35 @@ export class DatabaseStorage implements IStorage {
   async deleteExpiredClientSessions(): Promise<number> {
     const result = await db.delete(clientSessions)
       .where(lte(clientSessions.expiresAt, new Date()))
+      .returning();
+    return result.length;
+  }
+
+  // Admin session operations (database-backed for persistence across restarts)
+  async createAdminSession(sessionToken: string, expiresAt: Date): Promise<DbAdminSession> {
+    const [session] = await db.insert(adminSessions).values({
+      sessionToken,
+      expiresAt,
+    }).returning();
+    return session;
+  }
+
+  async getAdminSessionByToken(token: string): Promise<DbAdminSession | undefined> {
+    const [session] = await db.select().from(adminSessions)
+      .where(and(
+        eq(adminSessions.sessionToken, token),
+        gte(adminSessions.expiresAt, new Date())
+      ));
+    return session;
+  }
+
+  async deleteAdminSession(token: string): Promise<void> {
+    await db.delete(adminSessions).where(eq(adminSessions.sessionToken, token));
+  }
+
+  async deleteExpiredAdminSessions(): Promise<number> {
+    const result = await db.delete(adminSessions)
+      .where(lte(adminSessions.expiresAt, new Date()))
       .returning();
     return result.length;
   }

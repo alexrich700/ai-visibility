@@ -4,58 +4,41 @@ import { storage } from "../storage";
 
 export const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 
-const TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000;
+const ADMIN_SESSION_EXPIRY_HOURS = 24;
 const CLIENT_SESSION_EXPIRY_DAYS = 90;
 
-interface AdminSession {
-  createdAt: number;
-}
-
-const adminSessions = new Map<string, AdminSession>();
-
-// Cleanup expired admin sessions (in-memory is fine for admin, they're short-lived)
-setInterval(() => {
-  const now = Date.now();
-  for (const [token, session] of adminSessions.entries()) {
-    if (now - session.createdAt > TOKEN_EXPIRY_MS) {
-      adminSessions.delete(token);
-    }
-  }
-}, 60 * 60 * 1000);
-
-// Cleanup expired client sessions from database daily
+// Cleanup expired sessions from database daily
 setInterval(async () => {
   try {
-    const deleted = await storage.deleteExpiredClientSessions();
-    if (deleted > 0) {
-      console.log(`[auth] Cleaned up ${deleted} expired client sessions`);
+    const deletedClient = await storage.deleteExpiredClientSessions();
+    const deletedAdmin = await storage.deleteExpiredAdminSessions();
+    if (deletedClient > 0 || deletedAdmin > 0) {
+      console.log(`[auth] Cleaned up ${deletedClient} expired client sessions, ${deletedAdmin} expired admin sessions`);
     }
   } catch (error) {
-    console.error('[auth] Failed to cleanup expired client sessions:', error);
+    console.error('[auth] Failed to cleanup expired sessions:', error);
   }
 }, 24 * 60 * 60 * 1000); // Run daily
 
-export function generateAdminToken(): string {
-  const { randomBytes } = require("crypto");
+// ============================================
+// ADMIN SESSION MANAGEMENT (Database-backed for persistence)
+// ============================================
+
+export async function generateAdminToken(): Promise<string> {
   const token = randomBytes(32).toString("hex");
-  adminSessions.set(token, { createdAt: Date.now() });
+  const expiresAt = new Date(Date.now() + ADMIN_SESSION_EXPIRY_HOURS * 60 * 60 * 1000);
+  
+  await storage.createAdminSession(token, expiresAt);
   return token;
 }
 
-export function validateAdminToken(token: string): boolean {
-  const session = adminSessions.get(token);
-  if (!session) return false;
-  
-  if (Date.now() - session.createdAt > TOKEN_EXPIRY_MS) {
-    adminSessions.delete(token);
-    return false;
-  }
-  
-  return true;
+export async function validateAdminToken(token: string): Promise<boolean> {
+  const session = await storage.getAdminSessionByToken(token);
+  return session !== undefined;
 }
 
-export function invalidateAdminToken(token: string): void {
-  adminSessions.delete(token);
+export async function invalidateAdminToken(token: string): Promise<void> {
+  await storage.deleteAdminSession(token);
 }
 
 // ============================================
@@ -93,11 +76,11 @@ export async function getClientIdFromRequest(req: Request): Promise<number | nul
   return session?.clientId ?? null;
 }
 
-// Check if request is from admin
-export function isAdminRequest(req: Request): boolean {
+// Check if request is from admin (async - queries database)
+export async function isAdminRequest(req: Request): Promise<boolean> {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) return false;
-  return validateAdminToken(authHeader.substring(7));
+  return await validateAdminToken(authHeader.substring(7));
 }
 
 // ============================================
@@ -114,12 +97,16 @@ export function requireAdminAuth(req: Request, res: Response, next: NextFunction
   
   const token = authHeader.substring(7);
   
-  if (!validateAdminToken(token)) {
-    res.status(401).json({ error: "Invalid or expired token" });
-    return;
-  }
-  
-  next();
+  // Use async validation
+  validateAdminToken(token).then(isValid => {
+    if (!isValid) {
+      res.status(401).json({ error: "Invalid or expired token" });
+      return;
+    }
+    next();
+  }).catch(() => {
+    res.status(500).json({ error: "Authentication error" });
+  });
 }
 
 interface RateLimitEntry {
@@ -197,8 +184,8 @@ export function resetLoginAttempts(ip: string): void {
 // The client ID is extracted from the route param (e.g., /api/monitoring/dashboard/:clientId)
 export function requireAdminOrClientAuth(clientIdParam: string = "clientId") {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    // Check for admin auth first
-    if (isAdminRequest(req)) {
+    // Check for admin auth first (async - queries database)
+    if (await isAdminRequest(req)) {
       (req as any).isAdmin = true;
       (req as any).clientId = null;
       next();
