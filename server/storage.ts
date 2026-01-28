@@ -28,6 +28,7 @@ export interface IStorage {
   getMonitoringClients(): Promise<MonitoringClient[]>;
   getMonitoringClientById(id: number): Promise<MonitoringClient | undefined>;
   getMonitoringClientByAccessToken(token: string): Promise<MonitoringClient | undefined>;
+  getMonitoringClientByBusinessNameAndDomain(businessName: string, domain: string): Promise<MonitoringClient | undefined>;
   updateMonitoringClient(id: number, data: Partial<InsertMonitoringClient>): Promise<MonitoringClient | undefined>;
   deleteMonitoringClient(id: number): Promise<void>;
   
@@ -197,6 +198,26 @@ export class DatabaseStorage implements IStorage {
     if (!token) return undefined;
     const [client] = await db.select().from(monitoringClients).where(eq(monitoringClients.clientAccessToken, token));
     return client;
+  }
+
+  async getMonitoringClientByBusinessNameAndDomain(businessName: string, domain: string): Promise<MonitoringClient | undefined> {
+    if (!businessName || !domain) return undefined;
+    
+    // Normalize inputs for consistent matching
+    const normalizedName = businessName.trim().toLowerCase();
+    const normalizedDomain = domain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    
+    // Get all clients and find a case-insensitive match
+    const allClients = await db.select().from(monitoringClients)
+      .orderBy(desc(monitoringClients.createdAt));
+    
+    const matchingClient = allClients.find(c => {
+      const clientName = c.businessName.trim().toLowerCase();
+      const clientDomain = c.domain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+      return clientName === normalizedName && clientDomain === normalizedDomain;
+    });
+    
+    return matchingClient;
   }
 
   async updateMonitoringClient(id: number, data: Partial<InsertMonitoringClient>): Promise<MonitoringClient | undefined> {

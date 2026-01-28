@@ -304,45 +304,96 @@ export async function registerRoutes(
       // Validate client data
       const validatedClient = monitoringClientRequestSchema.parse(clientData);
       
-      // Create monitoring client
-      const client = await storage.createMonitoringClient({
-        businessName: validatedClient.businessName,
-        domain: validatedClient.domain,
-        industry: validatedClient.industry,
-        scope: validatedClient.scope,
-        city: validatedClient.city || null,
-        cities: validatedClient.cities || null,
-        primaryCategories: validatedClient.primaryCategories || null,
-        brandAliases: validatedClient.brandAliases || null,
-        checkFrequencyDays: validatedClient.checkFrequencyDays,
-        isActive: true,
-      });
+      // Check if a client with the same business name + domain already exists
+      const existingClient = await storage.getMonitoringClientByBusinessNameAndDomain(
+        validatedClient.businessName,
+        validatedClient.domain
+      );
       
-      // Create groups and map their IDs
-      const groupIdMap: Record<string, number> = {};
-      for (const group of groups) {
-        const createdGroup = await storage.createGroup({
-          clientId: client.id,
-          name: group.name,
-          description: group.description || null,
-          isHighLevelCategory: group.isHighLevelCategory || false,
+      let client: typeof existingClient;
+      const createdPrompts: { id: number; groupId: number; text: string }[] = [];
+      
+      let useExistingConfig = false;
+      
+      if (existingClient) {
+        // Reuse existing client and update with any new settings
+        console.log(`[CREATE-AND-SCAN] Reusing existing client ${existingClient.id} for "${validatedClient.businessName}"`);
+        const updatedClient = await storage.updateMonitoringClient(existingClient.id, {
+          industry: validatedClient.industry,
+          scope: validatedClient.scope,
+          city: validatedClient.city || null,
+          cities: validatedClient.cities || null,
+          primaryCategories: validatedClient.primaryCategories || null,
+          brandAliases: validatedClient.brandAliases || null,
+          checkFrequencyDays: validatedClient.checkFrequencyDays,
           isActive: true,
         });
-        groupIdMap[group.name] = createdGroup.id;
+        client = updatedClient || existingClient;
+        
+        // Check if existing client has valid groups and prompts
+        const existingGroups = await storage.getGroupsByClientId(client.id);
+        const existingPrompts = await storage.getPromptsByClientId(client.id);
+        
+        if (existingGroups.length > 0 && existingPrompts.length > 0) {
+          // Use existing configuration
+          useExistingConfig = true;
+          for (const prompt of existingPrompts) {
+            createdPrompts.push({
+              id: prompt.id,
+              groupId: prompt.groupId,
+              text: prompt.promptText,
+            });
+          }
+        } else {
+          console.log(`[CREATE-AND-SCAN] Existing client ${client.id} is missing groups/prompts, creating new configuration`);
+        }
+      } else {
+        // Create new monitoring client
+        client = await storage.createMonitoringClient({
+          businessName: validatedClient.businessName,
+          domain: validatedClient.domain,
+          industry: validatedClient.industry,
+          scope: validatedClient.scope,
+          city: validatedClient.city || null,
+          cities: validatedClient.cities || null,
+          primaryCategories: validatedClient.primaryCategories || null,
+          brandAliases: validatedClient.brandAliases || null,
+          checkFrequencyDays: validatedClient.checkFrequencyDays,
+          isActive: true,
+        });
       }
       
-      // Create prompts
-      const createdPrompts: { id: number; groupId: number; text: string }[] = [];
-      for (const prompt of prompts) {
-        const groupId = groupIdMap[prompt.groupName];
-        if (groupId) {
-          const createdPrompt = await storage.createPrompt({
-            groupId,
-            promptText: prompt.text,
+      // If not using existing config, create groups and prompts
+      if (!useExistingConfig && client) {
+        const groupIdMap: Record<string, number> = {};
+        for (const group of groups) {
+          const createdGroup = await storage.createGroup({
+            clientId: client.id,
+            name: group.name,
+            description: group.description || null,
+            isHighLevelCategory: group.isHighLevelCategory || false,
             isActive: true,
           });
-          createdPrompts.push({ id: createdPrompt.id, groupId, text: prompt.text });
+          groupIdMap[group.name] = createdGroup.id;
         }
+        
+        // Create prompts
+        for (const prompt of prompts) {
+          const groupId = groupIdMap[prompt.groupName];
+          if (groupId) {
+            const createdPrompt = await storage.createPrompt({
+              groupId,
+              promptText: prompt.text,
+              isActive: true,
+            });
+            createdPrompts.push({ id: createdPrompt.id, groupId, text: prompt.text });
+          }
+        }
+      }
+      
+      // Ensure client is defined before proceeding
+      if (!client) {
+        throw new Error("Failed to create or find client");
       }
       
       const totalPrompts = createdPrompts.length;
@@ -508,91 +559,168 @@ export async function registerRoutes(
       // Send immediate heartbeat to confirm stream is active
       sendEvent("heartbeat", { message: "Stream connected" });
       
-      sendEvent("status", { message: "Creating client profile...", progress: 5 });
+      sendEvent("status", { message: "Checking for existing client...", progress: 5 });
       
-      // Create monitoring client
-      const client = await storage.createMonitoringClient({
-        businessName: validatedClient.businessName,
-        domain: validatedClient.domain,
-        industry: validatedClient.industry,
-        scope: validatedClient.scope,
-        city: validatedClient.city || null,
-        cities: validatedClient.cities || null,
-        primaryCategories: validatedClient.primaryCategories || null,
-        brandAliases: validatedClient.brandAliases || null,
-        checkFrequencyDays: validatedClient.checkFrequencyDays,
-        isActive: true,
-      });
+      // Check if a client with the same business name + domain already exists
+      const existingClient = await storage.getMonitoringClientByBusinessNameAndDomain(
+        validatedClient.businessName,
+        validatedClient.domain
+      );
       
-      sendEvent("status", { message: "Setting up service groups...", progress: 8 });
+      let client: typeof existingClient;
+      let isReusingExistingClient = false;
       
-      // Create groups and map their IDs
+      if (existingClient) {
+        // Reuse existing client - update it with any new settings
+        isReusingExistingClient = true;
+        console.log(`[SCAN] Reusing existing client ${existingClient.id} for "${validatedClient.businessName}"`);
+        
+        // Update the existing client with potentially updated settings
+        const updatedClient = await storage.updateMonitoringClient(existingClient.id, {
+          industry: validatedClient.industry,
+          scope: validatedClient.scope,
+          city: validatedClient.city || null,
+          cities: validatedClient.cities || null,
+          primaryCategories: validatedClient.primaryCategories || null,
+          brandAliases: validatedClient.brandAliases || null,
+          checkFrequencyDays: validatedClient.checkFrequencyDays,
+          isActive: true,
+        });
+        client = updatedClient || existingClient;
+        
+        sendEvent("status", { message: "Found existing client, running new scan...", progress: 8 });
+      } else {
+        // Create new monitoring client
+        sendEvent("status", { message: "Creating client profile...", progress: 6 });
+        
+        client = await storage.createMonitoringClient({
+          businessName: validatedClient.businessName,
+          domain: validatedClient.domain,
+          industry: validatedClient.industry,
+          scope: validatedClient.scope,
+          city: validatedClient.city || null,
+          cities: validatedClient.cities || null,
+          primaryCategories: validatedClient.primaryCategories || null,
+          brandAliases: validatedClient.brandAliases || null,
+          checkFrequencyDays: validatedClient.checkFrequencyDays,
+          isActive: true,
+        });
+        
+        sendEvent("status", { message: "Setting up service groups...", progress: 8 });
+      }
+      
+      // Set up groups and prompts - either reuse existing or create new
       const groupIdMap: Record<string, number> = {};
       const groupNames: string[] = [];
       const brandSentimentGroupName = "Brand Sentiment";
+      let promptsByGroup: Record<string, { id: number; groupId: number; text: string }[]> = {};
       
-      for (const group of groups) {
-        const createdGroup = await storage.createGroup({
-          clientId: client.id,
-          name: group.name,
-          description: group.description || null,
-          isHighLevelCategory: group.isHighLevelCategory || false,
-          promptCategory: 'service', // Regular service prompts
-          isActive: true,
-        });
-        groupIdMap[group.name] = createdGroup.id;
-        groupNames.push(group.name);
-      }
-      
-      // Create Brand Sentiment group with brand-specific prompts
-      const brandSentimentGroup = await storage.createGroup({
-        clientId: client.id,
-        name: brandSentimentGroupName,
-        description: "Direct brand questions to gather sentiment and feedback",
-        isHighLevelCategory: false,
-        promptCategory: 'brand_sentiment', // Brand sentiment category - excluded from visibility metrics
-        isActive: true,
-      });
-      groupIdMap[brandSentimentGroupName] = brandSentimentGroup.id;
-      groupNames.push(brandSentimentGroupName);
-      
-      sendEvent("status", { message: "Preparing prompts...", progress: 10 });
-      
-      // Create prompts and organize by group
-      const promptsByGroup: Record<string, { id: number; groupId: number; text: string }[]> = {};
-      for (const prompt of prompts) {
-        const groupId = groupIdMap[prompt.groupName];
-        if (groupId) {
-          const createdPrompt = await storage.createPrompt({
-            groupId,
-            promptText: prompt.text,
-            isActive: true,
-          });
-          if (!promptsByGroup[prompt.groupName]) {
-            promptsByGroup[prompt.groupName] = [];
+      if (isReusingExistingClient && client) {
+        // Reuse existing groups and prompts for this client
+        const existingGroups = await storage.getGroupsByClientId(client.id);
+        const existingPrompts = await storage.getPromptsByClientId(client.id);
+        
+        // Validate that existing client has groups and prompts
+        const hasBrandSentimentGroup = existingGroups.some(g => g.name === brandSentimentGroupName);
+        const hasServiceGroups = existingGroups.some(g => g.name !== brandSentimentGroupName);
+        
+        if (existingGroups.length === 0 || existingPrompts.length === 0 || !hasBrandSentimentGroup || !hasServiceGroups) {
+          // Existing client is incomplete - treat as new client and create groups/prompts
+          console.log(`[SCAN] Existing client ${client.id} is missing groups/prompts, creating new configuration`);
+          isReusingExistingClient = false;
+          sendEvent("status", { message: "Updating client configuration...", progress: 9 });
+        } else {
+          // Build groupIdMap from existing groups
+          for (const group of existingGroups) {
+            groupIdMap[group.name] = group.id;
+            groupNames.push(group.name);
           }
-          promptsByGroup[prompt.groupName].push({ id: createdPrompt.id, groupId, text: prompt.text });
+          
+          // Build promptsByGroup from existing prompts
+          for (const prompt of existingPrompts) {
+            const group = existingGroups.find(g => g.id === prompt.groupId);
+            if (group) {
+              if (!promptsByGroup[group.name]) {
+                promptsByGroup[group.name] = [];
+              }
+              promptsByGroup[group.name].push({
+                id: prompt.id,
+                groupId: prompt.groupId,
+                text: prompt.promptText,
+              });
+            }
+          }
+          
+          console.log(`[SCAN] Reusing ${existingGroups.length} groups and ${existingPrompts.length} prompts for client ${client.id}`);
+          sendEvent("status", { message: "Using existing configuration...", progress: 10 });
         }
       }
       
-      // Generate and create brand sentiment prompts (use scanCity for location context)
-      const brandSentimentPrompts = generateBrandSentimentPrompts(
-        client.businessName,
-        client.industry,
-        scanCity || client.city || undefined
-      );
-      promptsByGroup[brandSentimentGroupName] = [];
-      for (const promptText of brandSentimentPrompts) {
-        const createdPrompt = await storage.createPrompt({
-          groupId: brandSentimentGroup.id,
-          promptText,
+      // If we're not reusing (new client or incomplete existing client), create groups/prompts
+      if (!isReusingExistingClient) {
+        // Create new groups for new client
+        for (const group of groups) {
+          const createdGroup = await storage.createGroup({
+            clientId: client!.id,
+            name: group.name,
+            description: group.description || null,
+            isHighLevelCategory: group.isHighLevelCategory || false,
+            promptCategory: 'service', // Regular service prompts
+            isActive: true,
+          });
+          groupIdMap[group.name] = createdGroup.id;
+          groupNames.push(group.name);
+        }
+        
+        // Create Brand Sentiment group with brand-specific prompts
+        const brandSentimentGroup = await storage.createGroup({
+          clientId: client!.id,
+          name: brandSentimentGroupName,
+          description: "Direct brand questions to gather sentiment and feedback",
+          isHighLevelCategory: false,
+          promptCategory: 'brand_sentiment', // Brand sentiment category - excluded from visibility metrics
           isActive: true,
         });
-        promptsByGroup[brandSentimentGroupName].push({
-          id: createdPrompt.id,
-          groupId: brandSentimentGroup.id,
-          text: promptText,
-        });
+        groupIdMap[brandSentimentGroupName] = brandSentimentGroup.id;
+        groupNames.push(brandSentimentGroupName);
+        
+        sendEvent("status", { message: "Preparing prompts...", progress: 10 });
+        
+        // Create prompts and organize by group
+        for (const prompt of prompts) {
+          const groupId = groupIdMap[prompt.groupName];
+          if (groupId) {
+            const createdPrompt = await storage.createPrompt({
+              groupId,
+              promptText: prompt.text,
+              isActive: true,
+            });
+            if (!promptsByGroup[prompt.groupName]) {
+              promptsByGroup[prompt.groupName] = [];
+            }
+            promptsByGroup[prompt.groupName].push({ id: createdPrompt.id, groupId, text: prompt.text });
+          }
+        }
+        
+        // Generate and create brand sentiment prompts (use scanCity for location context)
+        const brandSentimentPrompts = generateBrandSentimentPrompts(
+          client!.businessName,
+          client!.industry,
+          scanCity || client!.city || undefined
+        );
+        promptsByGroup[brandSentimentGroupName] = [];
+        for (const promptText of brandSentimentPrompts) {
+          const createdPrompt = await storage.createPrompt({
+            groupId: brandSentimentGroup.id,
+            promptText,
+            isActive: true,
+          });
+          promptsByGroup[brandSentimentGroupName].push({
+            id: createdPrompt.id,
+            groupId: brandSentimentGroup.id,
+            text: promptText,
+          });
+        }
       }
       
       const allPrompts = Object.values(promptsByGroup).flat();
