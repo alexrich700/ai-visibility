@@ -1,0 +1,160 @@
+2026-01-28 15:23:59.19
+a945c6ec
+User
+[queryOpenAI] Result - found: false, response length: 9783, citations: 17
+2026-01-28 15:23:59.79
+a945c6ec
+User
+[Checkpoint] Session 35: Saved checkpoint at prompt 41/54 (score: 53%)
+2026-01-28 15:24:00.19
+a945c6ec
+User
+[Checkpoint] Session 35: Saved checkpoint at prompt 42/54 (score: 53%)
+2026-01-28 15:24:00.59
+a945c6ec
+User
+[Checkpoint] Session 35: Saved checkpoint at prompt 43/54 (score: 54%)
+2026-01-28 15:24:00.99
+a945c6ec
+User
+[queryGoogleAI] Calling Gemini...
+2026-01-28 15:24:00.99
+a945c6ec
+User
+[runPromptCheck] Checking visibility for "Rise & Shine Garage Doors" with location: "Rochester, MN", aliases: 0
+2026-01-28 15:24:00.99
+a945c6ec
+User
+[queryOpenAI] Calling ChatGPT with location: "Rochester, MN", aliases: 0
+2026-01-28 15:24:00.99
+a945c6ec
+User
+[Checkpoint] Session 35: Saved checkpoint at prompt 44/54 (score: 55%)
+2026-01-28 15:24:01.29
+a945c6ec
+User
+[queryGoogleAI] Calling Gemini...
+2026-01-28 15:24:01.29
+a945c6ec
+User
+[runPromptCheck] Checking visibility for "Rise & Shine Garage Doors" with location: "Rochester, MN", aliases: 0
+2026-01-28 15:24:01.29
+a945c6ec
+User
+[queryOpenAI] Calling ChatGPT with location: "Rochester, MN", aliases: 0
+2026-01-28 15:24:01.29
+a945c6ec
+User
+[queryGoogleAI] Calling Gemini...
+2026-01-28 15:24:01.29
+a945c6ec
+User
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+2026-01-28 15:24:01.29
+a945c6ec
+User
+[runPromptCheck] Checking visibility for "Rise & Shine Garage Doors" with location: "Rochester, MN", aliases: 0
+2026-01-28 15:24:01.29
+a945c6ec
+User
+[queryGoogleAI] Calling Gemini...
+2026-01-28 15:24:01.29
+a945c6ec
+User
+[queryOpenAI] Calling ChatGPT with location: "Rochester, MN", aliases: 0
+2026-01-28 15:24:01.29
+a945c6ec
+User
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+2026-01-28 15:24:01.29
+a945c6ec
+User
+[queryOpenAI] Calling ChatGPT with location: "Rochester, MN", aliases: 0
+2026-01-28 15:24:01.29
+a945c6ec
+User
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+2026-01-28 15:24:01.29
+a945c6ec
+User
+[runPromptCheck] Checking visibility for "Rise & Shine Garage Doors" with location: "Rochester, MN", aliases: 0
+2026-01-28 15:24:01.29
+a945c6ec
+User
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+2026-01-28 15:24:05.89
+a945c6ec
+User
+[CHATGPT DETECTION] Business: "Rise & Shine Garage Doors" | URL: "https://callriseandshine.com/" | Aliases: 0 | Search terms: ["rise & shine garage doors","rise&shinegaragedoors","callriseandshine","callriseandshine.com"] | Found: false
+2026-01-28 15:24:05.89
+a945c6ec
+User
+[CHATGPT] Extracted 16 citations
+2026-01-28 15:24:05.89
+a945c6ec
+User
+[queryOpenAI] Result - found: false, response length: 3796, citations: 16
+2026-01-28 15:24:05.89
+a945c6ec
+User
+[NO MATCH] AI cited these domains: precisiondooraustin.com, a1garage.com, goodgollygarage.com, americangaragedoorrepair.com, nexa-garage.com
+2026-01-28 15:24:05.89
+a945c6ec
+User
+[CHATGPT] Response preview (first 300 chars): I searched local company sites for Austin, TX emergency garage‑door cable repair. Below are companies that advertise 24/7 emergency service, their emergency contact number, and the emergency/ETA claim shown on their website (if the site does not state a specific ETA I note that). I’ve cited the sour
+2026-01-28 15:24:10.59
+a945c6ec
+User
+[queryGoogleAI] Result - found: false, response length: 716, citations: 5, has grounding: true
+2026-01-28 15:24:10.59
+a945c6ec
+User
+[GEMINI] Web search queries used: Emergency Garage Door Service Rochester MN, 24/7 garage door repair Rochester MN
+2026-01-28 15:24:10.59
+a945c6ec
+User
+[GEMINI] Response preview (first 300 chars): For emergency garage door service in Rochester, MN, the following businesses offer assistance right now: * **A1 Garage Door Service**: This company provides 24/7 emergency garage door repairs and same-day repair services. * **SGD**: They offer 24/7 customer support and prompt same-day service f
+2026-01-28 15:24:10.59
+a945c6ec
+User
+[GEMINI] Extracted 5 citations
+2026-01-28 15:24:10.59
+a945c6ec
+User
+[GEMINI DETECTION] Business: "Rise & Shine Garage Doors" | URL: "https://callriseandshine.com/" | Aliases: 0 | Search terms: ["rise & shine garage doors","rise&shinegaragedoors","callriseandshine","callriseandshine.com"] | Found: false
+2026-01-28 15:24:11.59
+a945c6ec
+User
+[GEMINI] Web search queries used: affordable garage door sensor repair Rochester MN, low-cost garage door repair Rochester MN, garage door sensor repair cost Rochester MN
+2026-01-28 15:24:11.59
+a945c6ec
+User
+[queryGoogleAI] Result - found: false, response length: 2517, citations: 9, has grounding: true
+2026-01-28 15:24:11.59
+a945c6ec
+User
+[GEMINI] Response preview (first 300 chars): For residents of Rochester, MN, seeking affordable garage door sensor repair, several local businesses emphasize competitive pricing and customer satisfaction. While specific "low-cost sensor repair" packages with exact price tags are not widely advertised, companies often highlight their commitment
+2026-01-28 15:24:11.59
+a945c6ec
+User
+[GEMINI] Extracted 9 citations
+2026-01-28 15:24:11.59
+a945c6ec
+User
+[GEMINI DETECTION] Business: "Rise & Shine Garage Doors" | URL: "https://callriseandshine.com/" | Aliases: 0 | Search terms: ["rise & shine garage doors","rise&shinegaragedoors","callriseandshine","callriseandshine.com"] | Found: false
+2026-01-28 15:24:18.69
+a945c6ec
+User
+[NAME MATCH] Business name/alias "rise & shine garage doors" found in AI response text
+2026-01-28 15:24:18.69
+a945c6ec
+User
+[queryGoogleAI] Result - found: true, response length: 2026, citations: 17, has grounding: true
+2026-01-28 15:24:18.69
+a945c6ec
+User
+[GEMINI DETECTION] Business: "Rise & Shine Garage Doors" | URL: "https://callriseandshine.com/" | Aliases: 0 | Search terms: ["rise & shine garage doors","rise&shinegaragedoors","callriseandshine","callriseandshine.com"] | Found: true (matched: "rise & shine garage doors")
+2026-01-28 15:24:18.69
+a945c6ec
+User
+[GEMINI] Web search queries used: Emergency garage door repair Rochester MN same hour tonight, 24/7 garage door repair Rochester MN, Overhead Door Company of Olmsted County Rochester MN phone number, Rise & Shine Garage Doors Rochester MN phone number, A1 Garage Door Service Rochester MN phone number, Bear's Overhead Doors Rochester MN phone number, Precision Garage Door Service of Rochester MN phone number, Nelson Overhead Door Rochester MN phone number
