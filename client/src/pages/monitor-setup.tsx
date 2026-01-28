@@ -471,19 +471,132 @@ export default function MonitorSetup() {
             }
           };
           
-          eventSource.onerror = () => {
+          eventSource.onerror = async () => {
             console.error("EventSource error during city scan");
             eventSource.close();
             eventSourceRef.current = null;
-            activeSessionIdRef.current = null;
+            // Don't clear activeSessionIdRef yet - we need it for reconnection
             
             if (!isMountedRef.current) {
               return;
             }
             
-            // For multi-city scans, connection loss fails gracefully
-            // User can resume the incomplete scan from the dashboard
-            reject(new Error("Connection lost during scan. Progress has been saved."));
+            // If we have a session ID, attempt to reconnect using the resume endpoint
+            const sessionId = activeSessionIdRef.current;
+            if (sessionId && reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
+              console.log(`[Scan] Connection lost, attempting reconnect for session ${sessionId}`);
+              setScanStatus("Reconnecting...");
+              setScanSubStatus(`Connection lost - attempting to resume`);
+              
+              // Wait a moment before reconnecting
+              const delay = 1000 + (reconnectAttemptsRef.current * 1000);
+              await new Promise(r => setTimeout(r, delay));
+              
+              if (!isMountedRef.current) return;
+              
+              reconnectAttemptsRef.current++;
+              
+              try {
+                // Connect to resume endpoint
+                const resumeEventSource = new EventSource(`/api/monitoring/resume-stream/${sessionId}`);
+                eventSourceRef.current = resumeEventSource;
+                
+                resumeEventSource.onmessage = (resumeEvent) => {
+                  try {
+                    const resumeData = JSON.parse(resumeEvent.data);
+                    
+                    // Successful reconnection
+                    if (reconnectAttemptsRef.current > 0) {
+                      console.log("[Reconnect] Successfully reconnected to scan!");
+                      toast({
+                        title: "Reconnected",
+                        description: "Scan resumed successfully",
+                      });
+                      reconnectAttemptsRef.current = 0;
+                    }
+                    
+                    // Handle stream events
+                    switch (resumeData.type) {
+                      case "status":
+                        setScanStatus(resumeData.message || "");
+                        setScanSubStatus("");
+                        if (resumeData.progress !== undefined) {
+                          const cityProgress = resumeData.progress;
+                          const overallProgress = Math.round(((cityIndex - 1) / totalCities) * 100 + (cityProgress / totalCities));
+                          setScanProgress(overallProgress);
+                        }
+                        break;
+                      case "testing":
+                        setCurrentGroupName(resumeData.groupName || "");
+                        setCurrentPromptIndex(resumeData.promptIndex || 0);
+                        setTotalPrompts(resumeData.totalPrompts || 0);
+                        setScanStatus(`Testing ${resumeData.groupName}`);
+                        setScanSubStatus(resumeData.promptText || "");
+                        if (resumeData.progress !== undefined) {
+                          const cityProgress = resumeData.progress;
+                          const overallProgress = Math.round(((cityIndex - 1) / totalCities) * 100 + (cityProgress / totalCities));
+                          setScanProgress(overallProgress);
+                        }
+                        break;
+                      case "prompt_complete":
+                        if (resumeData.progress !== undefined) {
+                          const cityProgress = resumeData.progress;
+                          const overallProgress = Math.round(((cityIndex - 1) / totalCities) * 100 + (cityProgress / totalCities));
+                          setScanProgress(overallProgress);
+                        }
+                        break;
+                      case "complete":
+                        resumeEventSource.close();
+                        eventSourceRef.current = null;
+                        activeSessionIdRef.current = null;
+                        reconnectAttemptsRef.current = 0;
+                        resolve({ clientId: resumeData.clientId, overallScore: resumeData.overallScore });
+                        break;
+                      case "error":
+                        resumeEventSource.close();
+                        eventSourceRef.current = null;
+                        activeSessionIdRef.current = null;
+                        reconnectAttemptsRef.current = 0;
+                        reject(new Error(resumeData.message || "Scan error after reconnect"));
+                        break;
+                    }
+                  } catch (e) {
+                    console.error("Failed to parse resume SSE event:", e);
+                  }
+                };
+                
+                resumeEventSource.onerror = () => {
+                  console.error("[Reconnect] Resume connection failed");
+                  resumeEventSource.close();
+                  eventSourceRef.current = null;
+                  
+                  if (!isMountedRef.current) return;
+                  
+                  // If more attempts available, retry
+                  if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
+                    // Recursive retry via the same onerror mechanism
+                    setTimeout(() => {
+                      if (isMountedRef.current && activeSessionIdRef.current) {
+                        attemptReconnect();
+                      }
+                    }, 1000);
+                  } else {
+                    // All attempts exhausted
+                    activeSessionIdRef.current = null;
+                    reject(new Error("Connection lost after multiple reconnection attempts. Progress has been saved - you can resume from the dashboard."));
+                  }
+                };
+                
+              } catch (reconnectError) {
+                console.error("[Reconnect] Failed to create resume connection:", reconnectError);
+                activeSessionIdRef.current = null;
+                reject(new Error("Connection lost during scan. Progress has been saved."));
+              }
+            } else {
+              // No session to reconnect to, or max attempts reached
+              activeSessionIdRef.current = null;
+              reject(new Error("Connection lost during scan. Progress has been saved."));
+            }
           };
         } catch (error) {
           reject(error);
@@ -578,13 +691,23 @@ export default function MonitorSetup() {
       }, 2000);
       
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      const isConnectionError = errorMessage.includes("Connection lost") || errorMessage.includes("reconnect");
+      
       toast({
-        title: "Error running scan",
-        description: error instanceof Error ? error.message : "Unknown error",
+        title: isConnectionError ? "Scan Interrupted" : "Error running scan",
+        description: errorMessage,
         variant: "destructive",
       });
-      setScanProgress(0);
-      setScanStatus("Failed");
+      
+      // For connection errors, don't reset progress - the scan may still be running on the server
+      if (isConnectionError) {
+        setScanStatus("Disconnected");
+        setScanSubStatus("Your scan may still be running. Check dashboard for results.");
+      } else {
+        setScanProgress(0);
+        setScanStatus("Failed");
+      }
       setIsScanning(false);
       setCurrentScanCity(null);
     }

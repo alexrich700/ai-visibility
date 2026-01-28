@@ -146,26 +146,67 @@ async function processScanJob(job: ScanJob, alreadyClaimed: boolean = false): Pr
 
     const location = job.targetCity || client.city || undefined;
 
-    const session = await storage.createCheckSession({
-      clientId: job.clientId,
-      city: location || null,
-      overallScore: 0,
-      chatgptScore: 0,
-      googleAIScore: 0,
-      totalPrompts: servicePromptCount,
-      foundCount: 0,
-      citedCount: 0,
-      status: 'running',
-      totalPromptsToScan: totalPrompts,
-      lastCompletedPromptIndex: 0,
-    });
-
+    // Check if this is a resume (job already has a session)
+    let session;
+    let resumeFromIndex = 0;
+    
+    if (job.sessionId) {
+      // Try to resume from existing session
+      const existingSession = await storage.getCheckSessionById(job.sessionId);
+      if (existingSession && existingSession.status !== 'complete') {
+        session = existingSession;
+        
+        // Validate resume index by checking actual DB results count
+        // This handles cases where partial batches were written before crash
+        const existingResults = await storage.getCheckResultsBySessionId(existingSession.id);
+        const actualResultsCount = existingResults.length;
+        const savedIndex = existingSession.lastCompletedPromptIndex || 0;
+        
+        // Use the actual DB results count as the authoritative resume point
+        // This prevents duplicate processing if savedIndex is ahead of actual results
+        resumeFromIndex = Math.min(savedIndex, actualResultsCount);
+        
+        if (resumeFromIndex !== savedIndex) {
+          log(`[ScanJobProcessor] Corrected resume index from ${savedIndex} to ${resumeFromIndex} based on actual DB results`, "job-processor");
+        }
+        
+        log(`[ScanJobProcessor] Resuming session ${session.id} from prompt index ${resumeFromIndex}/${totalPrompts}`, "job-processor");
+        
+        // Update session status back to running
+        await storage.updateCheckSession(session.id, {
+          status: 'running',
+        });
+      }
+    }
+    
+    // Create new session if not resuming
+    if (!session) {
+      session = await storage.createCheckSession({
+        clientId: job.clientId,
+        city: location || null,
+        overallScore: 0,
+        chatgptScore: 0,
+        googleAIScore: 0,
+        totalPrompts: servicePromptCount,
+        foundCount: 0,
+        citedCount: 0,
+        status: 'running',
+        totalPromptsToScan: totalPrompts,
+        lastCompletedPromptIndex: 0,
+      });
+      
+      await storage.updateScanJob(job.id, {
+        sessionId: session.id,
+      });
+      
+      log(`[ScanJobProcessor] Created new session ${session.id} for job ${job.id} with ${totalPrompts} prompts`, "job-processor");
+    }
+    
     await storage.updateScanJob(job.id, {
-      sessionId: session.id,
-      progressMessage: 'Running AI visibility checks...',
+      progressMessage: resumeFromIndex > 0 
+        ? `Resuming AI visibility checks from ${resumeFromIndex}/${totalPrompts}...`
+        : 'Running AI visibility checks...',
     });
-
-    log(`[ScanJobProcessor] Created session ${session.id} for job ${job.id} with ${totalPrompts} prompts`, "job-processor");
 
     let foundCount = 0;
     let citedCount = 0;
@@ -219,8 +260,15 @@ async function processScanJob(job: ScanJob, alreadyClaimed: boolean = false): Pr
 
     const allCities = client.cities || (client.city ? [client.city] : []);
     const scanCity = job.targetCity || undefined;
+    
+    // If resuming, skip already-processed prompts and restore the completed count
+    const startIndex = resumeFromIndex;
+    if (startIndex > 0) {
+      completedCount = startIndex;
+      log(`[ScanJobProcessor] Skipping first ${startIndex} prompts (already processed)`, "job-processor");
+    }
 
-    for (let i = 0; i < promptsWithGroups.length; i += CONCURRENT_PROMPTS) {
+    for (let i = startIndex; i < promptsWithGroups.length; i += CONCURRENT_PROMPTS) {
       const batch = promptsWithGroups.slice(i, i + CONCURRENT_PROMPTS);
 
       const results = await Promise.all(
@@ -360,45 +408,93 @@ async function processScanJob(job: ScanJob, alreadyClaimed: boolean = false): Pr
         const runningChatgptScore = servicePromptCount > 0 ? Math.round((chatgptFoundCount / servicePromptCount) * 100) : 0;
         const runningGoogleAIScore = servicePromptCount > 0 ? Math.round((googleAIFoundCount / servicePromptCount) * 100) : 0;
 
+        // Note: foundCount uses distinct prompt-level count (foundCount variable), not exposure sum
         await storage.updateCheckSession(session.id, {
           lastCompletedPromptIndex: completedCount,
           status: 'running',
           overallScore: runningOverallScore,
           chatgptScore: runningChatgptScore,
           googleAIScore: runningGoogleAIScore,
-          foundCount: chatgptFoundCount + googleAIFoundCount,
+          foundCount, // Use distinct prompt-level found count
           citedCount,
         } as any);
       }
     }
 
-    log(`[ScanJobProcessor] Completed prompt processing for job ${job.id}. Calculating final scores...`, "job-processor");
+    log(`[ScanJobProcessor] Completed prompt processing for job ${job.id}. Calculating final scores from database...`, "job-processor");
 
     await updateJobProgress(job.id, completedCount, totalPrompts, 'Calculating final scores...');
 
-    const totalExposures = servicePromptCount * 2;
-    const totalFound = chatgptFoundCount + googleAIFoundCount;
+    // IMPORTANT: Load all results from database to ensure correct aggregation on resume
+    // This ensures resumed scans include ALL results, not just the ones processed in this run
+    const allDbResults = await storage.getCheckResultsBySessionId(session.id);
+    
+    // Determine which results are brand sentiment vs service prompts
+    const serviceResults = allDbResults.filter(r => !brandSentimentGroupIds.has(r.groupId));
+    const actualServicePromptCount = serviceResults.length;
+    
+    // Compute scores from DB results
+    const dbChatgptFoundCount = serviceResults.filter(r => r.chatgptFound).length;
+    const dbGoogleAIFoundCount = serviceResults.filter(r => r.googleAIFound).length;
+    const dbCitedCount = serviceResults.filter(r => r.chatgptCited || r.googleAICited).length;
+    
+    const totalExposures = actualServicePromptCount * 2;
+    const totalFound = dbChatgptFoundCount + dbGoogleAIFoundCount;
     const overallScore = totalExposures > 0 ? Math.round((totalFound / totalExposures) * 100) : 0;
-    const chatgptScore = servicePromptCount > 0 ? Math.round((chatgptFoundCount / servicePromptCount) * 100) : 0;
-    const googleAIScore = servicePromptCount > 0 ? Math.round((googleAIFoundCount / servicePromptCount) * 100) : 0;
+    const chatgptScore = actualServicePromptCount > 0 ? Math.round((dbChatgptFoundCount / actualServicePromptCount) * 100) : 0;
+    const googleAIScore = actualServicePromptCount > 0 ? Math.round((dbGoogleAIFoundCount / actualServicePromptCount) * 100) : 0;
 
-    const flatChatgptCitations = allChatgptCitations.flat();
-    const flatGoogleAICitations = allGoogleAICitations.flat();
+    // Parse citations from DB results
+    const dbChatgptCitations: Citation[][] = [];
+    const dbGoogleAICitations: Citation[][] = [];
+    const dbChatgptRanks: (number | null)[] = [];
+    const dbGoogleAIRanks: (number | null)[] = [];
+    const dbChatgptSentiments: (string | null)[] = [];
+    const dbGoogleAISentiments: (string | null)[] = [];
+    
+    for (const result of allDbResults) {
+      // Parse citations if they exist
+      if (result.chatgptCitations) {
+        try {
+          const citations = typeof result.chatgptCitations === 'string' 
+            ? JSON.parse(result.chatgptCitations) 
+            : result.chatgptCitations;
+          dbChatgptCitations.push(citations);
+        } catch {}
+      }
+      if (result.googleAICitations) {
+        try {
+          const citations = typeof result.googleAICitations === 'string' 
+            ? JSON.parse(result.googleAICitations) 
+            : result.googleAICitations;
+          dbGoogleAICitations.push(citations);
+        } catch {}
+      }
+      
+      dbChatgptRanks.push(result.chatgptRank);
+      dbGoogleAIRanks.push(result.googleAIRank);
+      dbChatgptSentiments.push(result.chatgptSentiment);
+      dbGoogleAISentiments.push(result.googleAISentiment);
+    }
+
+    const flatChatgptCitations = dbChatgptCitations.flat();
+    const flatGoogleAICitations = dbGoogleAICitations.flat();
     const topCitations = aggregateCitations([flatChatgptCitations, flatGoogleAICitations]);
 
     const competitorCounts = aggregateCompetitorMentions(
-      storedResults.filter(r => !r.isBrandSentiment).map(r => ({ competitors: r.competitors }))
+      serviceResults.map(r => ({ competitors: r.competitors }))
     );
-    const shareOfVoice = computeShareOfVoice(client.businessName, foundCount, competitorCounts, servicePromptCount);
-    const sentimentBreakdown = aggregateSentiment([...allChatgptSentiments, ...allGoogleAISentiments]);
-    const avgChatgptRank = calculateAverageRank(allChatgptRanks);
-    const avgGoogleAIRank = calculateAverageRank(allGoogleAIRanks);
-    const firstPlaceCount = countFirstPlace(allChatgptRanks) + countFirstPlace(allGoogleAIRanks);
+    const dbFoundCount = serviceResults.filter(r => r.chatgptFound || r.googleAIFound).length;
+    const shareOfVoice = computeShareOfVoice(client.businessName, dbFoundCount, competitorCounts, actualServicePromptCount);
+    const sentimentBreakdown = aggregateSentiment([...dbChatgptSentiments, ...dbGoogleAISentiments]);
+    const avgChatgptRank = calculateAverageRank(dbChatgptRanks);
+    const avgGoogleAIRank = calculateAverageRank(dbGoogleAIRanks);
+    const firstPlaceCount = countFirstPlace(dbChatgptRanks) + countFirstPlace(dbGoogleAIRanks);
 
     const sentimentScore = null;
-    const competitorVisibility = computeCompetitorVisibility(competitorCounts, servicePromptCount);
+    const competitorVisibility = computeCompetitorVisibility(competitorCounts, actualServicePromptCount);
     const sentimentStatements = aggregateSentimentStatements(
-      storedResults.filter(r => !r.isBrandSentiment).map(r => ({
+      serviceResults.map(r => ({
         chatgptResponse: r.chatgptResponse,
         googleAIResponse: r.googleAIResponse,
         promptText: r.promptText,
@@ -410,8 +506,8 @@ async function processScanJob(job: ScanJob, alreadyClaimed: boolean = false): Pr
       overallScore,
       chatgptScore,
       googleAIScore,
-      foundCount: totalFound,
-      citedCount,
+      foundCount: dbFoundCount, // Use distinct prompt-level found count
+      citedCount: dbCitedCount,
       shareOfVoice,
       topCitations,
       avgChatgptRank,
@@ -425,7 +521,43 @@ async function processScanJob(job: ScanJob, alreadyClaimed: boolean = false): Pr
       lastCompletedPromptIndex: totalPrompts,
     } as any);
 
-    for (const [groupName, metrics] of Object.entries(groupMetrics)) {
+    // Compute group metrics from DB results (excluding brand sentiment groups)
+    const dbGroupMetrics: Record<string, {
+      groupId: number;
+      totalPrompts: number;
+      foundCount: number;
+      citedCount: number;
+      chatgptFoundCount: number;
+      googleAIFoundCount: number;
+    }> = {};
+    
+    for (const result of allDbResults) {
+      // Skip brand sentiment groups - they shouldn't be included in visibility metrics
+      if (brandSentimentGroupIds.has(result.groupId)) continue;
+      
+      const group = activeGroups.find(g => g.id === result.groupId);
+      if (!group) continue;
+      
+      if (!dbGroupMetrics[group.name]) {
+        dbGroupMetrics[group.name] = {
+          groupId: group.id,
+          totalPrompts: 0,
+          foundCount: 0,
+          citedCount: 0,
+          chatgptFoundCount: 0,
+          googleAIFoundCount: 0,
+        };
+      }
+      
+      const metrics = dbGroupMetrics[group.name];
+      metrics.totalPrompts++;
+      if (result.chatgptFound) metrics.chatgptFoundCount++;
+      if (result.googleAIFound) metrics.googleAIFoundCount++;
+      if (result.chatgptFound || result.googleAIFound) metrics.foundCount++;
+      if (result.chatgptCited || result.googleAICited) metrics.citedCount++;
+    }
+    
+    for (const [groupName, metrics] of Object.entries(dbGroupMetrics)) {
       const visibilityScore = metrics.totalPrompts > 0 
         ? Math.round(((metrics.chatgptFoundCount + metrics.googleAIFoundCount) / (metrics.totalPrompts * 2)) * 100) 
         : 0;
@@ -444,11 +576,14 @@ async function processScanJob(job: ScanJob, alreadyClaimed: boolean = false): Pr
       });
     }
 
+    // Compute competitor metrics from DB results
     const allCompetitors = new Map<string, { chatgpt: number; google: number }>();
-    for (const result of storedResults) {
-      if (result.isBrandSentiment || !result.competitors) continue;
+    for (const result of serviceResults) {
+      if (!result.competitors) continue;
       try {
-        const competitors = JSON.parse(result.competitors) as string[];
+        const competitors = typeof result.competitors === 'string' 
+          ? JSON.parse(result.competitors) as string[]
+          : result.competitors as string[];
         for (const comp of competitors) {
           const existing = allCompetitors.get(comp) || { chatgpt: 0, google: 0 };
           existing.chatgpt++;
@@ -459,8 +594,8 @@ async function processScanJob(job: ScanJob, alreadyClaimed: boolean = false): Pr
 
     for (const [competitorName, counts] of Array.from(allCompetitors.entries())) {
       const totalMentions = counts.chatgpt + counts.google;
-      const visibilityPercent = servicePromptCount > 0 
-        ? Math.round((totalMentions / (servicePromptCount * 2)) * 100) 
+      const visibilityPercent = actualServicePromptCount > 0 
+        ? Math.round((totalMentions / (actualServicePromptCount * 2)) * 100) 
         : 0;
 
       await storage.createCheckCompetitorMetric({
@@ -549,33 +684,40 @@ async function cleanupOrphanedJobs(): Promise<void> {
       return;
     }
     
-    const runningCount = orphanedJobs.filter(j => j.status === 'running').length;
-    const staleQueuedCount = orphanedJobs.filter(j => j.status === 'queued').length;
+    const runningJobs = orphanedJobs.filter(j => j.status === 'running');
+    const staleQueuedJobs = orphanedJobs.filter(j => j.status === 'queued');
     
-    log(`[ScanJobProcessor] Found ${orphanedJobs.length} orphaned jobs on startup (${runningCount} running, ${staleQueuedCount} stale queued) - marking as failed`, "job-processor");
+    log(`[ScanJobProcessor] Found ${orphanedJobs.length} orphaned jobs (${runningJobs.length} running, ${staleQueuedJobs.length} stale queued)`, "job-processor");
     
-    for (const job of orphanedJobs) {
-      const reason = job.status === 'running' 
-        ? 'Interrupted by server restart'
-        : 'Job stuck in queue - never started processing';
-      
-      log(`[ScanJobProcessor] Marking orphaned job ${job.id} (client ${job.clientId}, status: ${job.status}) as failed: ${reason}`, "job-processor");
+    // For running jobs that were interrupted - reset to queued so they can be resumed
+    for (const job of runningJobs) {
+      log(`[ScanJobProcessor] Re-queuing interrupted job ${job.id} (client ${job.clientId}, was at ${job.completedPrompts || 0}/${job.totalPrompts || 0} prompts)`, "job-processor");
       
       await storage.updateScanJob(job.id, {
-        status: 'failed',
-        completedAt: new Date(),
-        errorMessage: reason,
-        progressMessage: `Failed: ${reason}`,
+        status: 'queued',
+        progressMessage: `Resuming after server restart (was at ${job.completedPrompts || 0}/${job.totalPrompts || 0})`,
+        lastProgressAt: new Date(), // Update to prevent immediate stuck detection
       });
       
+      // Update session to pending so it shows as resumable
       if (job.sessionId) {
         await storage.updateCheckSession(job.sessionId, {
-          status: 'failed',
+          status: 'pending',
         });
       }
     }
     
-    log(`[ScanJobProcessor] Cleaned up ${orphanedJobs.length} orphaned jobs`, "job-processor");
+    // For stale queued jobs - reset their lastProgressAt to prevent them being marked as stuck
+    for (const job of staleQueuedJobs) {
+      log(`[ScanJobProcessor] Refreshing stale queued job ${job.id} (client ${job.clientId})`, "job-processor");
+      
+      await storage.updateScanJob(job.id, {
+        lastProgressAt: new Date(), // Refresh to prevent being marked as stuck
+        progressMessage: 'Waiting to resume after server restart',
+      });
+    }
+    
+    log(`[ScanJobProcessor] Re-queued ${runningJobs.length} interrupted jobs, refreshed ${staleQueuedJobs.length} stale jobs`, "job-processor");
   } catch (error) {
     log(`[ScanJobProcessor] Error cleaning up orphaned jobs: ${error instanceof Error ? error.message : String(error)}`, "job-processor");
   }
