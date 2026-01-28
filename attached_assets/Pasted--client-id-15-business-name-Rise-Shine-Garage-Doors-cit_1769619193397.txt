@@ -1,0 +1,107 @@
+[
+  {
+    "client_id": 15,
+    "business_name": "Rise & Shine Garage Doors",
+    "cities": [
+      "Saint Paul, MN",
+      "Rochester, MN",
+      "Lakeville, MN",
+      "New Brighton, MN",
+      "Wayzata, MN",
+      "Austin, TX",
+      "Minneapolis, MN"
+    ],
+    "session_count": "1",
+    "job_count": "0"
+  },
+  {
+    "client_id": 16,
+    "business_name": "Rise & Shine Garage Doors",
+    "cities": [
+      "Saint Paul, MN",
+      "Rochester, MN",
+      "Lakeville, MN",
+      "New Brighton, MN",
+      "Wayzata, MN",
+      "Austin, TX",
+      "Minneapolis, MN"
+    ],
+    "session_count": "1",
+    "job_count": "0"
+  },
+  {
+    "client_id": 17,
+    "business_name": "Rise & Shine Garage Doors",
+    "cities": [
+      "Saint Paul, MN",
+      "Rochester, MN",
+      "Lakeville, MN",
+      "New Brighton, MN",
+      "Wayzata, MN",
+      "Austin, TX",
+      "Minneapolis, MN"
+    ],
+    "session_count": "1",
+    "job_count": "0"
+  },
+  {
+    "client_id": 18,
+    "business_name": "Rise & Shine Garage Doors",
+    "cities": [
+      "Saint Paul, MN",
+      "Rochester, MN",
+      "Lakeville, MN",
+      "New Brighton, MN",
+      "Wayzata, MN",
+      "Austin, TX",
+      "Minneapolis, MN"
+    ],
+    "session_count": "1",
+    "job_count": "0"
+  },
+  {
+    "client_id": 19,
+    "business_name": "Rise & Shine Garage Doors",
+    "cities": [
+      "Saint Paul, MN",
+      "Rochester, MN",
+      "Lakeville, MN",
+      "New Brighton, MN",
+      "Wayzata, MN",
+      "Austin, TX",
+      "Minneapolis, MN"
+    ],
+    "session_count": "1",
+    "job_count": "0"
+  },
+  {
+    "client_id": 20,
+    "business_name": "Rise & Shine Garage Doors",
+    "cities": [
+      "Saint Paul, MN",
+      "Rochester, MN",
+      "Lakeville, MN",
+      "New Brighton, MN",
+      "Wayzata, MN",
+      "Austin, TX",
+      "Minneapolis, MN"
+    ],
+    "session_count": "1",
+    "job_count": "0"
+  },
+  {
+    "client_id": 21,
+    "business_name": "Rise & Shine Garage Doors",
+    "cities": [
+      "Saint Paul, MN",
+      "Rochester, MN",
+      "Lakeville, MN",
+      "New Brighton, MN",
+      "Wayzata, MN",
+      "Austin, TX",
+      "Minneapolis, MN"
+    ],
+    "session_count": "2",
+    "job_count": "1"
+  }
+]

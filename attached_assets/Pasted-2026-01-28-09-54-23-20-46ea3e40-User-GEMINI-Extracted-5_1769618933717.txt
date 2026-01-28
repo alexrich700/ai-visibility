@@ -1,0 +1,164 @@
+2026-01-28 09:54:23.20
+46ea3e40
+User
+[GEMINI] Extracted 5 citations
+2026-01-28 09:54:23.20
+46ea3e40
+User
+[queryGoogleAI] Result - found: false, response length: 2666, citations: 5, has grounding: true
+2026-01-28 09:54:23.20
+46ea3e40
+User
+[GEMINI DETECTION] Business: "Rise & Shine Garage Doors" | URL: "https://callriseandshine.com/" | Aliases: 0 | Search terms: ["rise & shine garage doors","rise&shinegaragedoors","callriseandshine","callriseandshine.com"] | Found: false
+2026-01-28 09:54:23.20
+46ea3e40
+User
+[GEMINI] Web search queries used: garage door companies Saint Paul MN historic homes reviews, best garage door repair historic homes Saint Paul MN, garage door installation Saint Paul old homes reviews, Saint Paul MN garage door companies specializing in historic properties
+2026-01-28 09:54:29.56
+46ea3e40
+User
+[CHATGPT] Response preview (first 300 chars): Below are the highest‑rated garage‑door spring‑replacement providers that serve Wayzata / the Twin Cities area, with each provider’s reported star rating, number of reviews (as shown on the cited source), and any verifiable certifications or badges related to spring repair. I prioritized companies t
+2026-01-28 09:54:29.56
+46ea3e40
+User
+[queryOpenAI] Result - found: false, response length: 5655, citations: 10
+2026-01-28 09:54:29.56
+46ea3e40
+User
+[NO MATCH] AI cited these domains: doorsfixedfast.com, angi.com, precisiondoormn.com, garagedoorsplusllc.com, aladdindoorsminneapolis.com
+2026-01-28 09:54:29.56
+46ea3e40
+User
+[CHATGPT DETECTION] Business: "Rise & Shine Garage Doors" | URL: "https://callriseandshine.com/" | Aliases: 0 | Search terms: ["rise & shine garage doors","rise&shinegaragedoors","callriseandshine","callriseandshine.com"] | Found: false
+2026-01-28 09:54:29.56
+46ea3e40
+User
+[CHATGPT] Extracted 10 citations
+2026-01-28 09:54:31.04
+46ea3e40
+User
+3:54:31 PM [express] GET /api/monitoring/scan-job/4 304 in 59ms :: {"id":4,"clientId":21,"targetCity":null,"status":"running","progress":0,"progressMessage":"Running AI visibility checks...","completedPrompts":0,"totalPrompts":54,"sessionId":29,"resultScore":null,"errorMessage":null,"startedAt":"2026-01-28T15:54:11.493Z","completedAt":null,"createdAt":"2026-01-28T15:54:07.895Z"}
+2026-01-28 09:54:36.22
+46ea3e40
+User
+3:54:36 PM [express] GET /api/monitoring/scan-job/4 304 in 58ms :: {"id":4,"clientId":21,"targetCity":null,"status":"running","progress":0,"progressMessage":"Running AI visibility checks...","completedPrompts":0,"totalPrompts":54,"sessionId":29,"resultScore":null,"errorMessage":null,"startedAt":"2026-01-28T15:54:11.493Z","completedAt":null,"createdAt":"2026-01-28T15:54:07.895Z"}
+2026-01-28 09:54:36.34
+46ea3e40
+User
+3:54:36 PM [express] GET /api/monitoring/scan-job/4 304 in 68ms :: {"id":4,"clientId":21,"targetCity":null,"status":"running","progress":0,"progressMessage":"Running AI visibility checks...","completedPrompts":0,"totalPrompts":54,"sessionId":29,"resultScore":null,"errorMessage":null,"startedAt":"2026-01-28T15:54:11.493Z","completedAt":null,"createdAt":"2026-01-28T15:54:07.895Z"}
+2026-01-28 09:54:36.46
+46ea3e40
+User
+3:54:36 PM [express] GET /api/monitoring/scan-job/4 304 in 65ms :: {"id":4,"clientId":21,"targetCity":null,"status":"running","progress":0,"progressMessage":"Running AI visibility checks...","completedPrompts":0,"totalPrompts":54,"sessionId":29,"resultScore":null,"errorMessage":null,"startedAt":"2026-01-28T15:54:11.493Z","completedAt":null,"createdAt":"2026-01-28T15:54:07.895Z"}
+2026-01-28 09:54:37.16
+46ea3e40
+User
+[CHATGPT DETECTION] Business: "Rise & Shine Garage Doors" | URL: "https://callriseandshine.com/" | Aliases: 0 | Search terms: ["rise & shine garage doors","rise&shinegaragedoors","callriseandshine","callriseandshine.com"] | Found: true (matched: "callriseandshine.com")
+2026-01-28 09:54:37.16
+46ea3e40
+User
+[CHATGPT] Extracted 10 citations
+2026-01-28 09:54:37.16
+46ea3e40
+User
+[DOMAIN MATCH] Brand domain "callriseandshine.com" exactly matches AI-cited URL: "callriseandshine.com"
+2026-01-28 09:54:37.16
+46ea3e40
+User
+[queryOpenAI] Result - found: true, response length: 7952, citations: 10
+2026-01-28 09:54:38.06
+46ea3e40
+User
+3:54:38 PM [express] GET /api/monitoring/scan-job/4 304 in 65ms :: {"id":4,"clientId":21,"targetCity":null,"status":"running","progress":0,"progressMessage":"Running AI visibility checks...","completedPrompts":0,"totalPrompts":54,"sessionId":29,"resultScore":null,"errorMessage":null,"startedAt":"2026-01-28T15:54:11.493Z","completedAt":null,"createdAt":"2026-01-28T15:54:07.895Z"}
+2026-01-28 09:54:39.86
+46ea3e40
+User
+[NAME MATCH] Business name/alias "rise & shine garage doors" found in AI response text
+2026-01-28 09:54:39.86
+46ea3e40
+User
+[GEMINI] Web search queries used: 24/7 emergency garage door repair Saint Paul MN, garage door repair Saint Paul MN response time, Saint Paul MN emergency garage door services, All American Door Company Saint Paul 24/7, Premium Garage Door Repair Saint Paul 24/7, Minneapolis Garage Door Company Saint Paul 24/7
+2026-01-28 09:54:39.86
+46ea3e40
+User
+[GEMINI] Extracted 17 citations
+2026-01-28 09:54:39.86
+46ea3e40
+User
+[GEMINI DETECTION] Business: "Rise & Shine Garage Doors" | URL: "https://callriseandshine.com/" | Aliases: 0 | Search terms: ["rise & shine garage doors","rise&shinegaragedoors","callriseandshine","callriseandshine.com"] | Found: true (matched: "rise & shine garage doors")
+2026-01-28 09:54:40.16
+46ea3e40
+User
+[queryGoogleAI] Result - found: true, response length: 2648, citations: 17, has grounding: true
+2026-01-28 09:54:40.97
+46ea3e40
+User
+[DOMAIN MATCH] Brand domain "callriseandshine.com" exactly matches AI-cited URL: "callriseandshine.com"
+2026-01-28 09:54:40.97
+46ea3e40
+User
+[CHATGPT DETECTION] Business: "Rise & Shine Garage Doors" | URL: "https://callriseandshine.com/" | Aliases: 0 | Search terms: ["rise & shine garage doors","rise&shinegaragedoors","callriseandshine","callriseandshine.com"] | Found: true (matched: "callriseandshine.com")
+2026-01-28 09:54:40.97
+46ea3e40
+User
+[CHATGPT] Extracted 10 citations
+2026-01-28 09:54:40.97
+46ea3e40
+User
+[queryOpenAI] Result - found: true, response length: 6324, citations: 10
+2026-01-28 09:54:40.98
+46ea3e40
+User
+[NO MATCH] AI cited these domains: doorsfixedfast.com, rlgaragemn.com, garagedoorsplusllc.com, aladdindoors.com, modernize.com
+2026-01-28 09:54:40.98
+46ea3e40
+User
+[queryOpenAI] Result - found: false, response length: 3421, citations: 6
+2026-01-28 09:54:40.98
+46ea3e40
+User
+[CHATGPT DETECTION] Business: "Rise & Shine Garage Doors" | URL: "https://callriseandshine.com/" | Aliases: 0 | Search terms: ["rise & shine garage doors","rise&shinegaragedoors","callriseandshine","callriseandshine.com"] | Found: false
+2026-01-28 09:54:40.98
+46ea3e40
+User
+[CHATGPT] Extracted 6 citations
+2026-01-28 09:54:40.98
+46ea3e40
+User
+[CHATGPT] Response preview (first 300 chars): Below are several affordable garage‑door companies that advertise emergency/same‑day service for New Brighton (they serve the Twin Cities). For each I list the company website and the emergency / call‑out fee or the typical price range they publish (or — when they don’t publish a flat emergency fee
+2026-01-28 09:54:41.04
+46ea3e40
+User
+3:54:41 PM [express] GET /api/monitoring/scan-job/4 304 in 61ms :: {"id":4,"clientId":21,"targetCity":null,"status":"running","progress":0,"progressMessage":"Running AI visibility checks...","completedPrompts":0,"totalPrompts":54,"sessionId":29,"resultScore":null,"errorMessage":null,"startedAt":"2026-01-28T15:54:11.493Z","completedAt":null,"createdAt":"2026-01-28T15:54:07.895Z"}
+2026-01-28 09:54:42.66
+46ea3e40
+User
+[GEMINI] Web search queries used: top rated garage door companies Saint Paul MN, best garage door repair Saint Paul MN, garage door installation Saint Paul MN reviews, All Seasons Garage Door Company Saint Paul MN reviews service area, EZ Open Garage Door Saint Paul MN reviews service area, Midwest Garage Door Company Saint Paul MN reviews service area, Above All Company Saint Paul MN reviews service area, All Seasons Garage Door Company Saint Paul MN service area reviews pros cons, EZ Open Garage Door Saint Paul MN service area reviews pros cons, Midwest Garage Door Systems Inc Saint Paul MN service area reviews pros cons, A1 Garage Door Service Saint Paul MN service area reviews pros cons, Metro Garage Door Co Saint Paul MN service area reviews pros cons, Hamline Garage Door Saint Paul MN service area reviews pros cons, North Country Garage Door Saint Paul MN service area reviews pros cons, AA Garage Door Service Saint Paul MN service area reviews pros cons, Crawford Door Sales Of Twin Cities Saint Paul MN service area reviews pros cons, O'Brien Garage Doors Minneapolis-St. Paul service area reviews pros cons, PDQ Garage Door Service Saint Paul MN service area reviews pros cons, Precision Garage Door of St. Paul service area reviews pros cons, Superior Garage Door Repair Saint Paul MN service area reviews pros cons, Residential Garage Saint Paul MN service area reviews pros cons, Reliable Garage Door Saint Paul MN service area reviews pros cons, Midway Garage Door Saint Paul MN service area reviews pros cons, Above All Garage Door Company Saint Paul MN reviews, Above All Company Saint Paul MN garage door reviews
+2026-01-28 09:54:42.66
+46ea3e40
+User
+[GEMINI] Extracted 23 citations
+2026-01-28 09:54:42.66
+46ea3e40
+User
+[GEMINI] Response preview (first 300 chars): Here's a comparison of top garage door company providers in Saint Paul, MN, detailing their business names, pros, cons, and typical service areas: ### Top Garage Door Companies in Saint Paul, MN **1. All Seasons Garage Door Company** * **Pros:** * Renowned for exceptional service and high-
+2026-01-28 09:54:42.66
+46ea3e40
+User
+[queryGoogleAI] Result - found: false, response length: 9543, citations: 23, has grounding: true
+2026-01-28 09:54:42.66
+46ea3e40
+User
+[GEMINI DETECTION] Business: "Rise & Shine Garage Doors" | URL: "https://callriseandshine.com/" | Aliases: 0 | Search terms: ["rise & shine garage doors","rise&shinegaragedoors","callriseandshine","callriseandshine.com"] | Found: false
+2026-01-28 09:54:44.06
+46ea3e40
+User
+3:54:44 PM [express] GET /api/monitoring/scan-job/4 304 in 68ms :: {"id":4,"clientId":21,"targetCity":null,"status":"running","progress":0,"progressMessage":"Running AI visibility checks...","completedPrompts":0,"totalPrompts":54,"sessionId":29,"resultScore":null,"errorMessage":null,"startedAt":"2026-01-28T15:54:11.493Z","completedAt":null,"createdAt":"2026-01-28T15:54:07.895Z"}
+2026-01-28 09:54:47.16
+46ea3e40
+User
+3:54:47 PM [express] GET /api/monitoring/scan-job/4 304 in 69ms :: {"id":4,"clientId":21,"targetCity":null,"status":"running","progress":0,"progressMessage":"Running AI visibility checks...","completedPrompts":0,"totalPrompts":54,"sessionId":29,"resultScore":null,"errorMessage":null,"startedAt":"2026-01-28T15:54:11.493Z","completedAt":null,"createdAt":"2026-01-28T15:54:07.895Z"}
+2026-01-28 09:54:50.06
+46ea3e40
+User
+[GEMINI] Web search queries used: top-rated garage door installation companies Minneapolis MN, best garage door inst
