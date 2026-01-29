@@ -1,0 +1,88 @@
+
+e2ba90b8
+User
+12:01:43 AM [express] DELETE /api/monitoring/clients/17 200 in 717ms :: {"success":true,"message":"Client deleted successfully"}
+2026-01-28 18:01:44.24
+e2ba90b8
+User
+12:01:44 AM [express] GET /api/monitoring/clients-with-stats 200 in 227ms :: [{"id":21,"businessName":"Rise & Shine Garage Doors","domain":"https://callriseandshine.com/","industry":"Garage Door Company","scope":"local","city":"Austin, TX","cities":["Minneapolis, MN","Saint Paul, MN","Lakeville, MN","Wayzata, MN","New Brighton, MN","Rochester, MN","Austin, TX"],"primaryCategories":["Garage Door Company"],"brandAliases":null,"checkFrequencyDays":14,"lastCheckAt":null,"nextCheckAt":"2026-02-11T15:47:17.172Z","isActive":true,"clientAccessToken":null,"createdAt":"2026-01-28T15:47:17.188Z","updatedAt":"2026-01-28T21:34:08.996Z","latestSession":{"id":36,"overallScore":0,"chatgptScore":0,"googleAIScore":0,"createdAt":"2026-01-28T21:07:40.440Z"},"groupCount":11,"promptCount":54},{"id":16,"businessName":"Rise & Shine Garage Doors","domain":"https://callriseandshine.com/","industry":"Garage Door Company","scope":"local","city":"Rochester, MN","cities":["Saint Paul, MN","Rochester, MN","Lakeville, MN","New Brighton, MN","Wayzata, MN","Austin, TX","Minneapolis, MN"],"primaryCategories":["Garage Door Company"],"brandAliases":null,"checkFrequencyDays":14,"lastCheckAt":null,"nextCheckAt":"2026-02-11T15:21:22.613Z","isActive":true,"clientAccessToken":null,"createdAt":"2026-01-28T15:21:22.628Z","updatedAt":"2026-01-28T15:46:54.387Z","latestSession":{"id":23,"overallScore":57,"chatgptScore":48,"googleAIScore":66,"createdAt":"2026-01-28T15:21:24.727Z"},"groupCount":11,"promptCount":54},{"id":15,"businessName":"Rise & Shine Garage Doors","domain":"https://callriseandshine.com/","industry":"Garage Door Company","scope":"local","city":"Saint Paul, MN","cities":["Saint Paul, MN","Rochester, MN","Lakeville, MN","New Brighton, MN","Wayzata, MN","Austin, TX","Minneapolis, MN"],"primaryCategories":["Garage Door Company"],"brandAliases":null,"checkFrequencyDays":14,"lastCheckAt":null,"nextCheckAt":"2026-02-11T15:16:18.759Z","isActive":true,"clientAccessToken":null,"createdAt":"2026-01-28T15:16:18.777Z","updatedAt":"2026-01-28T15:42:19.042Z","latestSession":{"id":22,"overallScore":42,"chatgptScore":48,"googleAIScore":36,"createdAt":"2026-01-28T15:16:21.014Z"},"groupCount":11,"promptCount":54},{"id":14,"businessName":"MSP Plumbing Heating Air","domain":"https://mspplumbingheatingair.com/","industry":"Plumber","scope":"local","city":"Saint Paul, MN","cities":["Minneapolis, MN","Saint Paul, MN"],"primaryCategories":["Plumber","HVAC Company"],"brandAliases":null,"checkFrequencyDays":14,"lastCheckAt":"2026-01-23T16:05:48.671Z","nextCheckAt":"2026-02-06T16:05:48.671Z","isActive":true,"clientAccessToken":"8df5d0fb77a4aa20de57694fe262935329c49721ac073ce767fcc05a4c304b26","createdAt":"2026-01-22T14:40:42.995Z","updatedAt":"2026-01-23T16:13:07.437Z","latestSession":{"id":21,"overallScore":21,"chatgptScore":41,"googleAIScore":0,"createdAt":"2026-01-23T15:16:44.806Z"},"groupCount":17,"promptCount":84}]
+2026-01-28 18:01:46.61
+e2ba90b8
+User
+12:01:46 AM [express] DELETE /api/monitoring/clients/16 200 in 725ms :: {"success":true,"message":"Client deleted successfully"}
+2026-01-28 18:01:46.90
+e2ba90b8
+User
+12:01:46 AM [express] GET /api/monitoring/clients-with-stats 200 in 228ms :: [{"id":21,"businessName":"Rise & Shine Garage Doors","domain":"https://callriseandshine.com/","industry":"Garage Door Company","scope":"local","city":"Austin, TX","cities":["Minneapolis, MN","Saint Paul, MN","Lakeville, MN","Wayzata, MN","New Brighton, MN","Rochester, MN","Austin, TX"],"primaryCategories":["Garage Door Company"],"brandAliases":null,"checkFrequencyDays":14,"lastCheckAt":null,"nextCheckAt":"2026-02-11T15:47:17.172Z","isActive":true,"clientAccessToken":null,"createdAt":"2026-01-28T15:47:17.188Z","updatedAt":"2026-01-28T21:34:08.996Z","latestSession":{"id":36,"overallScore":0,"chatgptScore":0,"googleAIScore":0,"createdAt":"2026-01-28T21:07:40.440Z"},"groupCount":11,"promptCount":54},{"id":15,"businessName":"Rise & Shine Garage Doors","domain":"https://callriseandshine.com/","industry":"Garage Door Company","scope":"local","city":"Saint Paul, MN","cities":["Saint Paul, MN","Rochester, MN","Lakeville, MN","New Brighton, MN","Wayzata, MN","Austin, TX","Minneapolis, MN"],"primaryCategories":["Garage Door Company"],"brandAliases":null,"checkFrequencyDays":14,"lastCheckAt":null,"nextCheckAt":"2026-02-11T15:16:18.759Z","isActive":true,"clientAccessToken":null,"createdAt":"2026-01-28T15:16:18.777Z","updatedAt":"2026-01-28T15:42:19.042Z","latestSession":{"id":22,"overallScore":42,"chatgptScore":48,"googleAIScore":36,"createdAt":"2026-01-28T15:16:21.014Z"},"groupCount":11,"promptCount":54},{"id":14,"businessName":"MSP Plumbing Heating Air","domain":"https://mspplumbingheatingair.com/","industry":"Plumber","scope":"local","city":"Saint Paul, MN","cities":["Minneapolis, MN","Saint Paul, MN"],"primaryCategories":["Plumber","HVAC Company"],"brandAliases":null,"checkFrequencyDays":14,"lastCheckAt":"2026-01-23T16:05:48.671Z","nextCheckAt":"2026-02-06T16:05:48.671Z","isActive":true,"clientAccessToken":"8df5d0fb77a4aa20de57694fe262935329c49721ac073ce767fcc05a4c304b26","createdAt":"2026-01-22T14:40:42.995Z","updatedAt":"2026-01-23T16:13:07.437Z","latestSession":{"id":21,"overallScore":21,"chatgptScore":41,"googleAIScore":0,"createdAt":"2026-01-23T15:16:44.806Z"},"groupCount":17,"promptCount":84}]
+2026-01-28 18:01:49.26
+e2ba90b8
+User
+12:01:49 AM [express] DELETE /api/monitoring/clients/15 200 in 777ms :: {"success":true,"message":"Client deleted successfully"}
+2026-01-28 18:01:49.57
+e2ba90b8
+User
+12:01:49 AM [express] GET /api/monitoring/clients-with-stats 200 in 243ms :: [{"id":21,"businessName":"Rise & Shine Garage Doors","domain":"https://callriseandshine.com/","industry":"Garage Door Company","scope":"local","city":"Austin, TX","cities":["Minneapolis, MN","Saint Paul, MN","Lakeville, MN","Wayzata, MN","New Brighton, MN","Rochester, MN","Austin, TX"],"primaryCategories":["Garage Door Company"],"brandAliases":null,"checkFrequencyDays":14,"lastCheckAt":null,"nextCheckAt":"2026-02-11T15:47:17.172Z","isActive":true,"clientAccessToken":null,"createdAt":"2026-01-28T15:47:17.188Z","updatedAt":"2026-01-28T21:34:08.996Z","latestSession":{"id":36,"overallScore":0,"chatgptScore":0,"googleAIScore":0,"createdAt":"2026-01-28T21:07:40.440Z"},"groupCount":11,"promptCount":54},{"id":14,"businessName":"MSP Plumbing Heating Air","domain":"https://mspplumbingheatingair.com/","industry":"Plumber","scope":"local","city":"Saint Paul, MN","cities":["Minneapolis, MN","Saint Paul, MN"],"primaryCategories":["Plumber","HVAC Company"],"brandAliases":null,"checkFrequencyDays":14,"lastCheckAt":"2026-01-23T16:05:48.671Z","nextCheckAt":"2026-02-06T16:05:48.671Z","isActive":true,"clientAccessToken":"8df5d0fb77a4aa20de57694fe262935329c49721ac073ce767fcc05a4c304b26","createdAt":"2026-01-22T14:40:42.995Z","updatedAt":"2026-01-23T16:13:07.437Z","latestSession":{"id":21,"overallScore":21,"chatgptScore":41,"googleAIScore":0,"createdAt":"2026-01-23T15:16:44.806Z"},"groupCount":17,"promptCount":84}]
+2026-01-28 18:02:06.27
+e2ba90b8
+User
+12:02:06 AM [express] GET /api/monitoring/scan-job-active/21 304 in 58ms :: {"hasActiveJob":false}
+2026-01-28 18:02:13.61
+e2ba90b8
+User
+12:02:13 AM [express] GET /api/monitoring/scan-dates/21 200 in 142ms :: {"scanDates":[{"date":"2026-01-28","cities":["Austin, TX","Rochester, MN","New Brighton, MN","Wayzata, MN","Lakeville, MN","Saint Paul, MN","Minneapolis, MN"],"sessionIds":[36,35,34,33,32,31,30,28]}]}
+2026-01-28 18:02:17.66
+e2ba90b8
+User
+at xA (/home/runner/workspace/dist/index.cjs:159:3210)
+2026-01-28 18:02:17.66
+e2ba90b8
+User
+at cO (/home/runner/workspace/dist/index.cjs:578:8389)
+2026-01-28 18:02:17.66
+e2ba90b8
+User
+=== EXPORT BY DATE ERROR ===
+2026-01-28 18:02:17.66
+e2ba90b8
+User
+at iO (/home/runner/workspace/dist/index.cjs:578:7541)
+2026-01-28 18:02:17.66
+e2ba90b8
+User
+============================
+2026-01-28 18:02:17.66
+e2ba90b8
+User
+at Ij (/home/runner/workspace/dist/index.cjs:159:1936)
+2026-01-28 18:02:17.66
+e2ba90b8
+User
+at Object.xh (/home/runner/workspace/dist/index.cjs:197:37483)
+2026-01-28 18:02:17.66
+e2ba90b8
+User
+Error message: Text length must not exceed 32767 characters
+2026-01-28 18:02:17.66
+e2ba90b8
+User
+at nG (/home/runner/workspace/dist/index.cjs:197:33986)
+2026-01-28 18:02:17.66
+e2ba90b8
+User
+Error stack: Error: Text length must not exceed 32767 characters
+2026-01-28 18:02:17.66
+e2ba90b8
+User
+at /home/runner/workspace/dist/index.cjs:686:10997
+2026-01-28 18:02:17.66
+e2ba90b8
+User
+at Xz (/home/runner/workspace/dist/index.cjs:197:25095)
+2026-01-28 18:02:17.66
+e2ba90b8
+User
+at QA (/home/runner/workspace/dist/index.cjs:197:28803)
+2026-01-28 18:02:17.66
+e2ba90b8
+User
+at Fj (/home/runner/workspace/dist/index.cjs:158:45323)
