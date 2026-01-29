@@ -98,6 +98,17 @@ interface CSVRow {
   [key: string]: string | number | boolean | null;
 }
 
+// Excel has a maximum cell text length of 32,767 characters
+const EXCEL_MAX_CELL_LENGTH = 32767;
+const TRUNCATION_SUFFIX = "... [truncated]";
+
+function truncateForExcel(value: string | null | undefined): string {
+  if (value == null) return "";
+  const str = String(value);
+  if (str.length <= EXCEL_MAX_CELL_LENGTH) return str;
+  return str.substring(0, EXCEL_MAX_CELL_LENGTH - TRUNCATION_SUFFIX.length) + TRUNCATION_SUFFIX;
+}
+
 function escapeCSV(value: string | null | undefined): string {
   if (value == null) return "";
   const str = String(value);
@@ -517,17 +528,17 @@ function createGroupSheetData(
 
   for (const result of results) {
     rows.push([
-      result.promptText,
+      truncateForExcel(result.promptText),
       result.chatgptFound ? "Yes" : "No",
-      result.chatgptResponse || "",
-      formatCitations(result.chatgptCitations),
+      truncateForExcel(result.chatgptResponse),
+      truncateForExcel(formatCitations(result.chatgptCitations)),
       result.chatgptSentiment || "",
       result.googleAIFound ? "Yes" : "No",
-      result.googleAIResponse || "",
-      formatCitations(result.googleAICitations),
+      truncateForExcel(result.googleAIResponse),
+      truncateForExcel(formatCitations(result.googleAICitations)),
       result.googleAISentiment || "",
-      formatWebSearchQueries(result.googleAIGroundingMetadata),
-      result.competitors || "",
+      truncateForExcel(formatWebSearchQueries(result.googleAIGroundingMetadata)),
+      truncateForExcel(result.competitors),
       sessionDate.toISOString().split("T")[0]
     ]);
   }
