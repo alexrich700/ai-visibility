@@ -2892,9 +2892,52 @@ export async function registerRoutes(
       
       // Enhance each client with latest session and stats
       const clientsWithStats = await Promise.all(clients.map(async (client) => {
-        // Get latest session for this client
+        // Get all sessions for this client
         const sessions = await storage.getCheckSessionsByClientId(client.id);
-        const latestSession = sessions.length > 0 ? sessions[0] : null;
+        
+        // Filter for completed sessions only
+        const completedSessions = sessions.filter(s => s.status === 'complete');
+        
+        // For multi-city clients, aggregate the latest complete session per city
+        // This matches how the dashboard calculates the "All cities" aggregate
+        let aggregatedScore = 0;
+        let aggregatedChatgptScore = 0;
+        let aggregatedGoogleAIScore = 0;
+        let latestCreatedAt: Date | null = null;
+        let latestSessionId: number | null = null;
+        
+        if (completedSessions.length > 0) {
+          // Get the latest complete session per city
+          const latestPerCity = new Map<string | null, typeof completedSessions[0]>();
+          for (const session of completedSessions) {
+            const city = session.city;
+            if (!latestPerCity.has(city)) {
+              latestPerCity.set(city, session);
+            }
+          }
+          
+          const citySessions = Array.from(latestPerCity.values());
+          
+          if (citySessions.length > 0) {
+            // Average the scores across all cities (matching dashboard behavior)
+            aggregatedScore = Math.round(
+              citySessions.reduce((sum, s) => sum + (s.overallScore || 0), 0) / citySessions.length
+            );
+            aggregatedChatgptScore = Math.round(
+              citySessions.reduce((sum, s) => sum + (s.chatgptScore || 0), 0) / citySessions.length
+            );
+            aggregatedGoogleAIScore = Math.round(
+              citySessions.reduce((sum, s) => sum + (s.googleAIScore || 0), 0) / citySessions.length
+            );
+            
+            // Use the most recent session's date and ID for display
+            const mostRecent = citySessions.reduce((latest, s) => 
+              !latest || (s.createdAt && s.createdAt > latest.createdAt!) ? s : latest
+            , citySessions[0]);
+            latestCreatedAt = mostRecent.createdAt;
+            latestSessionId = mostRecent.id;
+          }
+        }
         
         // Get groups and prompts count
         const groups = await storage.getGroupsByClientId(client.id);
@@ -2902,12 +2945,12 @@ export async function registerRoutes(
         
         return {
           ...client,
-          latestSession: latestSession ? {
-            id: latestSession.id,
-            overallScore: latestSession.overallScore,
-            chatgptScore: latestSession.chatgptScore,
-            googleAIScore: latestSession.googleAIScore,
-            createdAt: latestSession.createdAt,
+          latestSession: latestSessionId ? {
+            id: latestSessionId,
+            overallScore: aggregatedScore,
+            chatgptScore: aggregatedChatgptScore,
+            googleAIScore: aggregatedGoogleAIScore,
+            createdAt: latestCreatedAt,
           } : undefined,
           groupCount: groups.length,
           promptCount: prompts.length,
