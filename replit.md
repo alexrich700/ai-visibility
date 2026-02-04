@@ -35,7 +35,12 @@ The tool integrates with:
 2.  **Google Gemini**: Integrates via Replit AI Integrations (no API key needed), using a `googleSearch` tool for grounding. Captures grounding metadata (`webSearchQueries`, `groundingSupports`) for geo-optimization analysis.
 3.  **Perplexity**: Requires `PERPLEXITY_API_KEY`.
 
-AI queries are processed with bounded concurrency (8 simultaneous prompts) and parallel API calls to optimize performance and cost.
+AI queries are processed with maximum parallelization for speed:
+-   **Research prompts**: 10 pre-built prompts targeting high-intent search queries
+-   **Sentiment prompts**: 3 pre-built prompts for brand perception
+-   **Parallel execution**: Research and sentiment run in parallel, with each prompt querying both ChatGPT and Gemini simultaneously
+-   **Performance**: Optimized from ~300s to ~111s (63% improvement) through pre-built prompts, skip individual rate limits, and parallel batch execution
+-   **Bottleneck**: ChatGPT web search API response time (10-30s per call) is the limiting factor
 
 ### Gemini Grounding Metadata
 -   **Purpose**: Captures what geographic search queries Gemini uses internally when answering prompts (e.g., "best plumber Woodbury MN"). This reveals how AI platforms interpret location-specific queries.

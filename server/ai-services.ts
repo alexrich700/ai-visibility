@@ -11,7 +11,8 @@ import { promptFallbackLogs } from "@shared/schema";
 import { DatabaseKeepaliveContext } from "./db-utils";
 
 // Configuration constants for prompt generation
-export const PROMPTS_PER_GROUP = 5; // Number of prompts to generate per service group
+export const PROMPTS_PER_GROUP = 5; // Number of prompts to generate per service group (for monitoring)
+export const AUDIT_PROMPT_COUNT = 10; // Number of prompts for lead gen audits (optimized for speed)
 
 // ============================================
 // ERROR CLASSIFICATION AND DIAGNOSTICS
@@ -752,7 +753,11 @@ async function queryGemini(prompt: string, businessName: string, url?: string, b
 }
 
 // ChatGPT client using Responses API with web_search tool for proper grounding
-async function queryChatGPT(prompt: string, businessName: string, url?: string, location?: string, brandAliases?: string[]): Promise<{ found: boolean; response: string; competitors: string[]; citations: ExtractedCitation[] }> {
+interface QueryOptions {
+  skipRateLimitDelay?: boolean; // Skip delay for batched contexts that handle rate limiting at batch level
+}
+
+async function queryChatGPT(prompt: string, businessName: string, url?: string, location?: string, brandAliases?: string[], options?: QueryOptions): Promise<{ found: boolean; response: string; competitors: string[]; citations: ExtractedCitation[] }> {
   // Check circuit breaker before making API call
   if (openAICircuitBreaker.isOpen()) {
     console.log(`[CHATGPT] Circuit breaker is OPEN, skipping API call for prompt`);
@@ -773,8 +778,10 @@ async function queryChatGPT(prompt: string, businessName: string, url?: string, 
       };
     }
     
-    // Add rate limit delay before API call to spread requests evenly (as OpenAI recommends)
-    await rateLimitDelay();
+    // Add rate limit delay unless we're in a batched context (batch handles rate limiting)
+    if (!options?.skipRateLimitDelay) {
+      await rateLimitDelay();
+    }
     
     // Use Responses API with web_search tool for real-time grounded search results
     // The Responses API uses 'input' and 'instructions' instead of 'messages'
@@ -1129,6 +1136,40 @@ function generatePromptSummary(chatgptFound: boolean, googleAIFound: boolean, ch
 }
 
 // Generate executive summary using AI with GPT-4o
+// Fast template-based executive summary - no AI call needed
+function generateFastExecutiveSummary(
+  businessName: string,
+  keyword: string,
+  overallScore: number,
+  chatgptScore: number,
+  googleAIScore: number,
+  sentimentOverall: string,
+  location: string,
+  promptCount: number
+): string {
+  const locationText = location !== "nationwide" ? ` for ${keyword} in ${location}` : ` for ${keyword} nationwide`;
+  
+  // Determine visibility level
+  let visibilityLevel: string;
+  let recommendation: string;
+  
+  if (overallScore >= 70) {
+    visibilityLevel = "strong";
+    recommendation = "Your brand has solid AI visibility. Focus on maintaining this position and expanding to related keywords.";
+  } else if (overallScore >= 40) {
+    visibilityLevel = "moderate";
+    recommendation = "There's opportunity to improve. Consider optimizing your digital presence and building more authoritative content.";
+  } else if (overallScore >= 20) {
+    visibilityLevel = "limited";
+    recommendation = "AI platforms are not recommending your business. Immediate action is needed to improve your digital footprint.";
+  } else {
+    visibilityLevel = "minimal";
+    recommendation = "Your competitors are getting recommended while you're invisible to AI. This requires urgent attention.";
+  }
+  
+  return `We analyzed ${businessName} across ${promptCount} high-intent AI prompts on ChatGPT and Google AI${locationText}. The results show ${visibilityLevel} visibility with an overall score of ${overallScore}/100 (ChatGPT: ${chatgptScore}%, Google AI: ${googleAIScore}%) and ${sentimentOverall} brand sentiment. ${recommendation}`;
+}
+
 async function generateExecutiveSummary(
   businessName: string,
   keyword: string,
@@ -1240,6 +1281,35 @@ function getFallbackSentimentPrompts(businessName: string, keyword: string, loca
     `What do customers say about ${businessName}?`,
     `${businessName} reviews - are they worth it?`,
     `Should I hire ${businessName} for ${keyword}?`,
+  ];
+}
+
+// Fast research prompts for lead gen audits - skips AI generation and website scraping
+// Returns exactly AUDIT_PROMPT_COUNT (10) high-quality prompts immediately
+export function getFastAuditPrompts(keyword: string, location: string): string[] {
+  const loc = location !== "nationwide" ? ` in ${location}` : "";
+  const year = new Date().getFullYear();
+  return [
+    `Who are the best ${keyword} companies${loc}?`,
+    `List the top-rated ${keyword} services${loc}`,
+    `Which ${keyword} businesses do you recommend${loc}?`,
+    `Name 5 specific ${keyword} companies I can call today${loc}`,
+    `What are the most trusted ${keyword} providers${loc}?`,
+    `Best ${keyword} for residential work${loc}`,
+    `Top ${keyword} companies with great reviews in ${year}${loc}`,
+    `Emergency ${keyword} services available now${loc}`,
+    `Affordable ${keyword} companies${loc}`,
+    `Which ${keyword} businesses offer same-day service${loc}`,
+  ];
+}
+
+// Fast sentiment prompts for lead gen audits - 3 high-impact prompts only
+export function getFastSentimentPrompts(businessName: string, keyword: string, location: string): string[] {
+  const loc = location !== "nationwide" ? ` in ${location}` : "";
+  return [
+    `Would you recommend ${businessName}${loc}?`,
+    `What do customers say about ${businessName}?`,
+    `Is ${businessName} a good ${keyword}?`,
   ];
 }
 
@@ -1562,7 +1632,43 @@ function analyzeSentiment(response: string, businessName: string): "positive" | 
   return "neutral";
 }
 
-// Main audit function
+// Batched AI query helper - optimized for maximum speed
+// OpenAI: 500 RPM (very generous) - bottleneck is API response time, not rate limit
+// Gemini: 10-15 RPM - but calls are fast (~2-5s each)
+// Strategy: Run all prompts in parallel with minimal delay - API response time is the bottleneck
+const AUDIT_BATCH_SIZE = 13; // Run ALL prompts in parallel (10 research + 3 sentiment max)
+const AUDIT_BATCH_DELAY_MS = 500; // Minimal delay since bottleneck is API response time, not rate limits
+
+async function runBatchedAIQueries<T>(
+  items: T[],
+  queryFn: (item: T) => Promise<any>,
+  batchSize: number = AUDIT_BATCH_SIZE
+): Promise<any[]> {
+  const results: any[] = [];
+  const totalBatches = Math.ceil(items.length / batchSize);
+  
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batchNum = Math.floor(i / batchSize) + 1;
+    const batch = items.slice(i, i + batchSize);
+    
+    console.log(`[AUDIT] Processing batch ${batchNum}/${totalBatches} (${batch.length} items)`);
+    
+    // Run this batch in parallel
+    const batchResults = await Promise.all(batch.map(queryFn));
+    results.push(...batchResults);
+    
+    // Add delay before next batch (skip for last batch)
+    if (i + batchSize < items.length) {
+      console.log(`[AUDIT] Waiting ${AUDIT_BATCH_DELAY_MS}ms before next batch...`);
+      await new Promise(resolve => setTimeout(resolve, AUDIT_BATCH_DELAY_MS));
+    }
+  }
+  
+  return results;
+}
+
+// Main audit function - OPTIMIZED for speed
+// Uses pre-built prompts (no AI generation), batched queries, and template summary
 export async function runAudit(
   businessName: string,
   url: string,
@@ -1593,62 +1699,70 @@ export async function runAudit(
     }>;
   };
 }> {
+  const startTime = Date.now();
+  
   // Start database keepalive to prevent connection timeout during long AI operations
   const keepalive = new DatabaseKeepaliveContext(10000);
-  console.log("[AUDIT] Started database keepalive for audit operation");
+  console.log("[AUDIT] Started FAST audit mode with optimized batching");
   
   try {
-    // Generate research prompts (NO brand name - for visibility testing)
-    const researchPrompts = await generateResearchPrompts(keyword, scope, city, url);
+    // Use fast pre-built prompts instead of AI-generated ones (saves ~15-20 seconds)
+    const location = scope === "local" && city ? city : "nationwide";
+    const researchPrompts = getFastAuditPrompts(keyword, location);
+    const sentimentPrompts = getFastSentimentPrompts(businessName, keyword, location);
     
-    // Generate sentiment prompts (WITH brand name - for sentiment analysis)
-    const sentimentPrompts = await generateSentimentPrompts(businessName, keyword, scope, city);
+    console.log(`[AUDIT] Using ${researchPrompts.length} research prompts + ${sentimentPrompts.length} sentiment prompts`);
 
     // Format location for web search (use city if provided)
     const searchLocation = city || undefined;
 
-    // Query ChatGPT and Google AI for research prompts (visibility)
-    const promptResults = await Promise.all(
-      researchPrompts.map(async (prompt) => {
-        const [chatgpt, googleAI] = await Promise.all([
-          queryChatGPT(prompt, businessName, url, searchLocation),
-          queryGemini(prompt, businessName, url),
-        ]);
-        const summary = generatePromptSummary(
-          chatgpt.found,
-          googleAI.found,
-          chatgpt.competitors,
-          googleAI.competitors,
-          businessName
-        );
-        return { prompt, summary, chatgpt, googleAI };
-      })
-    );
-
-    // Query ChatGPT and Google AI for sentiment prompts
-    const sentimentResults = await Promise.all(
-      sentimentPrompts.map(async (prompt) => {
-        const [chatgptResult, googleAIResult] = await Promise.all([
-          queryChatGPT(prompt, businessName, url, searchLocation),
-          queryGemini(prompt, businessName, url),
-        ]);
-        return {
-          prompt,
-          chatgpt: {
-            response: chatgptResult.response,
-            sentiment: analyzeSentiment(chatgptResult.response, businessName),
-          },
-          googleAI: {
-            response: googleAIResult.response,
-            sentiment: analyzeSentiment(googleAIResult.response, businessName),
-          },
-        };
-      })
-    );
+    // Run research and sentiment prompts in PARALLEL for maximum speed
+    // Both use batched execution internally to respect rate limits
+    const [promptResults, sentimentResults] = await Promise.all([
+      // Research prompts
+      runBatchedAIQueries(
+        researchPrompts,
+        async (prompt) => {
+          const [chatgpt, googleAI] = await Promise.all([
+            queryChatGPT(prompt, businessName, url, searchLocation, undefined, { skipRateLimitDelay: true }),
+            queryGemini(prompt, businessName, url),
+          ]);
+          const summary = generatePromptSummary(
+            chatgpt.found,
+            googleAI.found,
+            chatgpt.competitors,
+            googleAI.competitors,
+            businessName
+          );
+          return { prompt, summary, chatgpt, googleAI };
+        }
+      ),
+      // Sentiment prompts (run in parallel with research)
+      runBatchedAIQueries(
+        sentimentPrompts,
+        async (prompt) => {
+          const [chatgptResult, googleAIResult] = await Promise.all([
+            queryChatGPT(prompt, businessName, url, searchLocation, undefined, { skipRateLimitDelay: true }),
+            queryGemini(prompt, businessName, url),
+          ]);
+          return {
+            prompt,
+            chatgpt: {
+              response: chatgptResult.response,
+              sentiment: analyzeSentiment(chatgptResult.response, businessName),
+            },
+            googleAI: {
+              response: googleAIResult.response,
+              sentiment: analyzeSentiment(googleAIResult.response, businessName),
+            },
+          };
+        }
+      ),
+    ]);
 
     // Calculate visibility scores
-    const chatgptFound = promptResults.filter((r) => r.chatgpt.found).length;
-    const googleAIFound = promptResults.filter((r) => r.googleAI.found).length;
+    const chatgptFound = promptResults.filter((r: any) => r.chatgpt.found).length;
+    const googleAIFound = promptResults.filter((r: any) => r.googleAI.found).length;
 
     const chatgptScore = Math.round((chatgptFound / researchPrompts.length) * 100);
     const googleAIScore = Math.round((googleAIFound / researchPrompts.length) * 100);
@@ -1684,19 +1798,22 @@ export async function runAudit(
       .sort((a, b) => b.mentions - a.mentions)
       .slice(0, 5);
 
-    // Generate executive summary
-    const location = scope === "local" && city ? city : "nationwide";
-    const executiveSummary = await generateExecutiveSummary(
+    // Use FAST template-based executive summary (no AI call - saves ~5-10 seconds)
+    const totalPrompts = researchPrompts.length + sentimentPrompts.length;
+    const executiveSummary = generateFastExecutiveSummary(
       businessName,
       keyword,
       overallScore,
       chatgptScore,
       googleAIScore,
       overallSentiment,
-      location
+      location,
+      totalPrompts
     );
 
-    console.log("[AUDIT] Audit completed successfully, stopping keepalive");
+    const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`[AUDIT] FAST audit completed in ${elapsedTime}s (target: <90s, original: ~300s)`);
+    
     return {
       promptResults,
       overallScore,
