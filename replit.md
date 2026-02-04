@@ -36,11 +36,13 @@ The tool integrates with:
 3.  **Perplexity**: Requires `PERPLEXITY_API_KEY`.
 
 AI queries are processed with maximum parallelization for speed:
--   **Research prompts**: 10 pre-built prompts targeting high-intent search queries
--   **Sentiment prompts**: 3 pre-built prompts for brand perception
--   **Parallel execution**: Research and sentiment run in parallel, with each prompt querying both ChatGPT and Gemini simultaneously
--   **Performance**: Optimized from ~300s to ~111s (63% improvement) through pre-built prompts, skip individual rate limits, and parallel batch execution
+-   **Research prompts**: AI-generated industry-specific prompts tailored to the business, scope (local/national), and location
+-   **Sentiment prompts**: AI-generated brand perception prompts using GPT-5.2
+-   **Executive Summary**: AI-generated personalized insights (not templated)
+-   **Parallel execution**: Research and sentiment prompts generated and run in parallel, with each prompt querying both ChatGPT and Gemini simultaneously
+-   **Performance**: Optimized through parallel batch execution and skipRateLimitDelay for batched contexts
 -   **Bottleneck**: ChatGPT web search API response time (10-30s per call) is the limiting factor
+-   **Real-time Progress**: SSE streaming shows actual progress stages (generating prompts, querying AI with counts, analyzing, creating summary, complete)
 
 ### Gemini Grounding Metadata
 -   **Purpose**: Captures what geographic search queries Gemini uses internally when answering prompts (e.g., "best plumber Woodbury MN"). This reveals how AI platforms interpret location-specific queries.
