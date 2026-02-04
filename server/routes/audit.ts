@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { storage } from "../storage";
-import { runAudit } from "../ai-services";
+import { runAudit, ProgressCallback } from "../ai-services";
 import { auditRequestSchema } from "@shared/schema";
 import crypto from "crypto";
 import { withDatabaseRetry } from "../db-utils";
@@ -12,6 +12,77 @@ function generateShareToken(): string {
   return crypto.randomBytes(16).toString("hex");
 }
 
+// SSE endpoint for real-time audit progress
+router.post("/stream", async (req, res) => {
+  try {
+    const validatedData = auditRequestSchema.parse(req.body);
+    const { businessName, url, keyword, scope, city } = validatedData;
+
+    // Set up SSE headers
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.flushHeaders();
+
+    // Helper to send SSE events
+    const sendEvent = (eventType: string, data: any) => {
+      res.write(`event: ${eventType}\n`);
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    // Progress callback for real-time updates
+    const onProgress: ProgressCallback = (stage, progress, total) => {
+      sendEvent("progress", { stage, progress, total });
+    };
+
+    // Run the audit with progress streaming
+    const results = await runAudit(businessName, url, keyword, scope, city, onProgress);
+
+    // Save to database
+    const audit = await withDatabaseRetry(() => 
+      storage.createAudit({
+        businessName,
+        url: url || null,
+        keyword,
+        scope,
+        city: city || null,
+        overallScore: results.overallScore,
+        chatgptScore: results.chatgptScore,
+        googleAIScore: results.googleAIScore,
+        fullResults: JSON.stringify(results),
+      })
+    );
+
+    // Send final result
+    sendEvent("complete", {
+      auditId: audit.id,
+      businessName,
+      url,
+      keyword,
+      scope,
+      city,
+      overallScore: results.overallScore,
+      chatgptScore: results.chatgptScore,
+      googleAIScore: results.googleAIScore,
+      executiveSummary: results.executiveSummary,
+      promptResults: results.promptResults,
+      sentimentAnalysis: results.sentimentAnalysis,
+      competitors: results.competitors,
+      timestamp: new Date().toISOString(),
+    });
+
+    res.end();
+  } catch (error) {
+    logError("AUDIT STREAM ERROR", error);
+    // Send error event
+    res.write(`event: error\n`);
+    res.write(`data: ${JSON.stringify({ error: "Failed to run audit" })}\n\n`);
+    res.end();
+  }
+});
+
+// Original endpoint for backwards compatibility (no streaming)
 router.post("/", async (req, res) => {
   try {
     const validatedData = auditRequestSchema.parse(req.body);

@@ -1,21 +1,64 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
-import { useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
 import {
-  Search,
-  CheckCircle,
   ArrowRight,
   MapPin,
   Layout,
   Building2,
   Globe,
+  Search,
+  CheckCircle,
 } from "lucide-react";
 import type { AuditRequest, AuditResults } from "@shared/schema";
 import logoFull from "@assets/RMG-Logo-Black-1920w_(1)_1765741951083.webp";
 import logoIcon from "@assets/images_1765741951084.png";
 
 type Step = "input" | "scanning";
+
+// Map backend stages to user-friendly messages
+function getStageMessage(stage: string, progress?: number, total?: number): { text: string; subtext: string; progress: number } {
+  switch (stage) {
+    case "generating_prompts":
+      return { 
+        text: "Generating Industry-Specific Prompts...", 
+        subtext: "Tailoring queries for your business and location",
+        progress: 10 
+      };
+    case "querying_ai":
+      const pct = total && progress ? Math.round((progress / total) * 70) + 15 : 30;
+      const completed = progress || 0;
+      const totalPrompts = total || 0;
+      return { 
+        text: `Querying ChatGPT & Google AI...`, 
+        subtext: `Processing ${completed}/${totalPrompts} prompts across AI platforms`,
+        progress: Math.min(pct, 85)
+      };
+    case "analyzing_results":
+      return { 
+        text: "Analyzing Results...", 
+        subtext: "Calculating visibility scores and sentiment",
+        progress: 90 
+      };
+    case "generating_summary":
+      return { 
+        text: "Creating Executive Summary...", 
+        subtext: "Generating personalized insights for your business",
+        progress: 95 
+      };
+    case "complete":
+      return { 
+        text: "Audit Complete!", 
+        subtext: "Redirecting to your report...",
+        progress: 100 
+      };
+    default:
+      return { 
+        text: "Processing...", 
+        subtext: "Please wait",
+        progress: 5 
+      };
+  }
+}
 
 export default function Home() {
   const [, setLocation] = useLocation();
@@ -32,28 +75,21 @@ export default function Home() {
   const [scanProgress, setScanProgress] = useState(0);
   const [scanStatus, setScanStatus] = useState("");
   const [activePrompt, setActivePrompt] = useState("");
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Scroll to top when step changes
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [step]);
 
-  // Audit mutation
-  const auditMutation = useMutation({
-    mutationFn: async (data: AuditRequest) => {
-      const response = await apiRequest("POST", "/api/audit", data);
-      return await response.json() as AuditResults;
-    },
-    onSuccess: (data) => {
-      if (data.auditId) {
-        setLocation(`/audit/${data.auditId}`);
+  // Cleanup abort controller on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
       }
-    },
-    onError: (error) => {
-      console.error("Audit failed:", error);
-      setStep("input");
-    },
-  });
+    };
+  }, []);
 
   const startScan = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,47 +97,109 @@ export default function Home() {
     if (scope === "local" && !city) return;
 
     setStep("scanning");
+    setScanProgress(5);
+    setScanStatus("Initializing Audit...");
+    setActivePrompt("Connecting to AI platforms...");
 
-    const locationString = scope === "local" ? `in ${city}` : "";
-    const locationContext = scope === "local" ? city : "National";
-
-    const stages = [
-      { progress: 5, text: "Initializing Rossman Media AI Engine...", subtext: "Connecting to Knowledge Graph..." },
-      { progress: 10, text: `Identifying Entity: ${businessName}`, subtext: "Verifying domain authority..." },
-      { progress: 20, text: "Scraping website content...", subtext: `Analyzing ${url}...` },
-      { progress: 30, text: "Generating 20 User Intent Prompts...", subtext: `Creating variations for "${keyword}"...` },
-      { progress: 45, text: "Querying ChatGPT...", subtext: `PROMPT: "Who is the best ${keyword} ${locationString}?"` },
-      { progress: 65, text: "Querying Google AI Overviews...", subtext: `PROMPT: "Top rated ${keyword} providers ${locationContext}..."` },
-      { progress: 80, text: "Analyzing Competitor Share of Voice...", subtext: "Cross-referencing ChatGPT & Google AI..." },
-      { progress: 90, text: "Compiling Prompt Log...", subtext: "Identifying missed opportunities..." },
-      { progress: 95, text: "Calculating visibility score...", subtext: "Finalizing audit..." },
-    ];
-
-    let currentStage = 0;
-    const interval = setInterval(() => {
-      if (currentStage >= stages.length) {
-        clearInterval(interval);
-        return;
-      }
-      setScanProgress(stages[currentStage].progress);
-      setScanStatus(stages[currentStage].text);
-      setActivePrompt(stages[currentStage].subtext);
-      currentStage++;
-    }, 3000);
+    // Create abort controller for cleanup
+    abortControllerRef.current = new AbortController();
 
     try {
-      await auditMutation.mutateAsync({
+      const requestBody: AuditRequest = {
         businessName,
         url,
         keyword,
         scope,
         city: scope === "local" ? city : undefined,
+      };
+
+      // Use fetch with SSE to stream progress
+      const response = await fetch("/api/audit/stream", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+        signal: abortControllerRef.current.signal,
       });
-    } finally {
-      clearInterval(interval);
-      setScanProgress(100);
-      setScanStatus("Audit Complete");
-      setActivePrompt("Redirecting to your report...");
+
+      if (!response.ok) {
+        throw new Error("Failed to start audit");
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error("No response body");
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let auditResult: AuditResults | null = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        
+        // Parse SSE events from buffer - split on double newlines (event separator)
+        const events = buffer.split("\n\n");
+        buffer = events.pop() || ""; // Keep incomplete event in buffer
+
+        for (const eventBlock of events) {
+          if (!eventBlock.trim()) continue;
+          
+          const lines = eventBlock.split("\n");
+          let eventType = "";
+          let eventData = "";
+          
+          for (const line of lines) {
+            if (line.startsWith("event: ")) {
+              eventType = line.slice(7).trim();
+            } else if (line.startsWith("data: ")) {
+              eventData = line.slice(6);
+            }
+          }
+          
+          if (eventType && eventData) {
+            try {
+              const data = JSON.parse(eventData);
+              
+              if (eventType === "progress") {
+                const { stage, progress, total } = data;
+                const msg = getStageMessage(stage, progress, total);
+                setScanProgress(msg.progress);
+                setScanStatus(msg.text);
+                setActivePrompt(msg.subtext);
+              } else if (eventType === "complete") {
+                auditResult = data as AuditResults;
+                setScanProgress(100);
+                setScanStatus("Audit Complete!");
+                setActivePrompt("Redirecting to your report...");
+              } else if (eventType === "error") {
+                throw new Error(data.error || "Audit failed");
+              }
+            } catch (parseError) {
+              console.error("Failed to parse SSE event:", eventType, eventData, parseError);
+            }
+          }
+        }
+      }
+
+      // Navigate to results after stream ends
+      if (auditResult?.auditId) {
+        setLocation(`/audit/${auditResult.auditId}`);
+      } else {
+        // Stream ended without complete event - show error
+        console.error("Audit stream ended without completion data");
+        setStep("input");
+      }
+    } catch (error) {
+      if ((error as Error).name === "AbortError") {
+        return; // User navigated away
+      }
+      console.error("Audit failed:", error);
+      setStep("input");
     }
   };
 
@@ -232,7 +330,6 @@ export default function Home() {
 
                   <button
                     type="submit"
-                    disabled={auditMutation.isPending}
                     className="w-full bg-[#5599f9] hover:bg-[#4a8ce8] text-white text-lg font-bold tracking-wide py-5 uppercase transition-all transform active:scale-[0.99] flex items-center justify-center gap-2 mt-4 rounded-lg shadow-lg shadow-blue-500/20 disabled:opacity-50"
                     data-testid="button-start-audit"
                   >

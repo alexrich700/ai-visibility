@@ -1639,13 +1639,18 @@ function analyzeSentiment(response: string, businessName: string): "positive" | 
 const AUDIT_BATCH_SIZE = 13; // Run ALL prompts in parallel (10 research + 3 sentiment max)
 const AUDIT_BATCH_DELAY_MS = 500; // Minimal delay since bottleneck is API response time, not rate limits
 
+// Progress callback type for SSE streaming
+export type ProgressCallback = (stage: string, progress?: number, total?: number) => void;
+
 async function runBatchedAIQueries<T>(
   items: T[],
   queryFn: (item: T) => Promise<any>,
-  batchSize: number = AUDIT_BATCH_SIZE
+  batchSize: number = AUDIT_BATCH_SIZE,
+  onProgress?: (completed: number, total: number) => void
 ): Promise<any[]> {
   const results: any[] = [];
   const totalBatches = Math.ceil(items.length / batchSize);
+  let completedCount = 0;
   
   for (let i = 0; i < items.length; i += batchSize) {
     const batchNum = Math.floor(i / batchSize) + 1;
@@ -1657,6 +1662,12 @@ async function runBatchedAIQueries<T>(
     const batchResults = await Promise.all(batch.map(queryFn));
     results.push(...batchResults);
     
+    // Update progress after each batch
+    completedCount += batch.length;
+    if (onProgress) {
+      onProgress(completedCount, items.length);
+    }
+    
     // Add delay before next batch (skip for last batch)
     if (i + batchSize < items.length) {
       console.log(`[AUDIT] Waiting ${AUDIT_BATCH_DELAY_MS}ms before next batch...`);
@@ -1667,14 +1678,15 @@ async function runBatchedAIQueries<T>(
   return results;
 }
 
-// Main audit function - OPTIMIZED for speed
-// Uses pre-built prompts (no AI generation), batched queries, and template summary
+// Main audit function - OPTIMIZED for speed with parallel execution
+// Uses AI-generated industry-specific prompts for accuracy
 export async function runAudit(
   businessName: string,
   url: string,
   keyword: string,
   scope: "local" | "national",
-  city?: string
+  city?: string,
+  onProgress?: ProgressCallback
 ): Promise<{
   promptResults: Array<{
     prompt: string;
@@ -1703,18 +1715,36 @@ export async function runAudit(
   
   // Start database keepalive to prevent connection timeout during long AI operations
   const keepalive = new DatabaseKeepaliveContext(10000);
-  console.log("[AUDIT] Started FAST audit mode with optimized batching");
+  console.log("[AUDIT] Started audit with parallel execution optimization");
   
   try {
-    // Use fast pre-built prompts instead of AI-generated ones (saves ~15-20 seconds)
+    // Stage 1: Generate AI-crafted prompts tailored to the specific industry, scope, and location
+    console.log("[AUDIT] Generating industry-specific prompts...");
+    onProgress?.("generating_prompts");
     const location = scope === "local" && city ? city : "nationwide";
-    const researchPrompts = getFastAuditPrompts(keyword, location);
-    const sentimentPrompts = getFastSentimentPrompts(businessName, keyword, location);
     
-    console.log(`[AUDIT] Using ${researchPrompts.length} research prompts + ${sentimentPrompts.length} sentiment prompts`);
+    // Generate both prompt types in parallel for speed
+    const [researchPrompts, sentimentPrompts] = await Promise.all([
+      generateResearchPrompts(keyword, scope, city, url),
+      generateSentimentPrompts(businessName, keyword, scope, city),
+    ]);
+    
+    const totalPrompts = researchPrompts.length + sentimentPrompts.length;
+    console.log(`[AUDIT] Generated ${researchPrompts.length} research prompts + ${sentimentPrompts.length} sentiment prompts`);
 
     // Format location for web search (use city if provided)
     const searchLocation = city || undefined;
+
+    // Stage 2: Query AI platforms (ChatGPT and Gemini)
+    onProgress?.("querying_ai", 0, totalPrompts);
+    
+    // Track combined progress from both parallel query streams
+    let researchCompleted = 0;
+    let sentimentCompleted = 0;
+    const updateQueryProgress = () => {
+      const completed = researchCompleted + sentimentCompleted;
+      onProgress?.("querying_ai", completed, totalPrompts);
+    };
 
     // Run research and sentiment prompts in PARALLEL for maximum speed
     // Both use batched execution internally to respect rate limits
@@ -1735,6 +1765,11 @@ export async function runAudit(
             businessName
           );
           return { prompt, summary, chatgpt, googleAI };
+        },
+        AUDIT_BATCH_SIZE,
+        (completed) => {
+          researchCompleted = completed;
+          updateQueryProgress();
         }
       ),
       // Sentiment prompts (run in parallel with research)
@@ -1756,10 +1791,18 @@ export async function runAudit(
               sentiment: analyzeSentiment(googleAIResult.response, businessName),
             },
           };
+        },
+        AUDIT_BATCH_SIZE,
+        (completed) => {
+          sentimentCompleted = completed;
+          updateQueryProgress();
         }
       ),
     ]);
 
+    // Stage 3: Analyze results
+    onProgress?.("analyzing_results");
+    
     // Calculate visibility scores
     const chatgptFound = promptResults.filter((r: any) => r.chatgpt.found).length;
     const googleAIFound = promptResults.filter((r: any) => r.googleAI.found).length;
@@ -1798,21 +1841,24 @@ export async function runAudit(
       .sort((a, b) => b.mentions - a.mentions)
       .slice(0, 5);
 
-    // Use FAST template-based executive summary (no AI call - saves ~5-10 seconds)
-    const totalPrompts = researchPrompts.length + sentimentPrompts.length;
-    const executiveSummary = generateFastExecutiveSummary(
+    // Stage 4: Generate AI-crafted executive summary with personalized insights
+    onProgress?.("generating_summary");
+    console.log("[AUDIT] Generating executive summary...");
+    const executiveSummary = await generateExecutiveSummary(
       businessName,
       keyword,
       overallScore,
       chatgptScore,
       googleAIScore,
       overallSentiment,
-      location,
-      totalPrompts
+      location
     );
 
     const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`[AUDIT] FAST audit completed in ${elapsedTime}s (target: <90s, original: ~300s)`);
+    console.log(`[AUDIT] Audit completed in ${elapsedTime}s`);
+    
+    // Stage 5: Complete
+    onProgress?.("complete");
     
     return {
       promptResults,
