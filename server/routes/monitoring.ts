@@ -23,6 +23,7 @@ import {
   requireAdminOrClientAuth
 } from "../middleware/auth";
 import { monitoringService } from "../services/monitoring/MonitoringService";
+import { saveMonitoringClientConfig } from "../services/monitoring/client-config";
 import { createLogger } from "../utils/logger";
 
 
@@ -1090,6 +1091,27 @@ export function registerMonitoringRoutes(app: Express): void {
   // ============================================
   // BACKGROUND SCAN JOB API (Queue-based, browser-independent)
   // ============================================
+
+  // Create/update client configuration and persist groups/prompts without running a scan.
+  // This is used by setup flow before queueing browser-independent scan jobs.
+  app.post("/api/monitoring/client-config", async (req, res) => {
+    try {
+      const { client: clientData, groups, prompts } = req.body;
+      const validatedClient = monitoringClientRequestSchema.parse(clientData);
+
+      const result = await saveMonitoringClientConfig(
+        storage,
+        validatedClient,
+        Array.isArray(groups) ? groups : [],
+        Array.isArray(prompts) ? prompts : [],
+      );
+
+      res.json(result);
+    } catch (error) {
+      logError("MONITORING CLIENT CONFIG ERROR", error);
+      res.status(400).json(getSafeErrorResponse("Failed to save monitoring client configuration"));
+    }
+  });
 
   // Queue a new scan job - returns immediately, job runs in background (admin only)
   app.post("/api/monitoring/scan-job/:clientId", requireAdminAuth, async (req, res) => {
