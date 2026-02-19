@@ -41,85 +41,20 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import logoIcon from "@assets/images_1765741951084.png";
-import type { MonitoringClient, MonitoringGroup, CheckSession, CheckResult } from "@shared/schema";
-import {
-  buildCompetitorTrendChartData,
-  buildGroupBarData,
-  buildGroupTrendChartData,
-  buildSessionChartData,
-  computeAverageRank,
-  computeCompetitorVisibility,
-  computeFirstPlaceCount,
-  computeShareOfVoice,
-  computeTopCitations,
-  computeVisibilityMetrics,
-  filterResultsByGroup,
-  selectAggregatedScores,
-  selectBrandSentimentGroupIds,
-  selectCityScopedDashboardData,
-  type Citation,
-  type CompetitorTrendData,
-  type CompetitorVisibility,
-  type GroupResults,
-  type GroupTrendData,
-  type ShareOfVoiceItem,
-} from "@/features/monitor-dashboard/selectors";
-
-interface SentimentStatement {
-  text: string;
-  platform: 'chatgpt' | 'google';
-  promptText?: string;
-}
-
-interface SentimentStatements {
-  positive: SentimentStatement[];
-  negative: SentimentStatement[];
-}
-
-interface SentimentNarrative {
-  text: string;
-  strength: number; // 1-5 scale
-}
-
-interface SentimentNarratives {
-  strengths: SentimentNarrative[];
-  improvements: SentimentNarrative[];
-}
-
-interface Analytics {
-  shareOfVoice: ShareOfVoiceItem[];
-  avgChatgptRank: number | null;
-  avgGoogleAIRank: number | null;
-  firstPlaceCount: number;
-  sentimentBreakdown: { positive: number; neutral: number; negative: number };
-  topCitations: Citation[];
-  sentimentScore: number | null;
-  competitorVisibility: CompetitorVisibility[];
-  sentimentStatements: SentimentStatements;
-  sentimentNarratives?: SentimentNarratives;
-}
-
-interface TrendDataPoint {
-  date: string;
-  overallScore: number;
-  chatgptScore: number;
-  googleAIScore: number;
-  foundCount: number;
-  citedCount: number;
-  shareOfVoice: ShareOfVoiceItem[] | null;
-  avgRank: number | null;
-  sentiment: { positive: number; neutral: number; negative: number } | null;
-}
-
-interface DashboardData {
-  client: MonitoringClient;
-  groups: MonitoringGroup[];
-  sessions: CheckSession[];
-  latestResults: CheckResult[];
-  resultsByGroup: GroupResults[];
-  analytics: Analytics | null;
-  trendData: TrendDataPoint[];
-}
+import type { CheckResult } from "@shared/schema";
+import type {
+  CitationCount as Citation,
+  CompetitorTrendData,
+  CompetitorTrendsResponse,
+  CompetitorVisibility,
+  GroupTrendData,
+  GroupTrendsResponse,
+  MonitoringDashboardData as DashboardData,
+  MonitoringTrendDataPoint as TrendDataPoint,
+  ShareOfVoiceItem,
+  SentimentNarrative,
+  SentimentStatements,
+} from "@shared/monitoring-dto";
 
 const COLORS = {
   primary: "#5599f9",
@@ -469,14 +404,14 @@ export default function MonitorDashboard() {
   });
 
   // Fetch group trends when "groups" view is selected
-  const { data: groupTrendsData } = useQuery<{ groupTrends: GroupTrendData[] }>({
+  const { data: groupTrendsData } = useQuery<GroupTrendsResponse>({
     queryKey: ["/api/monitoring/trends/groups", clientId],
     queryFn: getAdminQueryFn({ on401: "throw" }),
     enabled: !!clientId && trendView === "groups",
   });
 
   // Fetch competitor trends when "competitors" view is selected
-  const { data: competitorTrendsData } = useQuery<{ competitorTrends: CompetitorTrendData[] }>({
+  const { data: competitorTrendsData } = useQuery<CompetitorTrendsResponse>({
     queryKey: ["/api/monitoring/trends/competitors", clientId],
     queryFn: getAdminQueryFn({ on401: "throw" }),
     enabled: !!clientId && trendView === "competitors",
