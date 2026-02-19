@@ -55,6 +55,22 @@ import type {
   SentimentNarrative,
   SentimentStatements,
 } from "@shared/monitoring-dto";
+import {
+  buildCompetitorTrendChartData,
+  buildGroupBarData,
+  buildGroupTrendChartData,
+  buildSessionChartData,
+  computeAverageRank,
+  computeCompetitorVisibility,
+  computeFirstPlaceCount,
+  computeShareOfVoice,
+  computeTopCitations,
+  computeVisibilityMetrics,
+  filterResultsByGroup,
+  selectAggregatedScores,
+  selectBrandSentimentGroupIds,
+  selectCityScopedDashboardData,
+} from "@/features/monitor-dashboard/selectors";
 
 const COLORS = {
   primary: "#5599f9",
