@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { queryClient } from "./queryClient";
+import { hasDataClassPolicy, queryClient } from "./queryClient";
 
 test("near-real-time keys poll in background", () => {
   const defaults = queryClient.getQueryDefaults(["/api/monitoring/dashboard", 123]);
@@ -15,6 +15,11 @@ test("tier defaults are matched by key prefix, regardless of trailing ID", () =>
   const secondClientDefaults = queryClient.getQueryDefaults(["/api/monitoring/dashboard", 987]);
 
   assert.deepEqual(firstClientDefaults, secondClientDefaults);
+});
+
+test("hasDataClassPolicy identifies mapped and unmapped api keys", () => {
+  assert.equal(hasDataClassPolicy(["/api/monitoring/dashboard", 123]), true);
+  assert.equal(hasDataClassPolicy(["/api/something/random", 123]), false);
 });
 
 test("semi-static reporting keys use moderate staleness without interval polling", () => {

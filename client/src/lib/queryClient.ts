@@ -52,75 +52,7 @@ export async function apiRequest(
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";
-export const getQueryFn: <T>(options: {
-  on401: UnauthorizedBehavior;
-}) => QueryFunction<T> =
-  ({ on401: unauthorizedBehavior }) =>
-  async ({ queryKey }) => {
-    const res = await fetch(queryKey.join("/") as string, {
-      credentials: "include",
-    });
 
-    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
-      return null;
-    }
-
-    await throwIfResNotOk(res);
-    return await res.json();
-  };
-
-export const getAdminQueryFn: <T>(options: {
-  on401: UnauthorizedBehavior;
-}) => QueryFunction<T> =
-  ({ on401: unauthorizedBehavior }) =>
-  async ({ queryKey }) => {
-    const token = getAdminToken();
-    const headers: Record<string, string> = {};
-    
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-    
-    const res = await fetch(queryKey.join("/") as string, {
-      credentials: "include",
-      headers,
-    });
-
-    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
-      return null;
-    }
-
-    await throwIfResNotOk(res);
-    return await res.json();
-  };
-
-export const getSessionAwareQueryFn: <T>(options: {
-  on401: UnauthorizedBehavior;
-}) => QueryFunction<T> =
-  ({ on401: unauthorizedBehavior }) =>
-  async ({ queryKey }) => {
-    const token = getAdminToken();
-    const headers: Record<string, string> = {};
-
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-
-    const res = await fetch(queryKey.join("/") as string, {
-      credentials: "include",
-      headers,
-    });
-
-    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
-      return null;
-    }
-
-    await throwIfResNotOk(res);
-    return await res.json();
-  };
-
-// Cache policy tiers are grouped by data volatility to avoid one-size-fits-all defaults.
-// This keeps business metrics fresh while still caching stable data efficiently.
 const QUERY_CACHE_TIERS = {
   nearRealTime: {
     staleTime: 30 * 1000,
@@ -140,6 +72,7 @@ const QUERY_CACHE_TIERS = {
 } as const;
 
 // Query key prefixes mapped to cache tiers.
+// IMPORTANT: add new /api query keys here so they do not silently fall back to the baseline policy.
 const QUERY_POLICY_BY_KEY_PREFIX = {
   nearRealTime: [
     ["/api/monitoring/dashboard"],
@@ -156,17 +89,86 @@ const QUERY_POLICY_BY_KEY_PREFIX = {
   reference: [["/api/monitoring/settings"]],
 } as const;
 
+const REGISTERED_QUERY_PREFIXES: Set<string> = new Set(
+  Object.values(QUERY_POLICY_BY_KEY_PREFIX)
+    .flat()
+    .map(([prefix]) => prefix)
+);
+
+const warnedUnmappedQueryPrefixes = new Set<string>();
+
+export function hasDataClassPolicy(queryKey: readonly unknown[]): boolean {
+  return typeof queryKey[0] === "string" && REGISTERED_QUERY_PREFIXES.has(queryKey[0]);
+}
+
+function maybeWarnUnmappedPolicy(queryKey: readonly unknown[]) {
+  const prefix = queryKey[0];
+  if (!import.meta.env.DEV || typeof prefix !== "string") {
+    return;
+  }
+
+  if (!prefix.startsWith("/api/") || hasDataClassPolicy(queryKey) || warnedUnmappedQueryPrefixes.has(prefix)) {
+    return;
+  }
+
+  warnedUnmappedQueryPrefixes.add(prefix);
+  console.warn(
+    `[React Query] Unmapped query key '${prefix}' is using baseline defaults. Consider adding it to QUERY_POLICY_BY_KEY_PREFIX.`
+  );
+}
+
+export const getQueryFn: <T>(options: {
+  on401: UnauthorizedBehavior;
+}) => QueryFunction<T> =
+  ({ on401: unauthorizedBehavior }) =>
+  async ({ queryKey }) => {
+    maybeWarnUnmappedPolicy(queryKey);
+
+    const res = await fetch(queryKey.join("/") as string, {
+      credentials: "include",
+    });
+
+    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
+      return null;
+    }
+
+    await throwIfResNotOk(res);
+    return await res.json();
+  };
+
+export const getAdminQueryFn: <T>(options: {
+  on401: UnauthorizedBehavior;
+}) => QueryFunction<T> =
+  ({ on401: unauthorizedBehavior }) =>
+  async ({ queryKey }) => {
+    maybeWarnUnmappedPolicy(queryKey);
+
+    const token = getAdminToken();
+    const headers: Record<string, string> = {};
+    
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    
+    const res = await fetch(queryKey.join("/") as string, {
+      credentials: "include",
+      headers,
+    });
+
+    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
+      return null;
+    }
+
+    await throwIfResNotOk(res);
+    return await res.json();
+  };
+
 function applyDataClassQueryPolicies(client: QueryClient) {
-  for (const key of QUERY_POLICY_BY_KEY_PREFIX.nearRealTime) {
-    client.setQueryDefaults(key, QUERY_CACHE_TIERS.nearRealTime);
-  }
-
-  for (const key of QUERY_POLICY_BY_KEY_PREFIX.semiStatic) {
-    client.setQueryDefaults(key, QUERY_CACHE_TIERS.semiStatic);
-  }
-
-  for (const key of QUERY_POLICY_BY_KEY_PREFIX.reference) {
-    client.setQueryDefaults(key, QUERY_CACHE_TIERS.reference);
+  for (const [tierName, keys] of Object.entries(QUERY_POLICY_BY_KEY_PREFIX)) {
+    const tierConfig = QUERY_CACHE_TIERS[tierName as keyof typeof QUERY_CACHE_TIERS];
+    for (const key of keys) {
+      client.setQueryDefaults(key, tierConfig);
+    }
   }
 }
 
