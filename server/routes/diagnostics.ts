@@ -28,12 +28,7 @@ export function registerDiagnosticsRoutes(app: Express): void {
   });
 
   // Fallback logs from database (admin only) - persistent history of prompt generation failures
-  app.get("/api/diagnostics/fallback-logs", async (req, res) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || authHeader !== `Bearer ${process.env.ADMIN_PASSWORD}`) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-    
+  app.get("/api/diagnostics/fallback-logs", requireAdminAuth, async (req, res) => {
     try {
       const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
       const logs = await db.select()

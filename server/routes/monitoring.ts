@@ -23,7 +23,11 @@ import {
   requireAdminOrClientAuth
 } from "../middleware/auth";
 import { monitoringService } from "../services/monitoring/MonitoringService";
+import { saveMonitoringClientConfig } from "../services/monitoring/client-config";
+import { createLogger } from "../utils/logger";
 
+
+const monitoringLogger = createLogger("monitoring-routes");
 
 export function registerMonitoringRoutes(app: Express): void {
   
@@ -130,7 +134,7 @@ export function registerMonitoringRoutes(app: Express): void {
       
       if (existingClient) {
         // Reuse existing client and update with any new settings
-        console.log(`[CREATE-AND-SCAN] Reusing existing client ${existingClient.id} for "${validatedClient.businessName}"`);
+        monitoringLogger.info(`Reusing existing client for create-and-scan`, { clientId: existingClient.id, businessName: validatedClient.businessName });
         const updatedClient = await storage.updateMonitoringClient(existingClient.id, {
           industry: validatedClient.industry,
           scope: validatedClient.scope,
@@ -158,7 +162,7 @@ export function registerMonitoringRoutes(app: Express): void {
             });
           }
         } else {
-          console.log(`[CREATE-AND-SCAN] Existing client ${client.id} is missing groups/prompts, creating new configuration`);
+          monitoringLogger.info(`Existing client missing groups/prompts, creating configuration`, { clientId: client.id, requestId: "create-and-scan" });
         }
       } else {
         // Create new monitoring client
@@ -347,7 +351,7 @@ export function registerMonitoringRoutes(app: Express): void {
     
     req.on("close", async () => {
       isClientConnected = false;
-      console.log("Client disconnected from scan stream - scan will continue in background");
+      monitoringLogger.info("Client disconnected from scan stream - scan will continue in background", { requestId: "scan-stream" });
       // Note: We do NOT mark the session as paused or cancel the scan
       // The scan continues running on the server even if the client navigates away
       // The user can check the monitoring dashboard to see the completed results
@@ -385,7 +389,7 @@ export function registerMonitoringRoutes(app: Express): void {
       if (existingClient) {
         // Reuse existing client - update it with any new settings
         isReusingExistingClient = true;
-        console.log(`[SCAN] Reusing existing client ${existingClient.id} for "${validatedClient.businessName}"`);
+        monitoringLogger.info(`Reusing existing client for scan`, { clientId: existingClient.id, businessName: validatedClient.businessName });
         
         // Update the existing client with potentially updated settings
         const updatedClient = await storage.updateMonitoringClient(existingClient.id, {
@@ -438,7 +442,7 @@ export function registerMonitoringRoutes(app: Express): void {
         
         if (existingGroups.length === 0 || existingPrompts.length === 0 || !hasBrandSentimentGroup || !hasServiceGroups) {
           // Existing client is incomplete - treat as new client and create groups/prompts
-          console.log(`[SCAN] Existing client ${client.id} is missing groups/prompts, creating new configuration`);
+          monitoringLogger.info("Existing scan client missing groups/prompts, creating configuration", { clientId: client.id, requestId: "scan" });
           isReusingExistingClient = false;
           sendEvent("status", { message: "Updating client configuration...", progress: 9 });
         } else {
@@ -463,7 +467,7 @@ export function registerMonitoringRoutes(app: Express): void {
             }
           }
           
-          console.log(`[SCAN] Reusing ${existingGroups.length} groups and ${existingPrompts.length} prompts for client ${client.id}`);
+          monitoringLogger.info("Reusing existing groups/prompts", { clientId: client.id, groups: existingGroups.length, prompts: existingPrompts.length });
           sendEvent("status", { message: "Using existing configuration...", progress: 10 });
         }
       }
@@ -798,7 +802,7 @@ export function registerMonitoringRoutes(app: Express): void {
               googleAIGroundingMetadata: result.googleAI.groundingMetadata,
             });
           } catch (storeError) {
-            console.error(`[STORAGE ERROR] Scan: Failed to store result for prompt ${originalIndex + 1}:`, storeError);
+            monitoringLogger.error(`Scan failed to store result for prompt ${originalIndex + 1}`, { error: storeError instanceof Error ? storeError.message : String(storeError) });
             // Continue processing - storage failure shouldn't crash the scan
           }
           
@@ -861,9 +865,9 @@ export function registerMonitoringRoutes(app: Express): void {
               chatgptScore: runningChatgptScore,
               googleAIScore: runningGoogleAIScore,
             });
-            console.log(`[Checkpoint] Session ${session.id}: Saved checkpoint at prompt ${completedCount}/${totalPrompts} (score: ${runningOverallScore}%)`);
+            monitoringLogger.debug("Saved scan checkpoint", { sessionId: session.id, completedCount, totalPrompts, score: runningOverallScore });
           } catch (checkpointError) {
-            console.error(`[Checkpoint] Failed to save checkpoint for session ${session.id}:`, checkpointError);
+            monitoringLogger.error("Failed to save scan checkpoint", { sessionId: session.id, error: checkpointError instanceof Error ? checkpointError.message : String(checkpointError) });
             // Continue processing - checkpoint failure shouldn't stop the scan
           }
         }
@@ -1022,7 +1026,7 @@ export function registerMonitoringRoutes(app: Express): void {
             errorMessage: internalErrorMessage,
           } as any);
         } catch (updateErr) {
-          console.error("Failed to mark session as failed:", updateErr);
+          monitoringLogger.error("Failed to mark session as failed", { error: updateErr instanceof Error ? updateErr.message : String(updateErr) });
         }
       }
       
@@ -1088,6 +1092,27 @@ export function registerMonitoringRoutes(app: Express): void {
   // BACKGROUND SCAN JOB API (Queue-based, browser-independent)
   // ============================================
 
+  // Create/update client configuration and persist groups/prompts without running a scan.
+  // This is used by setup flow before queueing browser-independent scan jobs.
+  app.post("/api/monitoring/client-config", requireAdminAuth, async (req, res) => {
+    try {
+      const { client: clientData, groups, prompts } = req.body;
+      const validatedClient = monitoringClientRequestSchema.parse(clientData);
+
+      const result = await saveMonitoringClientConfig(
+        storage,
+        validatedClient,
+        Array.isArray(groups) ? groups : [],
+        Array.isArray(prompts) ? prompts : [],
+      );
+
+      res.json(result);
+    } catch (error) {
+      logError("MONITORING CLIENT CONFIG ERROR", error);
+      res.status(400).json(getSafeErrorResponse("Failed to save monitoring client configuration"));
+    }
+  });
+
   // Queue a new scan job - returns immediately, job runs in background (admin only)
   app.post("/api/monitoring/scan-job/:clientId", requireAdminAuth, async (req, res) => {
     try {
@@ -1135,7 +1160,7 @@ export function registerMonitoringRoutes(app: Express): void {
         totalPrompts: prompts.length,
       });
       
-      console.log(`[ScanJob] Created job ${job.id} for client ${clientId} with ${prompts.length} prompts`);
+      monitoringLogger.info("Created scan job", { jobId: job.id, clientId, prompts: prompts.length });
       
       res.json({ 
         jobId: job.id, 
@@ -1272,7 +1297,7 @@ export function registerMonitoringRoutes(app: Express): void {
     
     req.on("close", async () => {
       isClientConnected = false;
-      console.log("Client disconnected from rescan stream - scan will continue in background");
+      monitoringLogger.info("Client disconnected from rescan stream - scan will continue in background", { requestId: "rescan-stream" });
       // Note: We do NOT mark the session as paused or cancel the scan
       // The scan continues running on the server even if the client navigates away
     });
@@ -1563,7 +1588,7 @@ export function registerMonitoringRoutes(app: Express): void {
               googleAIGroundingMetadata: result.googleAI.groundingMetadata,
             });
           } catch (storeError) {
-            console.error(`[STORAGE ERROR] Failed to store result for prompt ${originalIndex + 1}:`, storeError);
+            monitoringLogger.error(`Rescan failed to store result for prompt ${originalIndex + 1}`, { error: storeError instanceof Error ? storeError.message : String(storeError) });
             // Continue processing - storage failure for one result shouldn't crash the scan
           }
           
@@ -1625,9 +1650,9 @@ export function registerMonitoringRoutes(app: Express): void {
               chatgptScore: runningChatgptScore,
               googleAIScore: runningGoogleAIScore,
             });
-            console.log(`[Checkpoint] Rescan session ${session.id}: Saved checkpoint at prompt ${completedCount}/${totalPrompts} (score: ${runningOverallScore}%)`);
+            monitoringLogger.debug("Saved rescan checkpoint", { sessionId: session.id, completedCount, totalPrompts, score: runningOverallScore });
           } catch (checkpointError) {
-            console.error(`[Checkpoint] Failed to save rescan checkpoint for session ${session.id}:`, checkpointError);
+            monitoringLogger.error("Failed to save rescan checkpoint", { sessionId: session.id, error: checkpointError instanceof Error ? checkpointError.message : String(checkpointError) });
           }
         }
       }
@@ -1778,7 +1803,7 @@ export function registerMonitoringRoutes(app: Express): void {
             errorMessage: internalErrorMessage,
           } as any);
         } catch (updateErr) {
-          console.error("Failed to mark rescan session as failed:", updateErr);
+          monitoringLogger.error("Failed to mark rescan session as failed", { error: updateErr instanceof Error ? updateErr.message : String(updateErr) });
         }
       }
       
@@ -1821,7 +1846,7 @@ export function registerMonitoringRoutes(app: Express): void {
     
     req.on("close", async () => {
       isClientConnected = false;
-      console.log("Client disconnected from resume stream - scan will continue in background");
+      monitoringLogger.info("Client disconnected from resume stream - scan will continue in background", { requestId: "resume-stream" });
       // Note: We do NOT mark the session as paused or cancel the scan
       // The scan continues running on the server even if the client navigates away
     });
@@ -2076,7 +2101,7 @@ export function registerMonitoringRoutes(app: Express): void {
               googleAIGroundingMetadata: result.googleAI.groundingMetadata,
             });
           } catch (storeError) {
-            console.error(`[STORAGE ERROR] Resume: Failed to store result for prompt ${originalIndex + 1}:`, storeError);
+            monitoringLogger.error(`Resume failed to store result for prompt ${originalIndex + 1}`, { error: storeError instanceof Error ? storeError.message : String(storeError) });
             // Continue processing - storage failure shouldn't crash the scan
           }
           
@@ -2109,9 +2134,9 @@ export function registerMonitoringRoutes(app: Express): void {
               chatgptScore: runningChatgptScore,
               googleAIScore: runningGoogleAIScore,
             });
-            console.log(`[Checkpoint] Resume session ${sessionId}: Saved checkpoint at prompt ${currentCompleted}/${totalPromptsInSession} (score: ${runningOverallScore}%)`);
+            monitoringLogger.debug("Saved resume checkpoint", { sessionId, completedCount: currentCompleted, totalPrompts: totalPromptsInSession, score: runningOverallScore });
           } catch (checkpointError) {
-            console.error(`[Checkpoint] Failed to save resume checkpoint for session ${sessionId}:`, checkpointError);
+            monitoringLogger.error("Failed to save resume checkpoint", { sessionId, error: checkpointError instanceof Error ? checkpointError.message : String(checkpointError) });
           }
           
           sendEvent("prompt_complete", {
@@ -2172,7 +2197,7 @@ export function registerMonitoringRoutes(app: Express): void {
           errorMessage: internalErrorMessage,
         } as any);
       } catch (updateErr) {
-        console.error("Failed to mark resume session as failed:", updateErr);
+        monitoringLogger.error("Failed to mark resume session as failed", { error: updateErr instanceof Error ? updateErr.message : String(updateErr) });
       }
       
       // Send sanitized error to client - no stack traces or internal details
@@ -2248,7 +2273,7 @@ export function registerMonitoringRoutes(app: Express): void {
           try {
             sentimentNarratives = await synthesizeSentimentNarratives(rawStatements, client.businessName);
           } catch (narrativeError) {
-            console.error('[Dashboard] Error synthesizing narratives:', narrativeError);
+            monitoringLogger.error('Error synthesizing narratives for dashboard', { error: narrativeError instanceof Error ? narrativeError.message : String(narrativeError) });
           }
         }
       }
