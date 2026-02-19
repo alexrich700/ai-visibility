@@ -19,6 +19,7 @@ import {
   type Citation,
 } from "./scan-analytics";
 import type { ScanJob, MonitoringClient, MonitoringGroup, MonitoringPrompt } from "@shared/schema";
+import { buildPromptLookupData, countServiceResultStatuses } from "./scan-job-processor-lookup";
 
 const JOB_POLL_INTERVAL_MS = 5000;
 const CONCURRENT_PROMPTS = 4;
@@ -139,10 +140,17 @@ async function processScanJob(job: ScanJob, alreadyClaimed: boolean = false): Pr
       progressMessage: 'Setting up scan session...',
     });
 
-    const brandSentimentGroupIds = new Set(
-      activeGroups.filter(g => (g as any).promptCategory === 'brand_sentiment').map(g => g.id)
+    const {
+      groupById,
+      brandSentimentGroupIds,
+      promptCountByGroupId,
+      servicePromptCount,
+    } = buildPromptLookupData(activeGroups, prompts);
+
+    log(
+      `[ScanJobProcessor] Prepared lookup maps for job ${job.id}: ${activeGroups.length} active groups, ${prompts.length} active prompts`,
+      "job-processor"
     );
-    const servicePromptCount = prompts.filter(p => !brandSentimentGroupIds.has(p.groupId)).length;
 
     const location = job.targetCity || client.city || undefined;
 
@@ -241,7 +249,7 @@ async function processScanJob(job: ScanJob, alreadyClaimed: boolean = false): Pr
     }> = {};
 
     for (const group of activeGroups) {
-      const groupPromptCount = prompts.filter(p => p.groupId === group.id).length;
+      const groupPromptCount = promptCountByGroupId.get(group.id) || 0;
       groupMetrics[group.name] = {
         groupId: group.id,
         totalPrompts: groupPromptCount,
@@ -254,7 +262,7 @@ async function processScanJob(job: ScanJob, alreadyClaimed: boolean = false): Pr
     }
 
     const promptsWithGroups = prompts.map(prompt => {
-      const group = activeGroups.find(g => g.id === prompt.groupId);
+      const group = groupById.get(prompt.groupId);
       return { prompt, group };
     });
 
@@ -431,12 +439,13 @@ async function processScanJob(job: ScanJob, alreadyClaimed: boolean = false): Pr
     
     // Determine which results are brand sentiment vs service prompts
     const serviceResults = allDbResults.filter(r => !brandSentimentGroupIds.has(r.groupId));
+    const serviceResultCountByStatus = countServiceResultStatuses(serviceResults);
     const actualServicePromptCount = serviceResults.length;
     
     // Compute scores from DB results
-    const dbChatgptFoundCount = serviceResults.filter(r => r.chatgptFound).length;
-    const dbGoogleAIFoundCount = serviceResults.filter(r => r.googleAIFound).length;
-    const dbCitedCount = serviceResults.filter(r => r.chatgptCited || r.googleAICited).length;
+    const dbChatgptFoundCount = serviceResultCountByStatus.chatgptFound;
+    const dbGoogleAIFoundCount = serviceResultCountByStatus.googleAIFound;
+    const dbCitedCount = serviceResultCountByStatus.cited;
     
     const totalExposures = actualServicePromptCount * 2;
     const totalFound = dbChatgptFoundCount + dbGoogleAIFoundCount;
@@ -484,7 +493,7 @@ async function processScanJob(job: ScanJob, alreadyClaimed: boolean = false): Pr
     const competitorCounts = aggregateCompetitorMentions(
       serviceResults.map(r => ({ competitors: r.competitors }))
     );
-    const dbFoundCount = serviceResults.filter(r => r.chatgptFound || r.googleAIFound).length;
+    const dbFoundCount = serviceResultCountByStatus.found;
     const shareOfVoice = computeShareOfVoice(client.businessName, dbFoundCount, competitorCounts, actualServicePromptCount);
     const sentimentBreakdown = aggregateSentiment([...dbChatgptSentiments, ...dbGoogleAISentiments]);
     const avgChatgptRank = calculateAverageRank(dbChatgptRanks);
@@ -535,7 +544,7 @@ async function processScanJob(job: ScanJob, alreadyClaimed: boolean = false): Pr
       // Skip brand sentiment groups - they shouldn't be included in visibility metrics
       if (brandSentimentGroupIds.has(result.groupId)) continue;
       
-      const group = activeGroups.find(g => g.id === result.groupId);
+      const group = groupById.get(result.groupId);
       if (!group) continue;
       
       if (!dbGroupMetrics[group.name]) {

@@ -1,4 +1,4 @@
-import { pgTable, text, varchar, integer, jsonb, timestamp, boolean, serial, real } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, jsonb, timestamp, boolean, serial, real, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -213,6 +213,8 @@ export const monitoringClients = pgTable("monitoring_clients", {
   id: serial("id").primaryKey(),
   businessName: text("business_name").notNull(),
   domain: text("domain").notNull(),
+  normalizedBusinessName: text("normalized_business_name").notNull().default(''),
+  normalizedDomain: text("normalized_domain").notNull().default(''),
   industry: text("industry").notNull(),
   scope: text("scope").notNull(), // "local" or "national"
   city: text("city"), // Legacy single city (for backward compatibility)
@@ -227,10 +229,14 @@ export const monitoringClients = pgTable("monitoring_clients", {
   clientAccessToken: text("client_access_token").unique(), // 32-char hex token for client-only dashboard access
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  normalizedLookupIdx: index("monitoring_clients_normalized_lookup_idx").on(table.normalizedBusinessName, table.normalizedDomain),
+}));
 
 export const insertMonitoringClientSchema = createInsertSchema(monitoringClients).omit({
   id: true,
+  normalizedBusinessName: true,
+  normalizedDomain: true,
   createdAt: true,
   updatedAt: true,
   lastCheckAt: true,

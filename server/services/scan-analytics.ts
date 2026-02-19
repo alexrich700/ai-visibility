@@ -1,3 +1,5 @@
+import type { CompetitorVisibility, SentimentStatements } from "@shared/monitoring-dto";
+
 /**
  * Scan Analytics Service
  * 
@@ -473,28 +475,6 @@ export function aggregateSentiment(
   return breakdown;
 }
 
-export interface SentimentStatement {
-  text: string;
-  platform: 'chatgpt' | 'google';
-  promptText?: string;
-}
-
-export interface SentimentStatements {
-  positive: SentimentStatement[];
-  negative: SentimentStatement[];
-}
-
-// New improved sentiment narrative interface (like SEMRush)
-export interface SentimentNarrative {
-  text: string;
-  strength: number; // 1-5 scale for visual bar
-}
-
-export interface SentimentNarratives {
-  strengths: SentimentNarrative[];
-  improvements: SentimentNarrative[];
-}
-
 /**
  * Extracts sentiment statements (quotes) from AI responses
  */
@@ -503,7 +483,7 @@ export function extractSentimentStatement(
   brandName: string,
   platform: 'chatgpt' | 'google',
   promptText?: string
-): { positive: SentimentStatement | null; negative: SentimentStatement | null } {
+): { positive: SentimentStatements["positive"][number] | null; negative: SentimentStatements["negative"][number] | null } {
   if (!responseText || !brandName) return { positive: null, negative: null };
   
   const snippet = extractMentionContext(responseText, brandName);
@@ -529,7 +509,7 @@ export function extractSentimentStatement(
     }
   }
   
-  const statement: SentimentStatement = {
+  const statement: SentimentStatements["positive"][number] = {
     text: snippet.length > 300 ? snippet.substring(0, 300) + '...' : snippet,
     platform,
     promptText
@@ -728,12 +708,6 @@ function extractBrandFindings(
   }
   
   return { issues, praise };
-}
-
-export interface CompetitorVisibility {
-  name: string;
-  visibilityPercent: number;
-  mentionCount: number;
 }
 
 /**

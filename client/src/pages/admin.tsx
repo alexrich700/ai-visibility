@@ -146,11 +146,17 @@ export default function Admin() {
     forgotPasswordMutation.mutate(email);
   };
 
-  const handleLogout = () => {
-    clearAdminToken();
-    setIsAuthenticated(false);
-    setEmail("");
-    setPassword("");
+  const handleLogout = async () => {
+    try {
+      await apiRequest("POST", "/api/admin/logout", undefined, { useAdminAuth: true });
+    } catch {
+      // Always clear local auth state even if server logout fails.
+    } finally {
+      clearAdminToken();
+      setIsAuthenticated(false);
+      setEmail("");
+      setPassword("");
+    }
   };
 
   const handleStatusChange = (leadId: number, newStatus: string) => {
