@@ -1094,7 +1094,7 @@ export function registerMonitoringRoutes(app: Express): void {
 
   // Create/update client configuration and persist groups/prompts without running a scan.
   // This is used by setup flow before queueing browser-independent scan jobs.
-  app.post("/api/monitoring/client-config", async (req, res) => {
+  app.post("/api/monitoring/client-config", requireAdminAuth, async (req, res) => {
     try {
       const { client: clientData, groups, prompts } = req.body;
       const validatedClient = monitoringClientRequestSchema.parse(clientData);

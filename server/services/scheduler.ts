@@ -1,21 +1,22 @@
 import { storage } from "../storage";
-import { log } from "../index";
+import { createLogger } from "../utils/logger";
 
 const SCHEDULER_INTERVAL_MS = 60 * 1000;
 
 let isSchedulerRunning = false;
 let schedulerIntervalId: NodeJS.Timeout | null = null;
+const schedulerLogger = createLogger("scheduler");
 
-async function queueScheduledScan(clientId: number): Promise<void> {
+export async function queueScheduledScan(clientId: number): Promise<void> {
   try {
     const client = await storage.getMonitoringClientById(clientId);
     if (!client) {
-      log(`Client ${clientId} not found, skipping`, "scheduler");
+      schedulerLogger.info(`Client ${clientId} not found, skipping`);
       return;
     }
 
     if (!client.isActive) {
-      log(`Client ${clientId} is not active, skipping`, "scheduler");
+      schedulerLogger.info(`Client ${clientId} is not active, skipping`);
       return;
     }
 
@@ -26,7 +27,7 @@ async function queueScheduledScan(clientId: number): Promise<void> {
     const activePrompts = allPrompts.filter(p => p.isActive && activeGroupIds.has(p.groupId));
 
     if (activePrompts.length === 0) {
-      log(`Client ${clientId} has no active prompts, skipping scheduled queue`, "scheduler");
+      schedulerLogger.info(`Client ${clientId} has no active prompts, skipping scheduled queue`);
       const nextCheck = new Date();
       nextCheck.setDate(nextCheck.getDate() + client.checkFrequencyDays);
       await storage.updateMonitoringClient(clientId, {
@@ -38,7 +39,7 @@ async function queueScheduledScan(clientId: number): Promise<void> {
 
     const existingJob = await storage.getActiveScanJobForClient(clientId);
     if (existingJob) {
-      log(`Client ${clientId} already has active job ${existingJob.id}, skipping scheduled queue`, "scheduler");
+      schedulerLogger.info(`Client ${clientId} already has active job ${existingJob.id}, skipping scheduled queue`);
       return;
     }
 
@@ -52,9 +53,15 @@ async function queueScheduledScan(clientId: number): Promise<void> {
       totalPrompts: activePrompts.length,
     });
 
-    log(`Queued scheduled scan job ${job.id} for client ${clientId} (${activePrompts.length} prompts)`, "scheduler");
+    const nextCheck = new Date();
+    nextCheck.setDate(nextCheck.getDate() + client.checkFrequencyDays);
+    await storage.updateMonitoringClient(clientId, {
+      nextCheckAt: nextCheck,
+    } as any);
+
+    schedulerLogger.info(`Queued scheduled scan job ${job.id} for client ${clientId} (${activePrompts.length} prompts)`);
   } catch (error) {
-    log(`Error queueing scheduled scan for client ${clientId}: ${error}`, "scheduler");
+    schedulerLogger.error(`Error queueing scheduled scan for client ${clientId}: ${error}`);
     const nextCheck = new Date();
     nextCheck.setMinutes(nextCheck.getMinutes() + 30);
 
@@ -63,7 +70,7 @@ async function queueScheduledScan(clientId: number): Promise<void> {
         nextCheckAt: nextCheck,
       } as any);
     } catch (updateError) {
-      log(`Failed to update nextCheckAt after scheduler queue error: ${updateError}`, "scheduler");
+      schedulerLogger.error(`Failed to update nextCheckAt after scheduler queue error: ${updateError}`);
     }
   }
 }
@@ -79,14 +86,14 @@ async function checkAndRunScheduledScans(): Promise<void> {
     const dueClients = await storage.getClientsDueForCheck();
 
     if (dueClients.length > 0) {
-      log(`Found ${dueClients.length} clients due for scheduled check`, "scheduler");
+      schedulerLogger.info(`Found ${dueClients.length} clients due for scheduled check`);
     }
 
     for (const client of dueClients) {
       await queueScheduledScan(client.id);
     }
   } catch (error) {
-    log(`Error checking for scheduled scans: ${error}`, "scheduler");
+    schedulerLogger.error(`Error checking for scheduled scans: ${error}`);
   } finally {
     isSchedulerRunning = false;
   }
@@ -94,11 +101,11 @@ async function checkAndRunScheduledScans(): Promise<void> {
 
 export function startScheduler(): void {
   if (schedulerIntervalId) {
-    log("Scheduler already running", "scheduler");
+    schedulerLogger.info("Scheduler already running");
     return;
   }
 
-  log("Starting visibility check scheduler", "scheduler");
+  schedulerLogger.info("Starting visibility check scheduler");
 
   checkAndRunScheduledScans();
 
@@ -109,6 +116,6 @@ export function stopScheduler(): void {
   if (schedulerIntervalId) {
     clearInterval(schedulerIntervalId);
     schedulerIntervalId = null;
-    log("Scheduler stopped", "scheduler");
+    schedulerLogger.info("Scheduler stopped");
   }
 }

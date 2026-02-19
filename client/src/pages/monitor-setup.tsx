@@ -353,7 +353,7 @@ export default function MonitorSetup() {
   // This keeps scans browser-independent (safe across refresh/tab close).
   const runSingleCityScan = async (targetCity: string | undefined, cityIndex: number, totalCities: number): Promise<{ clientId: number; overallScore: number }> => {
     const activeGroups = groups.filter(g => g.isActive);
-    const adminToken = localStorage.getItem("adminToken");
+    const adminToken = sessionStorage.getItem("adminToken");
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (adminToken) {
       headers["Authorization"] = `Bearer ${adminToken}`;
@@ -404,12 +404,12 @@ export default function MonitorSetup() {
       body: JSON.stringify({ targetCity }),
     });
 
+    const queueData = await queueResponse.json().catch(() => ({}));
     if (!queueResponse.ok) {
-      const data = await queueResponse.json().catch(() => ({}));
-      throw new Error(data.error || "Failed to queue scan job");
+      throw new Error(queueData.error || "Failed to queue scan job");
     }
 
-    const { jobId } = await queueResponse.json();
+    const { jobId } = queueData;
 
     while (true) {
       await new Promise(resolve => setTimeout(resolve, 2000));

@@ -20,6 +20,12 @@ function createStorageMock(overrides: Partial<MonitoringClientConfigStorage> = {
     async getPromptsByClientId() {
       return [];
     },
+    async updateGroup() {
+      return {};
+    },
+    async updatePrompt() {
+      return {};
+    },
     async createGroup() {
       return { id: 100 };
     },
@@ -39,7 +45,7 @@ const validClient = {
   city: "Austin",
   cities: ["Austin"],
   primaryCategories: ["HVAC"],
-  brandAliases: ["Acme Heating"],
+  brandAliases: null,
   checkFrequencyDays: 14,
 };
 
@@ -72,9 +78,9 @@ test("saveMonitoringClientConfig creates a new client and seeds groups/prompts w
       promptsLookupCount += 1;
       if (promptsLookupCount === 1) return [];
       return [
-        { groupId: 201, isActive: true },
-        { groupId: 202, isActive: true },
-        { groupId: 202, isActive: false },
+        { id: 1, groupId: 201, isActive: true },
+        { id: 2, groupId: 202, isActive: true },
+        { id: 3, groupId: 202, isActive: false },
       ];
     },
   });
@@ -127,11 +133,11 @@ test("saveMonitoringClientConfig updates an existing client and does not overwri
     async getPromptsByClientId() {
       promptsLookupCount += 1;
       if (promptsLookupCount === 1) {
-        return [{ groupId: 11, promptText: "existing prompt", isActive: true }];
+        return [{ id: 11, groupId: 11, promptText: "existing prompt", isActive: true }];
       }
       return [
-        { groupId: 11, promptText: "existing prompt", isActive: true },
-        { groupId: 12, promptText: "new prompt", isActive: true },
+        { id: 11, groupId: 11, promptText: "existing prompt", isActive: true },
+        { id: 12, groupId: 12, promptText: "new prompt", isActive: true },
       ];
     },
     async createGroup(data) {
@@ -189,11 +195,11 @@ test("saveMonitoringClientConfig adds only missing config on partial overlap inp
     async getPromptsByClientId() {
       promptsLookupCount += 1;
       if (promptsLookupCount === 1) {
-        return [{ groupId: 11, promptText: "existing prompt", isActive: true }];
+        return [{ id: 11, groupId: 11, promptText: "existing prompt", isActive: true }];
       }
       return [
-        { groupId: 11, promptText: "existing prompt", isActive: true },
-        { groupId: 12, promptText: "new prompt", isActive: true },
+        { id: 11, groupId: 11, promptText: "existing prompt", isActive: true },
+        { id: 12, groupId: 12, promptText: "new prompt", isActive: true },
       ];
     },
     async createGroup(data) {
@@ -244,7 +250,7 @@ test("saveMonitoringClientConfig ignores prompts that reference unknown groups",
     async getPromptsByClientId() {
       promptsLookupCount += 1;
       if (promptsLookupCount === 1) return [];
-      return [{ groupId: 55, isActive: true }];
+      return [{ id: 55, groupId: 55, isActive: true }];
     },
   });
 
@@ -261,4 +267,130 @@ test("saveMonitoringClientConfig ignores prompts that reference unknown groups",
   );
 
   assert.deepEqual(createPromptCalls, [{ groupId: 55, text: "kept" }]);
+});
+
+test("saveMonitoringClientConfig reactivates an existing inactive group with matching name", async () => {
+  const updateGroupCalls: number[] = [];
+
+  const storage = createStorageMock({
+    async getMonitoringClientByBusinessNameAndDomain() {
+      return { id: 88 };
+    },
+    async updateMonitoringClient() {
+      return { id: 88 };
+    },
+    async getGroupsByClientId() {
+      return [{ id: 21, name: "Dormant Group", isActive: false }];
+    },
+    async getPromptsByClientId() {
+      return [];
+    },
+    async updateGroup(id) {
+      updateGroupCalls.push(id as number);
+      return {};
+    },
+  });
+
+  await saveMonitoringClientConfig(
+    storage,
+    validClient,
+    [{ name: "Dormant Group", description: "reactivate" }],
+    [],
+  );
+
+  assert.deepEqual(updateGroupCalls, [21]);
+});
+
+test("saveMonitoringClientConfig reactivates matching inactive prompt instead of skipping it", async () => {
+  const updatePromptCalls: number[] = [];
+  const createPromptCalls: number[] = [];
+  let promptsLookupCount = 0;
+
+  const storage = createStorageMock({
+    async getMonitoringClientByBusinessNameAndDomain() {
+      return { id: 99 };
+    },
+    async updateMonitoringClient() {
+      return { id: 99 };
+    },
+    async getGroupsByClientId() {
+      return [{ id: 31, name: "Services", isActive: true }];
+    },
+    async getPromptsByClientId() {
+      promptsLookupCount += 1;
+      if (promptsLookupCount === 1) {
+        return [{ id: 71, groupId: 31, promptText: "same prompt", isActive: false }];
+      }
+      return [{ id: 71, groupId: 31, promptText: "same prompt", isActive: true }];
+    },
+    async updatePrompt(id) {
+      updatePromptCalls.push(id as number);
+      return {};
+    },
+    async createPrompt(data) {
+      createPromptCalls.push(data.groupId as number);
+      return {};
+    },
+  });
+
+  const result = await saveMonitoringClientConfig(
+    storage,
+    validClient,
+    [{ name: "Services", description: "existing" }],
+    [{ groupName: "Services", text: "same prompt" }],
+  );
+
+  assert.deepEqual(updatePromptCalls, [71]);
+  assert.deepEqual(createPromptCalls, []);
+  assert.equal(result.totalPrompts, 1);
+});
+
+test("saveMonitoringClientConfig seeds brand sentiment group/prompts when brand aliases are configured", async () => {
+  const createGroupCalls: Array<{ name: string; promptCategory?: string }> = [];
+  const createPromptCalls: Array<{ groupId: number; text: string }> = [];
+  let groupsLookupCount = 0;
+  let promptsLookupCount = 0;
+
+  const storage = createStorageMock({
+    async getMonitoringClientByBusinessNameAndDomain() {
+      return { id: 123 };
+    },
+    async updateMonitoringClient() {
+      return { id: 123 };
+    },
+    async createGroup(data) {
+      createGroupCalls.push({ name: data.name as string, promptCategory: data.promptCategory as string | undefined });
+      if ((data.promptCategory as string | undefined) === "brand_sentiment") {
+        return { id: 90 };
+      }
+      return { id: 91 };
+    },
+    async createPrompt(data) {
+      createPromptCalls.push({ groupId: data.groupId as number, text: data.promptText as string });
+      return {};
+    },
+    async getGroupsByClientId() {
+      groupsLookupCount += 1;
+      if (groupsLookupCount === 1) return [];
+      return [{ id: 90, name: "Brand Sentiment", promptCategory: "brand_sentiment", isActive: true }];
+    },
+    async getPromptsByClientId() {
+      promptsLookupCount += 1;
+      if (promptsLookupCount === 1) return [];
+      return createPromptCalls.map((p, idx) => ({ id: idx + 1, groupId: p.groupId, promptText: p.text, isActive: true }));
+    },
+  });
+
+  await saveMonitoringClientConfig(
+    storage,
+    {
+      ...validClient,
+      brandAliases: ["Acme Heating"],
+    },
+    [],
+    [],
+  );
+
+  assert.equal(createGroupCalls.some(c => c.promptCategory === "brand_sentiment"), true);
+  assert.equal(createPromptCalls.filter(p => p.groupId === 90).length, 4);
 });
