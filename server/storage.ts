@@ -238,7 +238,7 @@ export class DatabaseStorage implements IStorage {
       .from(monitoringClients)
       .where(and(
         eq(sql`lower(trim(${monitoringClients.businessName}))`, normalizedName),
-        eq(sql`regexp_replace(lower(trim(${monitoringClients.domain})), '/+$', '')`, normalizedDomain),
+        eq(sql`regexp_replace(regexp_replace(lower(trim(${monitoringClients.domain})), '^https?://', ''), '/+$', '')`, normalizedDomain),
       ))
       .orderBy(desc(monitoringClients.createdAt))
       .limit(1);
