@@ -94,13 +94,64 @@ export const getAdminQueryFn: <T>(options: {
     return await res.json();
   };
 
+// Cache policy tiers are grouped by data volatility to avoid one-size-fits-all defaults.
+// This keeps business metrics fresh while still caching stable data efficiently.
+const QUERY_CACHE_TIERS = {
+  nearRealTime: {
+    staleTime: 30 * 1000,
+    refetchInterval: 60 * 1000,
+    refetchOnWindowFocus: true,
+  },
+  semiStatic: {
+    staleTime: 10 * 60 * 1000,
+    refetchInterval: false,
+    refetchOnWindowFocus: false,
+  },
+  reference: {
+    staleTime: 30 * 60 * 1000,
+    refetchInterval: false,
+    refetchOnWindowFocus: false,
+  },
+} as const;
+
+// Query key prefixes mapped to cache tiers.
+const QUERY_POLICY_BY_KEY_PREFIX = {
+  nearRealTime: [
+    ["/api/monitoring/dashboard"],
+    ["/api/monitoring/clients-with-stats"],
+  ],
+  semiStatic: [
+    ["/api/monitoring/trends/groups"],
+    ["/api/monitoring/trends/competitors"],
+    ["/api/monitoring/scan-dates"],
+    ["/api/admin/audits"],
+    ["/api/audit"],
+    ["/api/audit/share"],
+  ],
+  reference: [["/api/monitoring/settings"]],
+} as const;
+
+function applyDataClassQueryPolicies(client: QueryClient) {
+  for (const key of QUERY_POLICY_BY_KEY_PREFIX.nearRealTime) {
+    client.setQueryDefaults(key, QUERY_CACHE_TIERS.nearRealTime);
+  }
+
+  for (const key of QUERY_POLICY_BY_KEY_PREFIX.semiStatic) {
+    client.setQueryDefaults(key, QUERY_CACHE_TIERS.semiStatic);
+  }
+
+  for (const key of QUERY_POLICY_BY_KEY_PREFIX.reference) {
+    client.setQueryDefaults(key, QUERY_CACHE_TIERS.reference);
+  }
+}
+
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       queryFn: getQueryFn({ on401: "throw" }),
+      staleTime: 60 * 1000,
       refetchInterval: false,
       refetchOnWindowFocus: false,
-      staleTime: Infinity,
       retry: false,
     },
     mutations: {
@@ -108,3 +159,5 @@ export const queryClient = new QueryClient({
     },
   },
 });
+
+applyDataClassQueryPolicies(queryClient);
