@@ -8,7 +8,10 @@
     "build": "tsx script/build.ts",
     "start": "NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "test:storage": "tsx --test server/storage.lookup.test.ts",
+    "test": "npm run test:storage && npm run test:storage-delete",
+    "test:storage-delete": "tsx --test server/storage.deleteMonitoringClient.test.ts"
   },
   "dependencies": {
     "@google/genai": "^1.33.0",

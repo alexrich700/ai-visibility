@@ -9,7 +9,21 @@ import {
   CheckGroupMetric, CheckCompetitorMetric, ScanJob, ClientSession as DbClientSession, AdminSession as DbAdminSession,
   adminUsers, InsertAdminUser, AdminUser
 } from "@shared/schema";
-import { eq, desc, and, lte, lt, isNull, or, isNotNull, gte, asc, inArray } from "drizzle-orm";
+import { eq, desc, and, lte, lt, isNull, or, isNotNull, gte, asc, inArray, sql } from "drizzle-orm";
+
+export function normalizeBusinessNameForLookup(businessName: string): string {
+  return businessName.trim().toLowerCase();
+}
+
+export function normalizeDomainForLookup(domain: string): string {
+  // Intentionally conservative normalization: strip protocol, trim/lowercase, and remove trailing slashes.
+  // We intentionally keep subdomains (including "www."), ports, paths, and query strings unchanged.
+  return domain
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/\/+$/, "");
+}
 
 export interface IStorage {
   createAudit(audit: InsertAudit): Promise<Audit>;
@@ -180,6 +194,8 @@ export class DatabaseStorage implements IStorage {
     
     const [client] = await db.insert(monitoringClients).values({
       ...clientData,
+      normalizedBusinessName: normalizeBusinessNameForLookup(clientData.businessName),
+      normalizedDomain: normalizeDomainForLookup(clientData.domain),
       nextCheckAt: nextCheck,
     }).returning();
     return client;
@@ -202,31 +218,58 @@ export class DatabaseStorage implements IStorage {
 
   async getMonitoringClientByBusinessNameAndDomain(businessName: string, domain: string): Promise<MonitoringClient | undefined> {
     if (!businessName || !domain) return undefined;
-    
-    // Normalize inputs for consistent matching
-    const normalizedName = businessName.trim().toLowerCase();
-    const normalizedDomain = domain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '');
-    
-    // Get all clients and find a case-insensitive match
-    const allClients = await db.select().from(monitoringClients)
-      .orderBy(desc(monitoringClients.createdAt));
-    
-    const matchingClient = allClients.find(c => {
-      const clientName = c.businessName.trim().toLowerCase();
-      const clientDomain = c.domain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '');
-      return clientName === normalizedName && clientDomain === normalizedDomain;
-    });
-    
-    return matchingClient;
+
+    const normalizedName = normalizeBusinessNameForLookup(businessName);
+    const normalizedDomain = normalizeDomainForLookup(domain);
+
+    const [client] = await db.select()
+      .from(monitoringClients)
+      .where(and(
+        eq(monitoringClients.normalizedBusinessName, normalizedName),
+        eq(monitoringClients.normalizedDomain, normalizedDomain),
+      ))
+      .orderBy(desc(monitoringClients.createdAt))
+      .limit(1);
+
+    if (client) return client;
+
+    // Fallback for rows that predate normalized-column backfill.
+    const [legacyClient] = await db.select()
+      .from(monitoringClients)
+      .where(and(
+        eq(sql`lower(trim(${monitoringClients.businessName}))`, normalizedName),
+        eq(sql`regexp_replace(regexp_replace(lower(trim(${monitoringClients.domain})), '^https?://', ''), '/+$', '')`, normalizedDomain),
+      ))
+      .orderBy(desc(monitoringClients.createdAt))
+      .limit(1);
+
+    return legacyClient;
   }
 
   async updateMonitoringClient(id: number, data: Partial<InsertMonitoringClient>): Promise<MonitoringClient | undefined> {
-    const [client] = await db
-      .update(monitoringClients)
-      .set({ ...data, updatedAt: new Date() })
-      .where(eq(monitoringClients.id, id))
-      .returning();
-    return client;
+    return await db.transaction(async (tx) => {
+      const [updatedClient] = await tx
+        .update(monitoringClients)
+        .set({
+          ...data,
+          updatedAt: new Date(),
+        })
+        .where(eq(monitoringClients.id, id))
+        .returning({ id: monitoringClients.id });
+
+      if (!updatedClient) return undefined;
+
+      const [client] = await tx
+        .update(monitoringClients)
+        .set({
+          normalizedBusinessName: sql`lower(trim(${monitoringClients.businessName}))`,
+          normalizedDomain: sql`regexp_replace(regexp_replace(lower(trim(${monitoringClients.domain})), '^https?://', ''), '/+$', '')`,
+        })
+        .where(eq(monitoringClients.id, id))
+        .returning();
+
+      return client;
+    });
   }
 
   async deleteMonitoringClient(id: number): Promise<void> {
