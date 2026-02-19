@@ -8,7 +8,13 @@
     "build": "tsx script/build.ts",
     "start": "NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "test:storage": "node --import tsx --test server/storage.lookup.test.ts",
+    "test": "npm run test:query-cache && npm run test:selectors && npm run test:logger && npm run test:storage && npm run test:storage-delete",
+    "test:storage-delete": "node --import tsx --test server/storage.deleteMonitoringClient.test.ts",
+    "test:query-cache": "node --import tsx --test server/services/monitoring/query-cache.test.ts",
+    "test:selectors": "node --import tsx --test server/services/monitoring/selectors.test.ts",
+    "test:logger": "node --import tsx --test server/services/monitoring/logger.test.ts"
   },
   "dependencies": {
     "@google/genai": "^1.33.0",
