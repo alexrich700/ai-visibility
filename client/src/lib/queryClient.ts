@@ -2,27 +2,6 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 const ADMIN_TOKEN_KEY = "adminToken";
 
-const DATA_CLASS_POLICY_KEYS = new Set([
-  "/api/monitoring/dashboard",
-  "/api/monitoring/settings",
-]);
-
-export function hasDataClassPolicy(queryKey: readonly unknown[]): boolean {
-  const keyRoot = typeof queryKey[0] === "string" ? queryKey[0] : "";
-  return DATA_CLASS_POLICY_KEYS.has(keyRoot);
-}
-
-function maybeWarnUnmappedPolicy(queryKey: readonly unknown[]): void {
-  const keyRoot = typeof queryKey[0] === "string" ? queryKey[0] : "";
-  if (!keyRoot.startsWith("/api/")) {
-    return;
-  }
-  if (!hasDataClassPolicy(queryKey) && import.meta.env?.MODE === "development") {
-    console.warn(`[queryClient] Unmapped data class policy for query key: ${String(keyRoot)}`);
-  }
-}
-
-
 export function getAdminToken(): string | null {
   return sessionStorage.getItem(ADMIN_TOKEN_KEY);
 }
@@ -202,6 +181,20 @@ export const getSessionAwareQueryFn: <T>(options: {
     await throwIfResNotOk(res);
     return await res.json();
   };
+
+function applyDataClassQueryPolicies(client: QueryClient): void {
+  for (const [tier, prefixes] of Object.entries(QUERY_POLICY_BY_KEY_PREFIX)) {
+    const options = QUERY_CACHE_TIERS[tier as keyof typeof QUERY_CACHE_TIERS];
+
+    for (const [prefix] of prefixes) {
+      client.setQueryDefaults([prefix], {
+        staleTime: options.staleTime,
+        refetchInterval: options.refetchInterval,
+        refetchOnWindowFocus: options.refetchOnWindowFocus,
+      });
+    }
+  }
+}
 
 export const queryClient = new QueryClient({
   defaultOptions: {
