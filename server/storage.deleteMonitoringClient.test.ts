@@ -12,15 +12,21 @@ import {
   monitoringPrompts,
 } from "@shared/schema";
 
-test("deleteMonitoringClient deletes dependent data in expected order", async () => {
+type DeleteCall = {
+  table: unknown;
+  where: unknown;
+};
+
+test("deleteMonitoringClient deletes dependent data in expected order and with expected IDs", async () => {
   const storage = new DatabaseStorage();
-  const deletedTables: unknown[] = [];
+  const clientId = 123;
+  const deletedCalls: DeleteCall[] = [];
 
   const originalDelete = db.delete.bind(db);
   Object.defineProperty(db, "delete", {
     value: (table: unknown) => ({
-      where: async () => {
-        deletedTables.push(table);
+      where: async (condition: unknown) => {
+        deletedCalls.push({ table, where: condition });
       },
     }),
     configurable: true,
@@ -35,7 +41,7 @@ test("deleteMonitoringClient deletes dependent data in expected order", async ()
   });
 
   try {
-    await storage.deleteMonitoringClient(123);
+    await storage.deleteMonitoringClient(clientId);
   } finally {
     Object.defineProperty(db, "delete", {
       value: originalDelete,
@@ -49,14 +55,26 @@ test("deleteMonitoringClient deletes dependent data in expected order", async ()
     });
   }
 
-  assert.deepEqual(deletedTables, [
-    checkResults,
-    checkGroupMetrics,
-    checkCompetitorMetrics,
-    checkSessions,
-    monitoringPrompts,
-    monitoringPrompts,
-    monitoringGroups,
-    monitoringClients,
-  ]);
+  assert.deepEqual(
+    deletedCalls.map((call) => call.table),
+    [
+      checkResults,
+      checkGroupMetrics,
+      checkCompetitorMetrics,
+      checkSessions,
+      monitoringPrompts,
+      monitoringPrompts,
+      monitoringGroups,
+      monitoringClients,
+    ],
+  );
+
+  const whereSql = deletedCalls.map((call) =>
+    db.select().from(checkResults).where(call.where as never).toSQL(),
+  );
+
+  assert.deepEqual(
+    whereSql.map((sql) => sql.params[0]),
+    [clientId, clientId, clientId, clientId, 101, 102, clientId, clientId],
+  );
 });
