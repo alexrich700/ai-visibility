@@ -42,6 +42,7 @@ import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import logoIcon from "@assets/images_1765741951084.png";
 import type { MonitoringClient, MonitoringGroup, CheckSession, CheckResult } from "@shared/schema";
+import type { GroupTrendsResponse, CompetitorTrendsResponse } from "@shared/monitoring-dto";
 import {
   buildCompetitorTrendChartData,
   buildGroupBarData,
@@ -997,7 +998,7 @@ export default function MonitorDashboard() {
                         }} 
                       />
                       <Legend />
-                      {groupTrendsData?.groupTrends?.map((g, i) => (
+                      {groupTrendsData?.groupTrends?.map((g: GroupTrendsResponse["groupTrends"][number], i: number) => (
                         <Line 
                           key={g.groupId}
                           type="monotone" 
@@ -1033,7 +1034,7 @@ export default function MonitorDashboard() {
                         formatter={(value: number) => [`${value}%`, undefined]}
                       />
                       <Legend />
-                      {competitorTrendsData?.competitorTrends?.map((c, i) => (
+                      {competitorTrendsData?.competitorTrends?.map((c: CompetitorTrendsResponse["competitorTrends"][number], i: number) => (
                         <Line 
                           key={c.competitorName}
                           type="monotone" 
