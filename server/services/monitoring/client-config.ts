@@ -21,6 +21,7 @@ type ClientRecord = {
 type GroupRecord = {
   id: number;
   name: string;
+  promptCategory?: string;
   isActive: boolean;
 };
 
@@ -41,6 +42,17 @@ export interface MonitoringClientConfigStorage {
   updatePrompt(id: number, data: Record<string, unknown>): Promise<unknown>;
   createGroup(data: Record<string, unknown>): Promise<{ id: number }>;
   createPrompt(data: Record<string, unknown>): Promise<unknown>;
+}
+
+function buildBrandSentimentPrompts(businessName: string, industry: string, city?: string): string[] {
+  const locationContext = city ? ` in ${city}` : "";
+
+  return [
+    `What do you know about ${businessName}${locationContext}? Is it a reputable ${industry} business?`,
+    `What are customers saying about ${businessName}? What are common complaints or praise points for this ${industry} company?`,
+    `Would you recommend ${businessName}${locationContext} for ${industry} services? What are the pros and cons?`,
+    `What should someone know before hiring ${businessName}? Are there any red flags or issues with this ${industry} business?`,
+  ];
 }
 
 export async function saveMonitoringClientConfig(
@@ -113,6 +125,66 @@ export async function saveMonitoringClientConfig(
       .map((prompt) => `${prompt.groupId}::${prompt.promptText || ""}`),
   );
   const promptByKey = new Map(existingPrompts.map((prompt) => [`${prompt.groupId}::${prompt.promptText || ""}`, prompt]));
+
+  // Keep parity with the legacy setup flow: when brand aliases are configured,
+  // ensure a brand sentiment group and prompts exist for ongoing scans.
+  if ((clientData.brandAliases?.length || 0) > 0) {
+    const brandSentimentGroupName = "Brand Sentiment";
+    let brandSentimentGroup = existingGroups.find(
+      (group) => group.promptCategory === "brand_sentiment" || group.name === brandSentimentGroupName,
+    );
+
+    if (brandSentimentGroup) {
+      if (!brandSentimentGroup.isActive) {
+        await storage.updateGroup(brandSentimentGroup.id, { isActive: true });
+        brandSentimentGroup.isActive = true;
+      }
+    } else {
+      const createdGroup = await storage.createGroup({
+        clientId: client.id,
+        name: brandSentimentGroupName,
+        description: "Direct brand questions to gather sentiment and feedback",
+        isHighLevelCategory: false,
+        promptCategory: "brand_sentiment",
+        isActive: true,
+      });
+
+      brandSentimentGroup = {
+        id: createdGroup.id,
+        name: brandSentimentGroupName,
+        promptCategory: "brand_sentiment",
+        isActive: true,
+      };
+      groupByName.set(brandSentimentGroupName, brandSentimentGroup);
+      groupIdMap.set(brandSentimentGroupName, createdGroup.id);
+    }
+
+    const brandSentimentPrompts = buildBrandSentimentPrompts(
+      clientData.businessName,
+      clientData.industry,
+      clientData.city || undefined,
+    );
+
+    for (const promptText of brandSentimentPrompts) {
+      const key = `${brandSentimentGroup.id}::${promptText}`;
+      if (activePromptKeys.has(key)) continue;
+
+      const existingPrompt = promptByKey.get(key);
+      if (existingPrompt && !existingPrompt.isActive) {
+        await storage.updatePrompt(existingPrompt.id, { isActive: true });
+        existingPrompt.isActive = true;
+        activePromptKeys.add(key);
+        continue;
+      }
+
+      await storage.createPrompt({
+        groupId: brandSentimentGroup.id,
+        promptText,
+        isActive: true,
+      });
+      activePromptKeys.add(key);
+    }
+  }
 
   for (const prompt of prompts) {
     if (!prompt.groupName) continue;

@@ -45,7 +45,7 @@ const validClient = {
   city: "Austin",
   cities: ["Austin"],
   primaryCategories: ["HVAC"],
-  brandAliases: ["Acme Heating"],
+  brandAliases: null,
   checkFrequencyDays: 14,
 };
 
@@ -343,4 +343,54 @@ test("saveMonitoringClientConfig reactivates matching inactive prompt instead of
   assert.deepEqual(updatePromptCalls, [71]);
   assert.deepEqual(createPromptCalls, []);
   assert.equal(result.totalPrompts, 1);
+});
+
+test("saveMonitoringClientConfig seeds brand sentiment group/prompts when brand aliases are configured", async () => {
+  const createGroupCalls: Array<{ name: string; promptCategory?: string }> = [];
+  const createPromptCalls: Array<{ groupId: number; text: string }> = [];
+  let groupsLookupCount = 0;
+  let promptsLookupCount = 0;
+
+  const storage = createStorageMock({
+    async getMonitoringClientByBusinessNameAndDomain() {
+      return { id: 123 };
+    },
+    async updateMonitoringClient() {
+      return { id: 123 };
+    },
+    async createGroup(data) {
+      createGroupCalls.push({ name: data.name as string, promptCategory: data.promptCategory as string | undefined });
+      if ((data.promptCategory as string | undefined) === "brand_sentiment") {
+        return { id: 90 };
+      }
+      return { id: 91 };
+    },
+    async createPrompt(data) {
+      createPromptCalls.push({ groupId: data.groupId as number, text: data.promptText as string });
+      return {};
+    },
+    async getGroupsByClientId() {
+      groupsLookupCount += 1;
+      if (groupsLookupCount === 1) return [];
+      return [{ id: 90, name: "Brand Sentiment", promptCategory: "brand_sentiment", isActive: true }];
+    },
+    async getPromptsByClientId() {
+      promptsLookupCount += 1;
+      if (promptsLookupCount === 1) return [];
+      return createPromptCalls.map((p, idx) => ({ id: idx + 1, groupId: p.groupId, promptText: p.text, isActive: true }));
+    },
+  });
+
+  await saveMonitoringClientConfig(
+    storage,
+    {
+      ...validClient,
+      brandAliases: ["Acme Heating"],
+    },
+    [],
+    [],
+  );
+
+  assert.equal(createGroupCalls.some(c => c.promptCategory === "brand_sentiment"), true);
+  assert.equal(createPromptCalls.filter(p => p.groupId === 90).length, 4);
 });
