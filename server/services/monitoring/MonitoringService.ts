@@ -1,5 +1,6 @@
 import { monitoringClientRequestSchema } from "@shared/schema";
 import { z } from "zod";
+import { createLogger } from "../../utils/logger";
 
 interface PendingScanConfig {
   client: z.infer<typeof monitoringClientRequestSchema>;
@@ -46,6 +47,8 @@ interface PendingRescanConfig {
   createdAt: number;
 }
 
+const monitoringLogger = createLogger("monitoring-service");
+
 class MonitoringService {
   private pendingScanConfigs = new Map<string, PendingScanConfig>();
   private pendingRescanConfigs = new Map<string, PendingRescanConfig>();
@@ -90,11 +93,11 @@ class MonitoringService {
 
         if (attempt < maxRetries) {
           const delayMs = baseDelayMs * (attempt + 1);
-          console.log(`[RETRY] Attempt ${attempt + 1}/${maxRetries} failed (${errorType}): ${lastError.message}`);
-          console.log(`[RETRY] Waiting ${delayMs / 1000}s before next attempt...`);
+          monitoringLogger.warn(`Attempt ${attempt + 1}/${maxRetries} failed (${errorType}): ${lastError.message}`, { retryAttempt: attempt + 1, maxRetries, errorType });
+          monitoringLogger.info(`Waiting ${delayMs / 1000}s before next attempt...`, { retryAttempt: attempt + 1, delayMs });
           await new Promise((resolve) => setTimeout(resolve, delayMs));
         } else {
-          console.log(`[RETRY] All ${maxRetries} retries exhausted. Final error: ${lastError.message}`);
+          monitoringLogger.error(`All ${maxRetries} retries exhausted. Final error: ${lastError.message}`, { maxRetries, errorType });
         }
       }
     }
