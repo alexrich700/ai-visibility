@@ -230,24 +230,35 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteMonitoringClient(id: number): Promise<void> {
-    // Delete in order respecting foreign key constraints:
-    // 1. Delete check results (depends on sessions and prompts)
-    await db.delete(checkResults).where(eq(checkResults.clientId, id));
-    // 2. Delete group metrics (depends on sessions)
-    await db.delete(checkGroupMetrics).where(eq(checkGroupMetrics.clientId, id));
-    // 3. Delete competitor metrics (depends on sessions)
-    await db.delete(checkCompetitorMetrics).where(eq(checkCompetitorMetrics.clientId, id));
-    // 4. Delete check sessions
-    await db.delete(checkSessions).where(eq(checkSessions.clientId, id));
-    // 5. Delete prompts (get groups first, then delete prompts by group)
-    const groups = await this.getGroupsByClientId(id);
-    for (const group of groups) {
-      await db.delete(monitoringPrompts).where(eq(monitoringPrompts.groupId, group.id));
+    try {
+      await db.transaction(async (tx) => {
+        // Delete in order respecting foreign key constraints:
+        // 1. Delete check results (depends on sessions and prompts)
+        await tx.delete(checkResults).where(eq(checkResults.clientId, id));
+        // 2. Delete group metrics (depends on sessions)
+        await tx.delete(checkGroupMetrics).where(eq(checkGroupMetrics.clientId, id));
+        // 3. Delete competitor metrics (depends on sessions)
+        await tx.delete(checkCompetitorMetrics).where(eq(checkCompetitorMetrics.clientId, id));
+        // 4. Delete check sessions
+        await tx.delete(checkSessions).where(eq(checkSessions.clientId, id));
+        // 5. Delete prompts (get groups first, then delete prompts by group)
+        const groups = await tx.select().from(monitoringGroups)
+          .where(eq(monitoringGroups.clientId, id));
+        for (const group of groups) {
+          await tx.delete(monitoringPrompts).where(eq(monitoringPrompts.groupId, group.id));
+        }
+        // 6. Delete groups
+        await tx.delete(monitoringGroups).where(eq(monitoringGroups.clientId, id));
+        // 7. Delete the client
+        await tx.delete(monitoringClients).where(eq(monitoringClients.id, id));
+      });
+    } catch (error) {
+      console.error('[DELETE_MONITORING_CLIENT_TRANSACTION] Failed to delete monitoring client', {
+        clientId: id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
     }
-    // 6. Delete groups
-    await db.delete(monitoringGroups).where(eq(monitoringGroups.clientId, id));
-    // 7. Delete the client
-    await db.delete(monitoringClients).where(eq(monitoringClients.id, id));
   }
 
   // Group operations
