@@ -4,6 +4,7 @@ import { db } from "../db";
 import { desc } from "drizzle-orm";
 import { getPromptGenerationStats, testOpenAIConnectivity } from "../ai-services";
 import { logError, getSafeErrorResponse } from "../utils/error-sanitizer";
+import { requireAdminAuth } from "../middleware/auth";
 
 export function registerDiagnosticsRoutes(app: Express): void {
   app.get("/api/health", async (req, res) => {
@@ -11,23 +12,13 @@ export function registerDiagnosticsRoutes(app: Express): void {
   });
 
   // OpenAI connectivity test (admin only - checks if API is working)
-  app.get("/api/diagnostics/openai", async (req, res) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || authHeader !== `Bearer ${process.env.ADMIN_PASSWORD}`) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-    
+  app.get("/api/diagnostics/openai", requireAdminAuth, async (_req, res) => {
     const result = await testOpenAIConnectivity();
     res.json(result);
   });
 
   // Prompt generation statistics (admin only)
-  app.get("/api/diagnostics/prompt-stats", async (req, res) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || authHeader !== `Bearer ${process.env.ADMIN_PASSWORD}`) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-    
+  app.get("/api/diagnostics/prompt-stats", requireAdminAuth, async (_req, res) => {
     const stats = getPromptGenerationStats();
     res.json({
       ...stats,
@@ -37,12 +28,7 @@ export function registerDiagnosticsRoutes(app: Express): void {
   });
 
   // Fallback logs from database (admin only) - persistent history of prompt generation failures
-  app.get("/api/diagnostics/fallback-logs", async (req, res) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || authHeader !== `Bearer ${process.env.ADMIN_PASSWORD}`) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-    
+  app.get("/api/diagnostics/fallback-logs", requireAdminAuth, async (req, res) => {
     try {
       const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
       const logs = await db.select()
