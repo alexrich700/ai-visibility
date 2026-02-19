@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, Request, Response } from "express";
 import { storage } from "../storage";
 import { runAudit, ProgressCallback } from "../ai-services";
 import { auditRequestSchema } from "@shared/schema";
@@ -8,12 +8,31 @@ import { logError, getSafeErrorResponse } from "../utils/error-sanitizer";
 
 const router = Router();
 
+interface AuditStreamDeps {
+  runAuditFn: typeof runAudit;
+  createAuditFn: typeof storage.createAudit;
+  withDatabaseRetryFn: typeof withDatabaseRetry;
+}
+
+const defaultAuditStreamDeps: AuditStreamDeps = {
+  runAuditFn: runAudit,
+  createAuditFn: storage.createAudit.bind(storage),
+  withDatabaseRetryFn: withDatabaseRetry,
+};
+
 function generateShareToken(): string {
   return crypto.randomBytes(16).toString("hex");
 }
 
 // SSE endpoint for real-time audit progress
-router.post("/stream", async (req, res) => {
+export async function handleAuditStream(
+  req: Request,
+  res: Response,
+  deps: AuditStreamDeps = defaultAuditStreamDeps,
+) {
+  let clientDisconnected = false;
+  let heartbeat: NodeJS.Timeout | null = null;
+
   try {
     const validatedData = auditRequestSchema.parse(req.body);
     const { businessName, url, keyword, scope, city } = validatedData;
@@ -27,9 +46,31 @@ router.post("/stream", async (req, res) => {
 
     // Helper to send SSE events
     const sendEvent = (eventType: string, data: any) => {
+      if (clientDisconnected || res.writableEnded) {
+        return;
+      }
       res.write(`event: ${eventType}\n`);
       res.write(`data: ${JSON.stringify(data)}\n\n`);
     };
+
+    req.on("close", () => {
+      clientDisconnected = true;
+      if (heartbeat) {
+        clearInterval(heartbeat);
+        heartbeat = null;
+      }
+    });
+
+    heartbeat = setInterval(() => {
+      if (clientDisconnected || res.writableEnded) {
+        if (heartbeat) {
+          clearInterval(heartbeat);
+          heartbeat = null;
+        }
+        return;
+      }
+      res.write(`: heartbeat ${Date.now()}\n\n`);
+    }, 15000);
 
     // Progress callback for real-time updates
     const onProgress: ProgressCallback = (stage, progress, total) => {
@@ -37,11 +78,18 @@ router.post("/stream", async (req, res) => {
     };
 
     // Run the audit with progress streaming
-    const results = await runAudit(businessName, url, keyword, scope, city, onProgress);
+    const results = await deps.runAuditFn(
+      businessName,
+      url,
+      keyword,
+      scope,
+      city,
+      onProgress
+    );
 
     // Save to database
-    const audit = await withDatabaseRetry(() => 
-      storage.createAudit({
+    const audit = await deps.withDatabaseRetryFn(() => 
+      deps.createAuditFn({
         businessName,
         url: url || null,
         keyword,
@@ -72,14 +120,31 @@ router.post("/stream", async (req, res) => {
       timestamp: new Date().toISOString(),
     });
 
+    if (heartbeat) {
+      clearInterval(heartbeat);
+      heartbeat = null;
+    }
     res.end();
   } catch (error) {
+    if (heartbeat) {
+      clearInterval(heartbeat);
+      heartbeat = null;
+    }
+
+    if (clientDisconnected) {
+      return;
+    }
+
     logError("AUDIT STREAM ERROR", error);
     // Send error event
     res.write(`event: error\n`);
     res.write(`data: ${JSON.stringify({ error: "Failed to run audit" })}\n\n`);
     res.end();
   }
+}
+
+router.post("/stream", (req, res) => {
+  void handleAuditStream(req, res);
 });
 
 // Original endpoint for backwards compatibility (no streaming)
