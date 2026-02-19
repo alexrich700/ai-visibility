@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { getAdminQueryFn, getAdminToken } from "@/lib/queryClient";
+import { getAdminToken, getSessionAwareQueryFn } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -197,6 +197,13 @@ export default function MonitorDashboard() {
   const isMountedRef = useRef(true); // Track mount state
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const { data: authSession } = useQuery<{ authenticated: boolean; isAdmin: boolean }>({
+    queryKey: ["/api/monitoring/client-session"],
+    queryFn: getSessionAwareQueryFn({ on401: "returnNull" }),
+    staleTime: 30 * 1000,
+  });
+  const isAdmin = authSession?.isAdmin === true;
   
   // Cleanup polling on unmount
   useEffect(() => {
@@ -212,7 +219,7 @@ export default function MonitorDashboard() {
 
   // Check for active background job on mount and restore scan state
   useEffect(() => {
-    if (!clientId) return;
+    if (!clientId || !isAdmin) return;
     
     const checkActiveJob = async () => {
       try {
@@ -242,7 +249,7 @@ export default function MonitorDashboard() {
     };
     
     checkActiveJob();
-  }, [clientId]);
+  }, [clientId, isAdmin]);
 
   // Poll for job status updates
   const startJobPolling = (jobId: number) => {
@@ -464,28 +471,28 @@ export default function MonitorDashboard() {
 
   const { data, isLoading, refetch, isRefetching } = useQuery<DashboardData>({
     queryKey: ["/api/monitoring/dashboard", clientId],
-    queryFn: getAdminQueryFn({ on401: "throw" }),
+    queryFn: getSessionAwareQueryFn({ on401: "throw" }),
     enabled: !!clientId,
   });
 
   // Fetch group trends when "groups" view is selected
-  const { data: groupTrendsData } = useQuery<{ groupTrends: GroupTrendData[] }>({
+  const { data: groupTrendsData } = useQuery<GroupTrendsResponse>({
     queryKey: ["/api/monitoring/trends/groups", clientId],
-    queryFn: getAdminQueryFn({ on401: "throw" }),
+    queryFn: getSessionAwareQueryFn({ on401: "throw" }),
     enabled: !!clientId && trendView === "groups",
   });
 
   // Fetch competitor trends when "competitors" view is selected
-  const { data: competitorTrendsData } = useQuery<{ competitorTrends: CompetitorTrendData[] }>({
+  const { data: competitorTrendsData } = useQuery<CompetitorTrendsResponse>({
     queryKey: ["/api/monitoring/trends/competitors", clientId],
-    queryFn: getAdminQueryFn({ on401: "throw" }),
+    queryFn: getSessionAwareQueryFn({ on401: "throw" }),
     enabled: !!clientId && trendView === "competitors",
   });
 
   // Fetch available scan dates for export dropdown
   const { data: scanDatesData } = useQuery<{ scanDates: { date: string; cities: string[]; sessionIds: number[] }[] }>({
     queryKey: ["/api/monitoring/scan-dates", clientId],
-    queryFn: getAdminQueryFn({ on401: "throw" }),
+    queryFn: getSessionAwareQueryFn({ on401: "throw" }),
     enabled: !!clientId && exportDialogOpen,
   });
 
@@ -672,28 +679,32 @@ export default function MonitorDashboard() {
                 </SelectContent>
               </Select>
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={runRescan}
-              disabled={isScanning}
-              className="flex items-center gap-2"
-              data-testid="button-refresh"
-            >
-              <RefreshCw className={`w-4 h-4 ${isScanning ? "animate-spin" : ""}`} />
-              {isScanning ? "Scanning..." : (selectedScanCity && selectedScanCity !== "all" ? `Scan ${selectedScanCity}` : "Run New Scan")}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setLocation(`/monitor/settings/${clientId}`)}
-              className="flex items-center gap-2"
-              data-testid="button-settings"
-            >
-              <Settings className="w-4 h-4" />
-              Settings
-            </Button>
-            {getAdminToken() && (
+            {isAdmin && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={runRescan}
+                disabled={isScanning}
+                className="flex items-center gap-2"
+                data-testid="button-refresh"
+              >
+                <RefreshCw className={`w-4 h-4 ${isScanning ? "animate-spin" : ""}`} />
+                {isScanning ? "Scanning..." : (selectedScanCity && selectedScanCity !== "all" ? `Scan ${selectedScanCity}` : "Run New Scan")}
+              </Button>
+            )}
+            {isAdmin && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setLocation(`/monitor/settings/${clientId}`)}
+                className="flex items-center gap-2"
+                data-testid="button-settings"
+              >
+                <Settings className="w-4 h-4" />
+                Settings
+              </Button>
+            )}
+            {isAdmin && (
               <Button
                 variant="outline"
                 size="sm"

@@ -8,8 +8,11 @@ import {
   Globe,
   Search,
   CheckCircle,
+  AlertCircle,
+  XCircle,
 } from "lucide-react";
 import type { AuditRequest, AuditResults } from "@shared/schema";
+import { LEAD_GEN_TOTAL_PROMPTS } from "@shared/audit-constants";
 import logoFull from "@assets/RMG-Logo-Black-1920w_(1)_1765741951083.webp";
 import logoIcon from "@assets/images_1765741951084.png";
 
@@ -25,12 +28,18 @@ function getStageMessage(stage: string, progress?: number, total?: number): { te
         progress: 10 
       };
     case "querying_ai":
-      const pct = total && progress ? Math.round((progress / total) * 70) + 15 : 30;
+      const hasTotals = typeof total === "number" && total > 0;
+      const completedCount = typeof progress === "number" ? progress : 0;
+      const totalCount = hasTotals ? total : 0;
+      const pct = hasTotals ? Math.round((completedCount / totalCount) * 70) + 15 : 30;
       const completed = progress || 0;
       const totalPrompts = total || 0;
+      const etaSeconds = hasTotals
+        ? Math.max(20, Math.round((totalCount - completedCount) * 4))
+        : 60;
       return { 
         text: `Querying ChatGPT & Google AI...`, 
-        subtext: `Processing ${completed}/${totalPrompts} prompts across AI platforms`,
+        subtext: `Processing ${completed}/${totalPrompts} prompts across AI platforms • ~${etaSeconds}s remaining`,
         progress: Math.min(pct, 85)
       };
     case "analyzing_results":
@@ -75,6 +84,8 @@ export default function Home() {
   const [scanProgress, setScanProgress] = useState(0);
   const [scanStatus, setScanStatus] = useState("");
   const [activePrompt, setActivePrompt] = useState("");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // Scroll to top when step changes
@@ -95,6 +106,8 @@ export default function Home() {
     e.preventDefault();
     if (!url || !keyword || !businessName) return;
     if (scope === "local" && !city) return;
+    setErrorMessage(null);
+    setIsSubmitting(true);
 
     setStep("scanning");
     setScanProgress(5);
@@ -124,7 +137,7 @@ export default function Home() {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to start audit");
+        throw new Error("Unable to start your audit right now. Please try again.");
       }
 
       const reader = response.body?.getReader();
@@ -192,6 +205,7 @@ export default function Home() {
       } else {
         // Stream ended without complete event - show error
         console.error("Audit stream ended without completion data");
+        setErrorMessage("We couldn't finish your audit. Please try again.");
         setStep("input");
       }
     } catch (error) {
@@ -199,8 +213,18 @@ export default function Home() {
         return; // User navigated away
       }
       console.error("Audit failed:", error);
+      setErrorMessage((error as Error).message || "Audit failed. Please try again.");
       setStep("input");
+    } finally {
+      setIsSubmitting(false);
     }
+  };
+
+  const cancelScan = () => {
+    setErrorMessage("Live updates stopped. Your audit may still finish in the background.");
+    setStep("input");
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
   };
 
   const Branding = () => (
@@ -262,6 +286,12 @@ export default function Home() {
                 </div>
 
                 <div className="p-8 space-y-4 bg-white">
+                  {errorMessage && (
+                    <div className="rounded-lg border border-red-100 bg-red-50 p-3 text-left flex items-start gap-2" data-testid="audit-error-message">
+                      <AlertCircle size={16} className="text-red-500 mt-0.5" />
+                      <p className="text-sm text-red-700 font-medium">{errorMessage}</p>
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="group relative">
                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -332,13 +362,14 @@ export default function Home() {
                     type="submit"
                     className="w-full bg-[#5599f9] hover:bg-[#4a8ce8] text-white text-lg font-bold tracking-wide py-5 uppercase transition-all transform active:scale-[0.99] flex items-center justify-center gap-2 mt-4 rounded-lg shadow-lg shadow-blue-500/20 disabled:opacity-50"
                     data-testid="button-start-audit"
+                    disabled={isSubmitting}
                   >
-                    Start Visibility Audit <ArrowRight size={20} />
+                    {isSubmitting ? "Starting Audit..." : "Start Visibility Audit"} <ArrowRight size={20} />
                   </button>
 
                   <div className="text-center pt-2">
                     <p className="text-xs text-gray-400 font-medium">
-                      Generating 20 AI prompt variations - Checking ChatGPT & Google AI Overviews
+                      Generating {LEAD_GEN_TOTAL_PROMPTS} AI prompt variations - Checking ChatGPT & Google AI Overviews
                     </p>
                   </div>
                 </div>
@@ -389,6 +420,20 @@ export default function Home() {
               style={{ width: `${scanProgress}%` }}
             ></div>
           </div>
+        </div>
+
+        <div className="space-y-3 text-center">
+          <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">
+            You can leave this page. We will keep processing your audit.
+          </p>
+          <button
+            type="button"
+            onClick={cancelScan}
+            className="inline-flex items-center gap-2 text-xs font-semibold text-gray-500 hover:text-gray-700 border border-gray-200 rounded-md px-3 py-2 transition-colors"
+            data-testid="button-cancel-audit"
+          >
+            <XCircle size={14} /> Stop Live Updates
+          </button>
         </div>
       </div>
     </div>
