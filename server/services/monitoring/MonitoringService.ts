@@ -1,6 +1,6 @@
 import { monitoringClientRequestSchema } from "@shared/schema";
 import { z } from "zod";
-import { retryWithBackoff } from "./retryWithBackoff";
+import { createLogger } from "../../utils/logger";
 
 interface PendingScanConfig {
   client: z.infer<typeof monitoringClientRequestSchema>;
@@ -47,7 +47,9 @@ interface PendingRescanConfig {
   createdAt: number;
 }
 
-export class MonitoringService {
+const monitoringLogger = createLogger("monitoring-service");
+
+class MonitoringService {
   private pendingScanConfigs = new Map<string, PendingScanConfig>();
   private pendingRescanConfigs = new Map<string, PendingRescanConfig>();
 
@@ -77,7 +79,31 @@ export class MonitoringService {
   }
 
   async retryWithBackoff<T>(fn: () => Promise<T>, maxRetries = 3, baseDelayMs = 10000): Promise<T> {
-    return retryWithBackoff(fn, maxRetries, baseDelayMs);
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await fn();
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        const errorType = lastError.message.includes("rate") || lastError.message.includes("429")
+          ? "RATE_LIMIT"
+          : lastError.message.includes("timeout")
+            ? "TIMEOUT"
+            : "API_ERROR";
+
+        if (attempt < maxRetries) {
+          const delayMs = baseDelayMs * (attempt + 1);
+          monitoringLogger.warn(`Attempt ${attempt + 1}/${maxRetries} failed (${errorType}): ${lastError.message}`, { retryAttempt: attempt + 1, maxRetries, errorType });
+          monitoringLogger.info(`Waiting ${delayMs / 1000}s before next attempt...`, { retryAttempt: attempt + 1, delayMs });
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+        } else {
+          monitoringLogger.error(`All ${maxRetries} retries exhausted. Final error: ${lastError.message}`, { maxRetries, errorType });
+        }
+      }
+    }
+
+    throw lastError;
   }
 
   private cleanupStaleConfigs(): void {

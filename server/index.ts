@@ -6,45 +6,48 @@ import { createServer } from "http";
 import { startScheduler } from "./services/scheduler";
 import { startScanJobProcessor, registerShutdownHandlers } from "./services/scan-job-processor";
 import { validateOpenAIKey } from "./ai-services";
+import { createLogger } from "./utils/logger";
 
 const app = express();
+const startupLogger = createLogger("startup");
+const httpLogger = createLogger("express");
 
 // ============================================
 // STARTUP VALIDATION
 // ============================================
 function validateEnvironment() {
-  console.log("\n========================================");
-  console.log("ENVIRONMENT VALIDATION");
-  console.log("========================================");
+  startupLogger.info("========================================");
+  startupLogger.info("ENVIRONMENT VALIDATION");
+  startupLogger.info("========================================");
   
   // Validate OpenAI API key
   const openaiResult = validateOpenAIKey();
   if (!openaiResult.valid) {
-    console.error(`[CRITICAL] ${openaiResult.message}`);
-    console.error("[CRITICAL] Prompt generation will use fallback defaults - AI prompts won't be customized!");
+    startupLogger.error(openaiResult.message, { status: "critical" });
+    startupLogger.error("Prompt generation will use fallback defaults - AI prompts won't be customized!", { status: "critical" });
   }
   
   // Check other important environment variables
   if (!process.env.DATABASE_URL) {
-    console.warn("[WARNING] DATABASE_URL is not set - database operations will fail");
+    startupLogger.warn("DATABASE_URL is not set - database operations will fail");
   } else {
-    console.log("[OK] DATABASE_URL is configured");
+    startupLogger.info("DATABASE_URL is configured");
   }
   
   if (!process.env.ADMIN_PASSWORD) {
-    console.warn("[WARNING] ADMIN_PASSWORD is not set - admin portal will be inaccessible");
+    startupLogger.warn("ADMIN_PASSWORD is not set - admin portal will be inaccessible");
   } else {
-    console.log("[OK] ADMIN_PASSWORD is configured");
+    startupLogger.info("ADMIN_PASSWORD is configured");
   }
   
   // Optional API keys
   if (process.env.PERPLEXITY_API_KEY) {
-    console.log("[OK] PERPLEXITY_API_KEY is configured");
+    startupLogger.info("PERPLEXITY_API_KEY is configured");
   } else {
-    console.log("[INFO] PERPLEXITY_API_KEY not set - Perplexity checks will be skipped");
+    startupLogger.info("PERPLEXITY_API_KEY not set - Perplexity checks will be skipped");
   }
-  
-  console.log("========================================\n");
+
+  startupLogger.info("========================================");
 }
 
 // Run validation on startup
@@ -70,14 +73,7 @@ app.use(
 app.use(express.urlencoded({ extended: false }));
 
 export function log(message: string, source = "express") {
-  const formattedTime = new Date().toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-  });
-
-  console.log(`${formattedTime} [${source}] ${message}`);
+  createLogger(source).info(message);
 }
 
 app.use((req, res, next) => {
@@ -99,7 +95,7 @@ app.use((req, res, next) => {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
 
-      log(logLine);
+      httpLogger.info(logLine);
     }
   });
 
@@ -139,7 +135,7 @@ app.use((req, res, next) => {
       reusePort: true,
     },
     () => {
-      log(`serving on port ${port}`);
+      startupLogger.info(`serving on port ${port}`, { port });
       
       // Start the background scheduler for automated visibility checks
       startScheduler();
