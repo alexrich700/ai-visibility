@@ -54,7 +54,8 @@ class MonitoringService {
   private pendingRescanConfigs = new Map<string, PendingRescanConfig>();
 
   constructor() {
-    setInterval(() => this.cleanupStaleConfigs(), 60 * 1000);
+    const cleanupInterval = setInterval(() => this.cleanupStaleConfigs(), 60 * 1000);
+    cleanupInterval.unref();
   }
 
   setPendingScanConfig(id: string, config: PendingScanConfig): void {
