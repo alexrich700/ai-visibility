@@ -489,31 +489,13 @@ export default function MonitorDashboard() {
     enabled: !!clientId && exportDialogOpen,
   });
 
-  if (!clientId) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p>Invalid client ID</p>
-      </div>
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-[#5599f9] animate-spin" />
-      </div>
-    );
-  }
-
-  if (!data) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p>No data found</p>
-      </div>
-    );
-  }
-
-  const { client, groups, sessions, latestResults, resultsByGroup, analytics, trendData } = data;
+  const maybeClient = data?.client;
+  const sessions = data?.sessions ?? [];
+  const latestResults = data?.latestResults ?? [];
+  const resultsByGroup = data?.resultsByGroup ?? [];
+  const analytics = data?.analytics ?? null;
+  const groups = data?.groups ?? [];
+  const clientBusinessName = maybeClient?.businessName ?? "";
 
   const cityScopedData = useMemo(
     () => selectCityScopedDashboardData(sessions, latestResults, resultsByGroup, selectedViewCity),
@@ -574,15 +556,14 @@ export default function MonitorDashboard() {
     googleAIFoundCount,
   } = visibilityMetrics;
 
-
   const avgRank = useMemo(() => computeAverageRank(serviceResultsOnly), [serviceResultsOnly]);
   const computedCompetitorVisibility = useMemo(
-    () => computeCompetitorVisibility(serviceResultsOnly, client.businessName),
-    [serviceResultsOnly, client.businessName],
+    () => computeCompetitorVisibility(serviceResultsOnly, clientBusinessName),
+    [serviceResultsOnly, clientBusinessName],
   );
   const computedShareOfVoice = useMemo(
-    () => computeShareOfVoice(serviceResultsOnly, client.businessName),
-    [serviceResultsOnly, client.businessName],
+    () => computeShareOfVoice(serviceResultsOnly, clientBusinessName),
+    [serviceResultsOnly, clientBusinessName],
   );
   const computedTopCitations = useMemo(() => computeTopCitations(serviceResultsOnly), [serviceResultsOnly]);
   const firstPlaceCount = useMemo(() => computeFirstPlaceCount(serviceResultsOnly), [serviceResultsOnly]);
@@ -601,6 +582,33 @@ export default function MonitorDashboard() {
     () => buildCompetitorTrendChartData(competitorTrendsData?.competitorTrends ?? []),
     [competitorTrendsData],
   );
+
+  if (!clientId) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p>Invalid client ID</p>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-[#5599f9] animate-spin" />
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p>No data found</p>
+      </div>
+    );
+  }
+
+  const client = data.client;
+
 
   // Colors for group/competitor lines
   const trendLineColors = [

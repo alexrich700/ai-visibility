@@ -11,7 +11,7 @@
     "db:push": "drizzle-kit push",
     "test:query-cache": "npx tsx --test client/src/lib/queryClient.test.ts",
     "test:selectors": "npx tsx --test client/src/features/monitor-dashboard/selectors.test.ts",
-    "test:logger": "node -e \"console.log('No logger tests configured')\""
+    "test:logger": "npx tsx --test server/utils/logger.test.ts"
   },
   "dependencies": {
     "@google/genai": "^1.33.0",
