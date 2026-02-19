@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -42,23 +42,28 @@ import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import logoIcon from "@assets/images_1765741951084.png";
 import type { MonitoringClient, MonitoringGroup, CheckSession, CheckResult } from "@shared/schema";
-
-interface Citation {
-  domain: string;
-  count: number;
-}
-
-interface ShareOfVoiceItem {
-  name: string;
-  percentage: number;
-  mentionCount: number;
-}
-
-interface CompetitorVisibility {
-  name: string;
-  visibilityPercent: number;
-  mentionCount: number;
-}
+import {
+  buildCompetitorTrendChartData,
+  buildGroupBarData,
+  buildGroupTrendChartData,
+  buildSessionChartData,
+  computeAverageRank,
+  computeCompetitorVisibility,
+  computeFirstPlaceCount,
+  computeShareOfVoice,
+  computeTopCitations,
+  computeVisibilityMetrics,
+  filterResultsByGroup,
+  selectAggregatedScores,
+  selectBrandSentimentGroupIds,
+  selectCityScopedDashboardData,
+  type Citation,
+  type CompetitorTrendData,
+  type CompetitorVisibility,
+  type GroupResults,
+  type GroupTrendData,
+  type ShareOfVoiceItem,
+} from "@/features/monitor-dashboard/selectors";
 
 interface SentimentStatement {
   text: string;
@@ -111,20 +116,9 @@ interface DashboardData {
   groups: MonitoringGroup[];
   sessions: CheckSession[];
   latestResults: CheckResult[];
-  resultsByGroup: { groupId: number; groupName: string; promptCategory: string; results: CheckResult[] }[];
+  resultsByGroup: GroupResults[];
   analytics: Analytics | null;
   trendData: TrendDataPoint[];
-}
-
-interface GroupTrendData {
-  groupId: number;
-  groupName: string;
-  data: { date: string | null; visibilityScore: number; foundCount: number; totalPrompts: number }[];
-}
-
-interface CompetitorTrendData {
-  competitorName: string;
-  data: { date: string | null; visibilityPercent: number; mentionCount: number }[];
 }
 
 const COLORS = {
@@ -171,159 +165,6 @@ function MetricInfo({ tooltip, id }: { tooltip: string; id: string }) {
   );
 }
 
-// Helper functions to recalculate analytics from city-filtered results
-function computeCompetitorVisibility(results: CheckResult[], businessName: string): CompetitorVisibility[] {
-  const competitorCounts: Record<string, number> = {};
-  const totalPrompts = results.length;
-  
-  results.forEach(result => {
-    if (result.competitors) {
-      try {
-        const competitors = JSON.parse(result.competitors);
-        if (Array.isArray(competitors)) {
-          competitors.forEach((comp: string) => {
-            const normalizedComp = comp.trim();
-            if (normalizedComp && normalizedComp.toLowerCase() !== businessName.toLowerCase()) {
-              competitorCounts[normalizedComp] = (competitorCounts[normalizedComp] || 0) + 1;
-            }
-          });
-        }
-      } catch (e) {
-        // Invalid JSON, skip
-      }
-    }
-  });
-  
-  return Object.entries(competitorCounts)
-    .map(([name, mentionCount]) => ({
-      name,
-      mentionCount,
-      visibilityPercent: totalPrompts > 0 ? Math.round((mentionCount / totalPrompts) * 1000) / 10 : 0
-    }))
-    .sort((a, b) => b.visibilityPercent - a.visibilityPercent)
-    .slice(0, 5);
-}
-
-function computeShareOfVoice(results: CheckResult[], businessName: string): ShareOfVoiceItem[] {
-  const totalPrompts = results.length;
-  if (totalPrompts === 0) return [];
-  
-  // Count brand mentions
-  const brandMentions = results.filter(r => r.chatgptFound || r.googleAIFound).length;
-  
-  // Count competitor mentions
-  const competitorCounts: Record<string, number> = {};
-  results.forEach(result => {
-    if (result.competitors) {
-      try {
-        const competitors = JSON.parse(result.competitors);
-        if (Array.isArray(competitors)) {
-          competitors.forEach((comp: string) => {
-            const normalizedComp = comp.trim();
-            if (normalizedComp && normalizedComp.toLowerCase() !== businessName.toLowerCase()) {
-              competitorCounts[normalizedComp] = (competitorCounts[normalizedComp] || 0) + 1;
-            }
-          });
-        }
-      } catch (e) {
-        // Invalid JSON, skip
-      }
-    }
-  });
-  
-  // Calculate total mentions
-  const competitorTotalMentions = Object.values(competitorCounts).reduce((sum, c) => sum + c, 0);
-  const totalMentions = brandMentions + competitorTotalMentions;
-  
-  if (totalMentions === 0) return [];
-  
-  // Build share of voice array
-  const shareOfVoice: ShareOfVoiceItem[] = [
-    {
-      name: businessName,
-      mentionCount: brandMentions,
-      percentage: Math.round((brandMentions / totalMentions) * 100)
-    }
-  ];
-  
-  // Add top competitors
-  Object.entries(competitorCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .forEach(([name, count]) => {
-      shareOfVoice.push({
-        name,
-        mentionCount: count,
-        percentage: Math.round((count / totalMentions) * 100)
-      });
-    });
-  
-  return shareOfVoice;
-}
-
-function computeTopCitations(results: CheckResult[]): Citation[] {
-  const citationCounts: Record<string, number> = {};
-  
-  // Filter out internal Google redirect URLs and other non-meaningful domains
-  const excludedDomains = [
-    'vertexaisearch.cloud.google.com',
-    'grounding-api-redirect',
-  ];
-  
-  const isDomainExcluded = (domain: string): boolean => {
-    return excludedDomains.some(excluded => domain.includes(excluded));
-  };
-  
-  results.forEach(result => {
-    // Process ChatGPT citations
-    if (result.chatgptCitations) {
-      try {
-        const citations = result.chatgptCitations as { url?: string; domain?: string }[];
-        if (Array.isArray(citations)) {
-          citations.forEach((cit) => {
-            const domain = cit.domain || (cit.url ? new URL(cit.url).hostname : null);
-            if (domain && !isDomainExcluded(domain)) {
-              citationCounts[domain] = (citationCounts[domain] || 0) + 1;
-            }
-          });
-        }
-      } catch (e) {
-        // Invalid JSON, skip
-      }
-    }
-    
-    // Process Google AI citations
-    if (result.googleAICitations) {
-      try {
-        const citations = result.googleAICitations as { url?: string; domain?: string }[];
-        if (Array.isArray(citations)) {
-          citations.forEach((cit) => {
-            const domain = cit.domain || (cit.url ? new URL(cit.url).hostname : null);
-            if (domain && !isDomainExcluded(domain)) {
-              citationCounts[domain] = (citationCounts[domain] || 0) + 1;
-            }
-          });
-        }
-      } catch (e) {
-        // Invalid JSON, skip
-      }
-    }
-  });
-  
-  return Object.entries(citationCounts)
-    .map(([domain, count]) => ({ domain, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 10);
-}
-
-function computeFirstPlaceCount(results: CheckResult[]): number {
-  let count = 0;
-  results.forEach(result => {
-    if (result.chatgptRank === 1) count++;
-    if (result.googleAIRank === 1) count++;
-  });
-  return count;
-}
 
 export default function MonitorDashboard() {
   const [, params] = useRoute("/monitor/dashboard/:id");
@@ -674,242 +515,92 @@ export default function MonitorDashboard() {
 
   const { client, groups, sessions, latestResults, resultsByGroup, analytics, trendData } = data;
 
-  // Check if a specific city is selected (not "all")
-  const isSpecificCitySelected = selectedViewCity && selectedViewCity !== "all";
-  
-  // Filter sessions by selected city if multi-city client and city is selected
-  const filteredSessions = isSpecificCitySelected
-    ? sessions.filter(s => (s as any).city === selectedViewCity)
-    : sessions;
-
-  // Track if the selected city has no scan data yet
-  const selectedCityHasNoData = isSpecificCitySelected && filteredSessions.length === 0;
-
-  // Calculate scores - use filtered sessions
-  const latestSession = filteredSessions[0];
-  const previousSession = filteredSessions[1];
-  
-  // For "All Cities" mode, aggregate scores from latest session per city
-  // Get unique cities and their latest sessions for aggregation
-  // Sort sessions by createdAt desc first to ensure we get the latest per city
-  const sortedSessions = [...sessions].sort((a, b) => 
-    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  const cityScopedData = useMemo(
+    () => selectCityScopedDashboardData(sessions, latestResults, resultsByGroup, selectedViewCity),
+    [sessions, latestResults, resultsByGroup, selectedViewCity],
   );
-  const latestSessionPerCity = isSpecificCitySelected ? null : (() => {
-    const citySessionMap = new Map<string | null, typeof sessions[0]>();
-    for (const session of sortedSessions) {
-      const city = (session as any).city || null;
-      if (!citySessionMap.has(city)) {
-        citySessionMap.set(city, session);
-      }
-    }
-    return Array.from(citySessionMap.values());
-  })();
-  
-  // Calculate aggregated scores for "All Cities" mode
-  const aggregatedScores = latestSessionPerCity && latestSessionPerCity.length > 0 ? {
-    overallScore: Math.round(latestSessionPerCity.reduce((sum, s) => sum + (s.overallScore || 0), 0) / latestSessionPerCity.length),
-    chatgptScore: Math.round(latestSessionPerCity.reduce((sum, s) => sum + (s.chatgptScore || 0), 0) / latestSessionPerCity.length),
-    googleAIScore: Math.round(latestSessionPerCity.reduce((sum, s) => sum + (s.googleAIScore || 0), 0) / latestSessionPerCity.length),
-  } : null;
-  
-  // Filter latestResults to only include results from the selected city's session
-  // IMPORTANT: When a specific city is selected but has no sessions, return empty array (not all results)
-  const cityFilteredResults = isSpecificCitySelected
-    ? (latestSession ? latestResults.filter(r => r.sessionId === latestSession.id) : [])
-    : latestResults;
-  
-  // Filter resultsByGroup similarly for city filtering
-  // When a specific city is selected but has no sessions, return empty array
-  const cityFilteredResultsByGroup = isSpecificCitySelected
-    ? (latestSession 
-        ? resultsByGroup.map(g => ({
-            ...g,
-            results: g.results.filter(r => r.sessionId === latestSession.id)
-          })).filter(g => g.results.length > 0)
-        : [])
-    : resultsByGroup;
-  
-  // Separate brand sentiment groups from service groups
-  // Brand sentiment prompts are excluded from visibility metrics and shown in a dedicated section
-  const brandSentimentGroupIds = new Set(
-    resultsByGroup
-      .filter(g => g.promptCategory === 'brand_sentiment')
-      .map(g => g.groupId)
+  const {
+    isSpecificCitySelected,
+    filteredSessions,
+    selectedCityHasNoData,
+    latestSession,
+    previousSession,
+    cityFilteredResults,
+    cityFilteredResultsByGroup,
+  } = cityScopedData;
+
+  const brandSentimentGroupIds = useMemo(() => selectBrandSentimentGroupIds(resultsByGroup), [resultsByGroup]);
+
+  const serviceResultsOnly = useMemo(
+    () => cityFilteredResults.filter((result) => !brandSentimentGroupIds.has(result.groupId)),
+    [cityFilteredResults, brandSentimentGroupIds],
   );
-  
-  // Filter out brand sentiment results from visibility calculations
-  const serviceResultsOnly = cityFilteredResults.filter(r => !brandSentimentGroupIds.has(r.groupId));
-  const serviceResultsByGroup = cityFilteredResultsByGroup.filter(g => g.promptCategory !== 'brand_sentiment');
-  
-  // Get brand sentiment results separately for the dedicated section
-  const brandSentimentResults = cityFilteredResults.filter(r => brandSentimentGroupIds.has(r.groupId));
-  const brandSentimentGroups = cityFilteredResultsByGroup.filter(g => g.promptCategory === 'brand_sentiment');
-  
-  // Use aggregated scores for "All Cities" mode, otherwise use single session scores
+  const serviceResultsByGroup = useMemo(
+    () => cityFilteredResultsByGroup.filter((group) => group.promptCategory !== "brand_sentiment"),
+    [cityFilteredResultsByGroup],
+  );
+
+  const brandSentimentResults = useMemo(
+    () => cityFilteredResults.filter((result) => brandSentimentGroupIds.has(result.groupId)),
+    [cityFilteredResults, brandSentimentGroupIds],
+  );
+  const brandSentimentGroups = useMemo(
+    () => cityFilteredResultsByGroup.filter((group) => group.promptCategory === "brand_sentiment"),
+    [cityFilteredResultsByGroup],
+  );
+
+  const aggregatedScores = useMemo(
+    () => selectAggregatedScores(sessions, isSpecificCitySelected),
+    [sessions, isSpecificCitySelected],
+  );
+
   const overallScore = aggregatedScores?.overallScore ?? latestSession?.overallScore ?? 0;
   const chatgptScore = aggregatedScores?.chatgptScore ?? latestSession?.chatgptScore ?? 0;
   const googleAIScore = aggregatedScores?.googleAIScore ?? latestSession?.googleAIScore ?? 0;
-  
-  const scoreDelta = previousSession 
-    ? (latestSession?.overallScore ?? 0) - previousSession.overallScore 
-    : 0;
 
-  // Calculate visibility metrics from service results only (excluding brand sentiment)
-  // Each prompt is checked across 2 platforms, so total exposures = prompts × 2
-  const promptCount = serviceResultsOnly.length;
-  const totalExposures = promptCount * 2;
-  
-  // Per-platform visibility metrics (service prompts only)
-  const chatgptFoundCount = serviceResultsOnly.filter(r => r.chatgptFound).length;
-  const googleAIFoundCount = serviceResultsOnly.filter(r => r.googleAIFound).length;
-  const chatgptCitedCount = serviceResultsOnly.filter(r => r.chatgptCited).length;
-  const googleAICitedCount = serviceResultsOnly.filter(r => r.googleAICited).length;
-  
-  // Overall counts are sum of both platforms
-  const foundCount = chatgptFoundCount + googleAIFoundCount;
-  const citedCount = chatgptCitedCount + googleAICitedCount;
-  
-  // Visibility rate uses total exposures (prompts × 2 platforms)
-  const visibilityRate = totalExposures > 0 ? Math.round((foundCount / totalExposures) * 100) : 0;
-  const citationRate = totalExposures > 0 ? Math.round((citedCount / totalExposures) * 100) : 0;
-  
-  // Per-platform percentages use per-prompt basis (out of promptCount)
-  const chatgptVisibility = promptCount > 0 ? Math.round((chatgptFoundCount / promptCount) * 100) : 0;
-  const googleAIVisibility = promptCount > 0 ? Math.round((googleAIFoundCount / promptCount) * 100) : 0;
-  
-  // Calculate average rank across service results only (excluding brand sentiment)
-  const chatgptRanks = serviceResultsOnly.filter(r => r.chatgptRank != null).map(r => r.chatgptRank as number);
-  const googleAIRanks = serviceResultsOnly.filter(r => r.googleAIRank != null).map(r => r.googleAIRank as number);
-  const allRanks = [...chatgptRanks, ...googleAIRanks];
-  const avgRank = allRanks.length > 0 
-    ? Math.round((allRanks.reduce((a, b) => a + b, 0) / allRanks.length) * 10) / 10
-    : null;
-  
-  // Recalculate analytics from city-filtered results instead of using API analytics
-  // Use serviceResultsOnly for competitor/share-of-voice/citations (excluding brand sentiment)
-  const computedCompetitorVisibility = computeCompetitorVisibility(serviceResultsOnly, client.businessName);
-  const computedShareOfVoice = computeShareOfVoice(serviceResultsOnly, client.businessName);
-  const computedTopCitations = computeTopCitations(serviceResultsOnly);
-  // Calculate first place count from service results for prominence metric
-  const firstPlaceCount = computeFirstPlaceCount(serviceResultsOnly);
+  const scoreDelta = previousSession ? (latestSession?.overallScore ?? 0) - previousSession.overallScore : 0;
 
-  // Prepare chart data - use filtered sessions
-  // When "All Cities" is selected, group sessions by date and average scores
-  // When a specific city is selected, show individual session data points
-  const sessionChartData = (() => {
-    if (isSpecificCitySelected) {
-      // Specific city: show individual session data points
-      return filteredSessions.slice().reverse().map((session) => ({
-        date: format(new Date(session.createdAt), "MMM d"),
-        overall: session.overallScore,
-        chatgpt: session.chatgptScore,
-        googleAI: session.googleAIScore,
-        city: (session as any).city || null,
-      }));
-    } else {
-      // All Cities: group by date and average scores across all cities
-      const dateGroupMap = new Map<string, { 
-        dateObj: Date;
-        sessions: typeof filteredSessions;
-      }>();
-      
-      for (const session of filteredSessions) {
-        const dateObj = new Date(session.createdAt);
-        const dateKey = format(dateObj, "yyyy-MM-dd"); // Group by calendar date
-        
-        if (!dateGroupMap.has(dateKey)) {
-          dateGroupMap.set(dateKey, { dateObj, sessions: [] });
-        }
-        dateGroupMap.get(dateKey)!.sessions.push(session);
-      }
-      
-      // Convert to chart data with averaged scores, sorted chronologically
-      return Array.from(dateGroupMap.entries())
-        .sort((a, b) => a[1].dateObj.getTime() - b[1].dateObj.getTime())
-        .map(([_, { dateObj, sessions: dateSessions }]) => {
-          const avgOverall = Math.round(
-            dateSessions.reduce((sum, s) => sum + (s.overallScore || 0), 0) / dateSessions.length
-          );
-          const avgChatgpt = Math.round(
-            dateSessions.reduce((sum, s) => sum + (s.chatgptScore || 0), 0) / dateSessions.length
-          );
-          const avgGoogleAI = Math.round(
-            dateSessions.reduce((sum, s) => sum + (s.googleAIScore || 0), 0) / dateSessions.length
-          );
-          
-          return {
-            date: format(dateObj, "MMM d"),
-            overall: avgOverall,
-            chatgpt: avgChatgpt,
-            googleAI: avgGoogleAI,
-            city: null, // Aggregated across all cities
-          };
-        });
-    }
-  })();
+  const visibilityMetrics = useMemo(() => computeVisibilityMetrics(serviceResultsOnly), [serviceResultsOnly]);
+  const {
+    promptCount,
+    totalExposures,
+    foundCount,
+    citedCount,
+    visibilityRate,
+    citationRate,
+    chatgptVisibility,
+    googleAIVisibility,
+    chatgptFoundCount,
+    googleAIFoundCount,
+  } = visibilityMetrics;
 
-  // Prepare group trend chart data (merge all groups into a single dataset)
-  const groupTrendChartData = (() => {
-    if (!groupTrendsData?.groupTrends?.length) return [];
-    // Collect all unique date timestamps across all groups (use ISO string for deduplication)
-    const allDatesMap = new Map<string, Date>();
-    groupTrendsData.groupTrends.forEach(g => {
-      g.data.forEach(d => {
-        if (d.date) {
-          const dateObj = new Date(d.date);
-          const isoKey = dateObj.toISOString();
-          if (!allDatesMap.has(isoKey)) {
-            allDatesMap.set(isoKey, dateObj);
-          }
-        }
-      });
-    });
-    // Sort by actual date chronologically
-    const sortedDates = Array.from(allDatesMap.entries())
-      .sort((a, b) => a[1].getTime() - b[1].getTime());
-    
-    return sortedDates.map(([isoKey, dateObj]) => {
-      const displayDate = format(dateObj, "MMM d");
-      const point: Record<string, string | number> = { date: displayDate };
-      groupTrendsData.groupTrends.forEach(g => {
-        const match = g.data.find(d => d.date && new Date(d.date).toISOString() === isoKey);
-        point[g.groupName] = match?.visibilityScore ?? 0;
-      });
-      return point;
-    });
-  })();
 
-  // Prepare competitor trend chart data
-  const competitorTrendChartData = (() => {
-    if (!competitorTrendsData?.competitorTrends?.length) return [];
-    // Collect all unique date timestamps across all competitors (use ISO string for deduplication)
-    const allDatesMap = new Map<string, Date>();
-    competitorTrendsData.competitorTrends.forEach(c => {
-      c.data.forEach(d => {
-        if (d.date) {
-          const dateObj = new Date(d.date);
-          const isoKey = dateObj.toISOString();
-          if (!allDatesMap.has(isoKey)) {
-            allDatesMap.set(isoKey, dateObj);
-          }
-        }
-      });
-    });
-    // Sort by actual date chronologically
-    const sortedDates = Array.from(allDatesMap.entries())
-      .sort((a, b) => a[1].getTime() - b[1].getTime());
-    
-    return sortedDates.map(([isoKey, dateObj]) => {
-      const displayDate = format(dateObj, "MMM d");
-      const point: Record<string, string | number> = { date: displayDate };
-      competitorTrendsData.competitorTrends.forEach(c => {
-        const match = c.data.find(d => d.date && new Date(d.date).toISOString() === isoKey);
-        point[c.competitorName] = match ? Math.round(match.visibilityPercent * 10) / 10 : 0;
-      });
-      return point;
-    });
-  })();
+  const avgRank = useMemo(() => computeAverageRank(serviceResultsOnly), [serviceResultsOnly]);
+  const computedCompetitorVisibility = useMemo(
+    () => computeCompetitorVisibility(serviceResultsOnly, client.businessName),
+    [serviceResultsOnly, client.businessName],
+  );
+  const computedShareOfVoice = useMemo(
+    () => computeShareOfVoice(serviceResultsOnly, client.businessName),
+    [serviceResultsOnly, client.businessName],
+  );
+  const computedTopCitations = useMemo(() => computeTopCitations(serviceResultsOnly), [serviceResultsOnly]);
+  const firstPlaceCount = useMemo(() => computeFirstPlaceCount(serviceResultsOnly), [serviceResultsOnly]);
+
+  const sessionChartData = useMemo(
+    () => buildSessionChartData(filteredSessions, isSpecificCitySelected),
+    [filteredSessions, isSpecificCitySelected],
+  );
+
+  const groupTrendChartData = useMemo(
+    () => buildGroupTrendChartData(groupTrendsData?.groupTrends ?? []),
+    [groupTrendsData],
+  );
+
+  const competitorTrendChartData = useMemo(
+    () => buildCompetitorTrendChartData(competitorTrendsData?.competitorTrends ?? []),
+    [competitorTrendsData],
+  );
 
   // Colors for group/competitor lines
   const trendLineColors = [
@@ -918,22 +609,14 @@ export default function MonitorDashboard() {
   ];
 
   // Use service groups only for visibility bar chart (excludes brand sentiment)
-  const groupBarData = serviceResultsByGroup.map((g) => {
-    const groupFoundCount = g.results.filter(r => r.chatgptFound || r.googleAIFound).length;
-    const groupTotal = g.results.length;
-    return {
-      name: g.groupName.length > 15 ? g.groupName.slice(0, 15) + "..." : g.groupName,
-      fullName: g.groupName,
-      visibility: groupTotal > 0 ? Math.round((groupFoundCount / groupTotal) * 100) : 0,
-      total: groupTotal,
-    };
-  });
+  const groupBarData = useMemo(() => buildGroupBarData(serviceResultsByGroup), [serviceResultsByGroup]);
 
   // Filter results by selected group (applied on top of city filtering)
   // Use service results only for Prompt Results section (excludes brand sentiment)
-  const filteredResults = selectedGroup === "all"
-    ? serviceResultsOnly
-    : serviceResultsOnly.filter(r => r.groupId === parseInt(selectedGroup));
+  const filteredResults = useMemo(
+    () => filterResultsByGroup(serviceResultsOnly, selectedGroup),
+    [serviceResultsOnly, selectedGroup],
+  );
 
   return (
     <div className="min-h-screen bg-gray-50 selection:bg-[#5599f9] selection:text-white">

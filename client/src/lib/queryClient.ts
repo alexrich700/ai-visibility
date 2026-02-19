@@ -2,6 +2,27 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 const ADMIN_TOKEN_KEY = "adminToken";
 
+const DATA_CLASS_POLICY_KEYS = new Set([
+  "/api/monitoring/dashboard",
+  "/api/monitoring/settings",
+]);
+
+export function hasDataClassPolicy(queryKey: readonly unknown[]): boolean {
+  const keyRoot = typeof queryKey[0] === "string" ? queryKey[0] : "";
+  return DATA_CLASS_POLICY_KEYS.has(keyRoot);
+}
+
+function maybeWarnUnmappedPolicy(queryKey: readonly unknown[]): void {
+  const keyRoot = typeof queryKey[0] === "string" ? queryKey[0] : "";
+  if (!keyRoot.startsWith("/api/")) {
+    return;
+  }
+  if (!hasDataClassPolicy(queryKey) && import.meta.env?.MODE === "development") {
+    console.warn(`[queryClient] Unmapped data class policy for query key: ${String(keyRoot)}`);
+  }
+}
+
+
 export function getAdminToken(): string | null {
   return sessionStorage.getItem(ADMIN_TOKEN_KEY);
 }
@@ -57,6 +78,8 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
+    maybeWarnUnmappedPolicy(queryKey);
+
     const res = await fetch(queryKey.join("/") as string, {
       credentials: "include",
     });
@@ -74,6 +97,8 @@ export const getAdminQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
+    maybeWarnUnmappedPolicy(queryKey);
+
     const token = getAdminToken();
     const headers: Record<string, string> = {};
     
@@ -84,6 +109,25 @@ export const getAdminQueryFn: <T>(options: {
     const res = await fetch(queryKey.join("/") as string, {
       credentials: "include",
       headers,
+    });
+
+    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
+      return null;
+    }
+
+    await throwIfResNotOk(res);
+    return await res.json();
+  };
+
+export const getSessionAwareQueryFn: <T>(options: {
+  on401: UnauthorizedBehavior;
+}) => QueryFunction<T> =
+  ({ on401: unauthorizedBehavior }) =>
+  async ({ queryKey }) => {
+    maybeWarnUnmappedPolicy(queryKey);
+
+    const res = await fetch(queryKey.join("/") as string, {
+      credentials: "include",
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
