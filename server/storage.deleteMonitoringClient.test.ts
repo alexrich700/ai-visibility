@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { eq } from "drizzle-orm";
 import {
   checkCompetitorMetrics,
   checkGroupMetrics,
@@ -18,12 +19,12 @@ type DbTransaction = Parameters<typeof db.transaction>[0] extends (tx: infer T) 
 
 type RecordedDelete = {
   operation: string;
-  whereParams: unknown[];
+  whereClause: unknown;
 };
 
 type RecordedSelect = {
   operation: string;
-  whereParams: unknown[];
+  whereClause: unknown;
 };
 
 const TABLE_NAMES = new Map<object, string>([
@@ -42,19 +43,11 @@ function getTableName(table: object): string {
   return tableName;
 }
 
-function extractWhereParams(condition: unknown): unknown[] {
-  if (!condition || typeof condition !== "object") {
-    return [];
-  }
-
-  const chunks = (condition as { queryChunks?: unknown[] }).queryChunks;
-  if (!Array.isArray(chunks)) {
-    return [];
-  }
-
-  return chunks
-    .filter((chunk) => Boolean(chunk) && typeof chunk === "object" && (chunk as { constructor?: { name?: string } }).constructor?.name === "Param")
-    .map((chunk) => (chunk as { value: unknown }).value);
+function assertWhereMatches(table: object, actualWhere: unknown, expectedWhere: unknown): void {
+  const actualSql = db.select().from(table as any).where(actualWhere as any).toSQL();
+  const expectedSql = db.select().from(table as any).where(expectedWhere as any).toSQL();
+  assert.deepEqual(actualSql.params, expectedSql.params);
+  assert.equal(actualSql.sql, expectedSql.sql);
 }
 
 function buildTransactionMock(options: {
@@ -76,7 +69,7 @@ function buildTransactionMock(options: {
         deleteCounter += 1;
         records.deletes.push({
           operation: `delete:${getTableName(table)}`,
-          whereParams: extractWhereParams(condition),
+          whereClause: condition,
         });
 
         if (failOnDeleteNumber === deleteCounter) {
@@ -89,7 +82,7 @@ function buildTransactionMock(options: {
         where: async (condition: unknown) => {
           records.selects.push({
             operation: `select:${getTableName(table)}`,
-            whereParams: extractWhereParams(condition),
+            whereClause: condition,
           });
           return groupIds.map((id) => ({ id })) as Array<{ id: number }>;
         },
@@ -138,17 +131,8 @@ test("deleteMonitoringClient deletes expected tables in order and commits", asyn
 
   assert.deepEqual(records.lifecycle, ["begin", "commit"]);
   assert.deepEqual(records.selects.map((entry) => entry.operation), ["select:monitoring_groups"]);
-  assert.deepEqual(records.selects[0].whereParams, [clientId]);
+  assertWhereMatches(monitoringGroups, records.selects[0].whereClause, eq(monitoringGroups.clientId, clientId));
 
-  // Expected delete operations:
-  // 1) check_results
-  // 2) check_group_metrics
-  // 3) check_competitor_metrics
-  // 4) check_sessions
-  // 5) monitoring_prompts (group 1)
-  // 6) monitoring_prompts (group 2)
-  // 7) monitoring_groups
-  // 8) monitoring_clients
   assert.deepEqual(
     records.deletes.map((entry) => entry.operation),
     [
@@ -163,28 +147,31 @@ test("deleteMonitoringClient deletes expected tables in order and commits", asyn
     ],
   );
 
-  const clientScopedDeleteParams = records.deletes
-    .filter((entry) => entry.operation !== "delete:monitoring_prompts")
-    .map((entry) => entry.whereParams);
-  clientScopedDeleteParams.forEach((params) => assert.deepEqual(params, [clientId]));
+  const clientScopedDeletes = records.deletes.filter((entry) => entry.operation !== "delete:monitoring_prompts");
+  assertWhereMatches(checkResults, clientScopedDeletes[0].whereClause, eq(checkResults.clientId, clientId));
+  assertWhereMatches(checkGroupMetrics, clientScopedDeletes[1].whereClause, eq(checkGroupMetrics.clientId, clientId));
+  assertWhereMatches(checkCompetitorMetrics, clientScopedDeletes[2].whereClause, eq(checkCompetitorMetrics.clientId, clientId));
+  assertWhereMatches(checkSessions, clientScopedDeletes[3].whereClause, eq(checkSessions.clientId, clientId));
+  assertWhereMatches(monitoringGroups, clientScopedDeletes[4].whereClause, eq(monitoringGroups.clientId, clientId));
+  assertWhereMatches(monitoringClients, clientScopedDeletes[5].whereClause, eq(monitoringClients.id, clientId));
 
-  const promptDeleteParams = records.deletes
-    .filter((entry) => entry.operation === "delete:monitoring_prompts")
-    .map((entry) => entry.whereParams[0]);
-  assert.deepEqual(promptDeleteParams, groupIds);
+  const promptDeletes = records.deletes.filter((entry) => entry.operation === "delete:monitoring_prompts");
+  assertWhereMatches(monitoringPrompts, promptDeletes[0].whereClause, eq(monitoringPrompts.groupId, groupIds[0]));
+  assertWhereMatches(monitoringPrompts, promptDeletes[1].whereClause, eq(monitoringPrompts.groupId, groupIds[1]));
 });
 
 test("deleteMonitoringClient rolls back transaction when a mid-step delete fails", async () => {
   const storage = new DatabaseStorage();
   const records = { deletes: [] as RecordedDelete[], selects: [] as RecordedSelect[], lifecycle: [] as string[] };
   const failure = new Error("simulated mid-transaction failure");
+  const clientId = 456;
   const tx = buildTransactionMock({ groupIds: [1, 2], failOnDeleteNumber: 4, failure, records });
 
   await assert.rejects(
     withTransactionStub(
       tx,
       async () => {
-        await storage.deleteMonitoringClient(456);
+        await storage.deleteMonitoringClient(clientId);
       },
       records.lifecycle,
     ),
@@ -198,6 +185,10 @@ test("deleteMonitoringClient rolls back transaction when a mid-step delete fails
     "delete:check_competitor_metrics",
     "delete:check_sessions",
   ]);
+  assertWhereMatches(checkResults, records.deletes[0].whereClause, eq(checkResults.clientId, clientId));
+  assertWhereMatches(checkGroupMetrics, records.deletes[1].whereClause, eq(checkGroupMetrics.clientId, clientId));
+  assertWhereMatches(checkCompetitorMetrics, records.deletes[2].whereClause, eq(checkCompetitorMetrics.clientId, clientId));
+  assertWhereMatches(checkSessions, records.deletes[3].whereClause, eq(checkSessions.clientId, clientId));
 });
 
 test("deleteMonitoringClient handles zero dependent groups without prompt deletes", async () => {
@@ -212,7 +203,7 @@ test("deleteMonitoringClient handles zero dependent groups without prompt delete
 
   assert.deepEqual(records.lifecycle, ["begin", "commit"]);
   assert.deepEqual(records.selects.map((entry) => entry.operation), ["select:monitoring_groups"]);
-  assert.deepEqual(records.selects[0].whereParams, [clientId]);
+  assertWhereMatches(monitoringGroups, records.selects[0].whereClause, eq(monitoringGroups.clientId, clientId));
   assert.deepEqual(records.deletes.map((entry) => entry.operation), [
     "delete:check_results",
     "delete:check_group_metrics",
@@ -240,7 +231,11 @@ test("deleteMonitoringClient for nonexistent client succeeds silently", async ()
   );
 
   assert.deepEqual(records.lifecycle, ["begin", "commit"]);
-  records.deletes
-    .filter((entry) => entry.operation !== "delete:monitoring_prompts")
-    .forEach((entry) => assert.deepEqual(entry.whereParams, [nonexistentClientId]));
+  const clientScopedDeletes = records.deletes.filter((entry) => entry.operation !== "delete:monitoring_prompts");
+  assertWhereMatches(checkResults, clientScopedDeletes[0].whereClause, eq(checkResults.clientId, nonexistentClientId));
+  assertWhereMatches(checkGroupMetrics, clientScopedDeletes[1].whereClause, eq(checkGroupMetrics.clientId, nonexistentClientId));
+  assertWhereMatches(checkCompetitorMetrics, clientScopedDeletes[2].whereClause, eq(checkCompetitorMetrics.clientId, nonexistentClientId));
+  assertWhereMatches(checkSessions, clientScopedDeletes[3].whereClause, eq(checkSessions.clientId, nonexistentClientId));
+  assertWhereMatches(monitoringGroups, clientScopedDeletes[4].whereClause, eq(monitoringGroups.clientId, nonexistentClientId));
+  assertWhereMatches(monitoringClients, clientScopedDeletes[5].whereClause, eq(monitoringClients.id, nonexistentClientId));
 });
