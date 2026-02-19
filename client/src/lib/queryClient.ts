@@ -94,6 +94,31 @@ export const getAdminQueryFn: <T>(options: {
     return await res.json();
   };
 
+export const getSessionAwareQueryFn: <T>(options: {
+  on401: UnauthorizedBehavior;
+}) => QueryFunction<T> =
+  ({ on401: unauthorizedBehavior }) =>
+  async ({ queryKey }) => {
+    const token = getAdminToken();
+    const headers: Record<string, string> = {};
+
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const res = await fetch(queryKey.join("/") as string, {
+      credentials: "include",
+      headers,
+    });
+
+    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
+      return null;
+    }
+
+    await throwIfResNotOk(res);
+    return await res.json();
+  };
+
 // Cache policy tiers are grouped by data volatility to avoid one-size-fits-all defaults.
 // This keeps business metrics fresh while still caching stable data efficiently.
 const QUERY_CACHE_TIERS = {

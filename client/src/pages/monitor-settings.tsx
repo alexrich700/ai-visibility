@@ -46,7 +46,7 @@ import {
   Globe, MapPin, Clock, Loader2, FolderOpen, MessageSquare, Crown
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, getQueryFn, queryClient } from "@/lib/queryClient";
+import { apiRequest, getSessionAwareQueryFn, queryClient } from "@/lib/queryClient";
 import logoIcon from "@assets/images_1765741951084.png";
 import type { MonitoringClient, MonitoringGroup, MonitoringPrompt } from "@shared/schema";
 
@@ -100,7 +100,7 @@ export default function MonitorSettings() {
 
   const { data: authSession, isLoading: isAuthLoading } = useQuery<{ authenticated: boolean; isAdmin: boolean }>({
     queryKey: ["/api/monitoring/client-session"],
-    queryFn: getQueryFn({ on401: "returnNull" }),
+    queryFn: getSessionAwareQueryFn({ on401: "returnNull" }),
     staleTime: 30 * 1000,
   });
   const isAdmin = authSession?.isAdmin === true;
