@@ -25,20 +25,6 @@ export function normalizeDomainForLookup(domain: string): string {
     .replace(/\/+$/, "");
 }
 
-export function normalizeBusinessNameForLookup(businessName: string): string {
-  return businessName.trim().toLowerCase();
-}
-
-export function normalizeDomainForLookup(domain: string): string {
-  // Intentionally conservative normalization: strip protocol, trim/lowercase, and remove trailing slashes.
-  // We intentionally keep subdomains (including "www."), ports, paths, and query strings unchanged.
-  return domain
-    .trim()
-    .toLowerCase()
-    .replace(/^https?:\/\//, "")
-    .replace(/\/+$/, "");
-}
-
 export interface IStorage {
   createAudit(audit: InsertAudit): Promise<Audit>;
   getAudits(): Promise<Audit[]>;
@@ -261,23 +247,29 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateMonitoringClient(id: number, data: Partial<InsertMonitoringClient>): Promise<MonitoringClient | undefined> {
-    const currentClient = await this.getMonitoringClientById(id);
-    if (!currentClient) return undefined;
+    return await db.transaction(async (tx) => {
+      const [updatedClient] = await tx
+        .update(monitoringClients)
+        .set({
+          ...data,
+          updatedAt: new Date(),
+        })
+        .where(eq(monitoringClients.id, id))
+        .returning({ id: monitoringClients.id });
 
-    const nextBusinessName = data.businessName ?? currentClient.businessName;
-    const nextDomain = data.domain ?? currentClient.domain;
+      if (!updatedClient) return undefined;
 
-    const [client] = await db
-      .update(monitoringClients)
-      .set({
-        ...data,
-        normalizedBusinessName: normalizeBusinessNameForLookup(nextBusinessName),
-        normalizedDomain: normalizeDomainForLookup(nextDomain),
-        updatedAt: new Date(),
-      })
-      .where(eq(monitoringClients.id, id))
-      .returning();
-    return client;
+      const [client] = await tx
+        .update(monitoringClients)
+        .set({
+          normalizedBusinessName: sql`lower(trim(${monitoringClients.businessName}))`,
+          normalizedDomain: sql`regexp_replace(regexp_replace(lower(trim(${monitoringClients.domain})), '^https?://', ''), '/+$', '')`,
+        })
+        .where(eq(monitoringClients.id, id))
+        .returning();
+
+      return client;
+    });
   }
 
   async deleteMonitoringClient(id: number): Promise<void> {
