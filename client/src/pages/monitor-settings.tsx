@@ -46,7 +46,7 @@ import {
   Globe, MapPin, Clock, Loader2, FolderOpen, MessageSquare, Crown
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, getSessionAwareQueryFn, queryClient } from "@/lib/queryClient";
 import logoIcon from "@assets/images_1765741951084.png";
 import type { MonitoringClient, MonitoringGroup, MonitoringPrompt } from "@shared/schema";
 
@@ -97,6 +97,13 @@ export default function MonitorSettings() {
 
   const [hasChanges, setHasChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  const { data: authSession, isLoading: isAuthLoading } = useQuery<{ authenticated: boolean; isAdmin: boolean }>({
+    queryKey: ["/api/monitoring/client-session"],
+    queryFn: getSessionAwareQueryFn({ on401: "returnNull" }),
+    staleTime: 30 * 1000,
+  });
+  const isAdmin = authSession?.isAdmin === true;
 
   const { data, isLoading } = useQuery<SettingsData>({
     queryKey: ["/api/monitoring/settings", clientId],
@@ -323,6 +330,28 @@ export default function MonitorSettings() {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Card className="p-6">
           <p className="text-muted-foreground">Invalid client ID</p>
+        </Card>
+      </div>
+    );
+  }
+
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-[#5599f9] animate-spin" />
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md p-6 text-center">
+          <CardTitle className="text-xl mb-3">Access denied</CardTitle>
+          <p className="text-muted-foreground mb-4">Only admins can edit monitoring settings.</p>
+          <Button onClick={() => setLocation(`/monitor/dashboard/${clientId}`)} data-testid="button-back-dashboard">
+            Back to Dashboard
+          </Button>
         </Card>
       </div>
     );
