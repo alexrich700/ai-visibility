@@ -25,18 +25,8 @@ export function normalizeDomainForLookup(domain: string): string {
     .replace(/\/+$/, "");
 }
 
-export function normalizeBusinessNameForLookup(businessName: string): string {
-  return businessName.trim().toLowerCase();
-}
-
-export function normalizeDomainForLookup(domain: string): string {
-  // Intentionally conservative normalization: strip protocol, trim/lowercase, and remove trailing slashes.
-  // We intentionally keep subdomains (including "www."), ports, paths, and query strings unchanged.
-  return domain
-    .trim()
-    .toLowerCase()
-    .replace(/^https?:\/\//, "")
-    .replace(/\/+$/, "");
+function normalizedDomainLegacySql(column: typeof monitoringClients.domain) {
+  return sql`regexp_replace(regexp_replace(lower(trim(${column})), '^https?://', ''), '/+$', '')`;
 }
 
 export interface IStorage {
@@ -252,7 +242,7 @@ export class DatabaseStorage implements IStorage {
       .from(monitoringClients)
       .where(and(
         eq(sql`lower(trim(${monitoringClients.businessName}))`, normalizedName),
-        eq(sql`regexp_replace(regexp_replace(lower(trim(${monitoringClients.domain})), '^https?://', ''), '/+$', '')`, normalizedDomain),
+        eq(normalizedDomainLegacySql(monitoringClients.domain), normalizedDomain),
       ))
       .orderBy(desc(monitoringClients.createdAt))
       .limit(1);
