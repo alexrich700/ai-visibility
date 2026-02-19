@@ -11,11 +11,13 @@ import {
 } from "@shared/schema";
 import { eq, desc, and, lte, lt, isNull, or, isNotNull, gte, asc, inArray } from "drizzle-orm";
 
-function normalizeBusinessNameForLookup(businessName: string): string {
+export function normalizeBusinessNameForLookup(businessName: string): string {
   return businessName.trim().toLowerCase();
 }
 
-function normalizeDomainForLookup(domain: string): string {
+export function normalizeDomainForLookup(domain: string): string {
+  // Intentionally conservative normalization: strip protocol, trim/lowercase, and remove trailing slashes.
+  // We intentionally keep subdomains (including "www."), ports, paths, and query strings unchanged.
   return domain
     .trim()
     .toLowerCase()
