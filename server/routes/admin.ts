@@ -147,12 +147,8 @@ router.post("/reset-password", async (req, res) => {
 
 router.post("/logout", requireAdminAuth, async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Authorization required" });
-    }
-
-    await invalidateAdminToken(authHeader.substring(7));
+    const token = req.headers.authorization!.substring(7);
+    await invalidateAdminToken(token);
     res.json({ success: true });
   } catch (error) {
     logError("ADMIN LOGOUT ERROR", error);
