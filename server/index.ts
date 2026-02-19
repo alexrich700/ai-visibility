@@ -34,11 +34,7 @@ function validateEnvironment() {
     startupLogger.info("DATABASE_URL is configured");
   }
   
-  if (!process.env.ADMIN_PASSWORD) {
-    startupLogger.warn("ADMIN_PASSWORD is not set - admin portal will be inaccessible");
-  } else {
-    startupLogger.info("ADMIN_PASSWORD is configured");
-  }
+  startupLogger.info("Admin portal auth uses database-backed user credentials and sessions");
   
   // Optional API keys
   if (process.env.PERPLEXITY_API_KEY) {

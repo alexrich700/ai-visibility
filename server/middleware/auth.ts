@@ -2,13 +2,11 @@ import type { Request, Response, NextFunction } from "express";
 import { randomBytes } from "crypto";
 import { storage } from "../storage";
 
-export const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
-
 const ADMIN_SESSION_EXPIRY_HOURS = 24;
 const CLIENT_SESSION_EXPIRY_DAYS = 90;
 
 // Cleanup expired sessions from database daily
-setInterval(async () => {
+const sessionCleanupInterval = setInterval(async () => {
   try {
     const deletedClient = await storage.deleteExpiredClientSessions();
     const deletedAdmin = await storage.deleteExpiredAdminSessions();
@@ -19,6 +17,7 @@ setInterval(async () => {
     console.error('[auth] Failed to cleanup expired sessions:', error);
   }
 }, 24 * 60 * 60 * 1000); // Run daily
+sessionCleanupInterval.unref();
 
 // ============================================
 // ADMIN SESSION MANAGEMENT (Database-backed for persistence)
@@ -87,7 +86,7 @@ export async function isAdminRequest(req: Request): Promise<boolean> {
 // AUTH MIDDLEWARE
 // ============================================
 
-export function requireAdminAuth(req: Request, res: Response, next: NextFunction): void {
+export async function requireAdminAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   const authHeader = req.headers.authorization;
   
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -96,17 +95,17 @@ export function requireAdminAuth(req: Request, res: Response, next: NextFunction
   }
   
   const token = authHeader.substring(7);
-  
-  // Use async validation
-  validateAdminToken(token).then(isValid => {
+
+  try {
+    const isValid = await validateAdminToken(token);
     if (!isValid) {
       res.status(401).json({ error: "Invalid or expired token" });
       return;
     }
     next();
-  }).catch(() => {
+  } catch {
     res.status(500).json({ error: "Authentication error" });
-  });
+  }
 }
 
 interface RateLimitEntry {
@@ -121,7 +120,7 @@ const MAX_ATTEMPTS = 5;
 const WINDOW_MS = 15 * 60 * 1000;
 const BLOCK_DURATION_MS = 15 * 60 * 1000;
 
-setInterval(() => {
+const loginAttemptCleanupInterval = setInterval(() => {
   const now = Date.now();
   Array.from(loginAttempts.entries()).forEach(([ip, entry]) => {
     if (entry.blockedUntil && now > entry.blockedUntil) {
@@ -131,6 +130,7 @@ setInterval(() => {
     }
   });
 }, 60 * 1000);
+loginAttemptCleanupInterval.unref();
 
 export function loginRateLimiter(req: Request, res: Response, next: NextFunction): void {
   const ip = req.ip || req.socket.remoteAddress || "unknown";

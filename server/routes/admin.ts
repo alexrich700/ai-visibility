@@ -5,7 +5,8 @@ import {
   requireAdminAuth, 
   loginRateLimiter, 
   generateAdminToken,
-  resetLoginAttempts
+  resetLoginAttempts,
+  invalidateAdminToken,
 } from "../middleware/auth";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
@@ -141,6 +142,21 @@ router.post("/reset-password", async (req, res) => {
   } catch (error) {
     logError("RESET PASSWORD ERROR", error);
     res.status(500).json(getSafeErrorResponse("Failed to reset password"));
+  }
+});
+
+router.post("/logout", requireAdminAuth, async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Authorization required" });
+    }
+
+    await invalidateAdminToken(authHeader.substring(7));
+    res.json({ success: true });
+  } catch (error) {
+    logError("ADMIN LOGOUT ERROR", error);
+    res.status(500).json(getSafeErrorResponse("Logout failed"));
   }
 });
 
