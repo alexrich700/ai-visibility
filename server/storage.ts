@@ -9,7 +9,21 @@ import {
   CheckGroupMetric, CheckCompetitorMetric, ScanJob, ClientSession as DbClientSession, AdminSession as DbAdminSession,
   adminUsers, InsertAdminUser, AdminUser
 } from "@shared/schema";
-import { eq, desc, and, lte, lt, isNull, or, isNotNull, gte, asc, inArray } from "drizzle-orm";
+import { eq, desc, and, lte, lt, isNull, or, isNotNull, gte, asc, inArray, sql } from "drizzle-orm";
+
+export function normalizeBusinessNameForLookup(businessName: string): string {
+  return businessName.trim().toLowerCase();
+}
+
+export function normalizeDomainForLookup(domain: string): string {
+  // Intentionally conservative normalization: strip protocol, trim/lowercase, and remove trailing slashes.
+  // We intentionally keep subdomains (including "www."), ports, paths, and query strings unchanged.
+  return domain
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/\/+$/, "");
+}
 
 export function normalizeBusinessNameForLookup(businessName: string): string {
   return businessName.trim().toLowerCase();
@@ -231,7 +245,19 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(monitoringClients.createdAt))
       .limit(1);
 
-    return client;
+    if (client) return client;
+
+    // Fallback for rows that predate normalized-column backfill.
+    const [legacyClient] = await db.select()
+      .from(monitoringClients)
+      .where(and(
+        eq(sql`lower(trim(${monitoringClients.businessName}))`, normalizedName),
+        eq(sql`regexp_replace(regexp_replace(lower(trim(${monitoringClients.domain})), '^https?://', ''), '/+$', '')`, normalizedDomain),
+      ))
+      .orderBy(desc(monitoringClients.createdAt))
+      .limit(1);
+
+    return legacyClient;
   }
 
   async updateMonitoringClient(id: number, data: Partial<InsertMonitoringClient>): Promise<MonitoringClient | undefined> {
