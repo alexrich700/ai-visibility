@@ -9,10 +9,15 @@ import {
 import { db } from "./db";
 import { promptFallbackLogs } from "@shared/schema";
 import { DatabaseKeepaliveContext } from "./db-utils";
+import {
+  PROMPTS_PER_GROUP,
+  AUDIT_PROMPT_COUNT,
+  SENTIMENT_PROMPT_COUNT,
+  LEAD_GEN_TOTAL_PROMPTS,
+} from "@shared/audit-constants";
 
 // Configuration constants for prompt generation
-export const PROMPTS_PER_GROUP = 5; // Number of prompts to generate per service group (for monitoring)
-export const AUDIT_PROMPT_COUNT = 10; // Number of prompts for lead gen audits (optimized for speed)
+export { PROMPTS_PER_GROUP, AUDIT_PROMPT_COUNT, SENTIMENT_PROMPT_COUNT, LEAD_GEN_TOTAL_PROMPTS };
 
 // ============================================
 // ERROR CLASSIFICATION AND DIAGNOSTICS
@@ -171,6 +176,32 @@ async function recordFallback(diagnostics: PromptGenerationDiagnostics, context?
 
 type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
 
+class Semaphore {
+  private active = 0;
+  private queue: Array<() => void> = [];
+
+  constructor(private readonly maxConcurrent: number) {}
+
+  async acquire(): Promise<() => void> {
+    if (this.active < this.maxConcurrent) {
+      this.active++;
+      return () => this.release();
+    }
+
+    await new Promise<void>((resolve) => this.queue.push(resolve));
+    this.active++;
+    return () => this.release();
+  }
+
+  private release() {
+    this.active = Math.max(0, this.active - 1);
+    const next = this.queue.shift();
+    if (next) {
+      next();
+    }
+  }
+}
+
 interface CircuitBreakerConfig {
   failureThreshold: number;
   resetTimeoutMs: number;
@@ -271,6 +302,9 @@ const geminiCircuitBreaker = new CircuitBreaker('Gemini', {
   resetTimeoutMs: 60000,
   halfOpenMaxAttempts: 2,
 });
+
+// Gemini has stricter RPM ceilings than OpenAI, so cap in-process concurrency to reduce throttling.
+const geminiConcurrencyLimiter = new Semaphore(4);
 
 export function getCircuitBreakerStats() {
   return {
@@ -692,54 +726,59 @@ async function queryGemini(prompt: string, businessName: string, url?: string, b
   }
 
   try {
-    const { GoogleGenAI } = await import("@google/genai");
+    const releaseGeminiSlot = await geminiConcurrencyLimiter.acquire();
+    try {
+      const { GoogleGenAI } = await import("@google/genai");
     
     // Use Replit AI Integrations for Gemini access
-    const ai = new GoogleGenAI({
-      apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
-      httpOptions: {
-        apiVersion: "",
-        baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL,
-      },
-    });
+      const ai = new GoogleGenAI({
+        apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
+        httpOptions: {
+          apiVersion: "",
+          baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL,
+        },
+      });
     
     // Enable Google Search grounding for real-time search results
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-      config: {
-        tools: [{ googleSearch: {} }]
-      }
-    });
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+        config: {
+          tools: [{ googleSearch: {} }]
+        }
+      });
 
-    const text = response.text || "";
+      const text = response.text || "";
     
     // Extract citations from the Gemini response structure and text
-    const structuredCitations = extractGeminiCitations(response);
-    const textCitations = extractUrlsFromText(text);
-    const citations = mergeCitations(structuredCitations, textCitations);
+      const structuredCitations = extractGeminiCitations(response);
+      const textCitations = extractUrlsFromText(text);
+      const citations = mergeCitations(structuredCitations, textCitations);
     
     // Extract grounding metadata for geo-optimization analysis
-    const groundingMetadata = extractGroundingMetadata(response);
-    if (groundingMetadata?.webSearchQueries?.length) {
-      console.log(`[GEMINI] Web search queries used: ${groundingMetadata.webSearchQueries.join(', ')}`);
-    }
+      const groundingMetadata = extractGroundingMetadata(response);
+      if (groundingMetadata?.webSearchQueries?.length) {
+        console.log(`[GEMINI] Web search queries used: ${groundingMetadata.webSearchQueries.join(', ')}`);
+      }
     
-    const detection = checkForMentions(text, businessName, url, brandAliases);
-    const competitors = extractCompetitors(text, businessName);
+      const detection = checkForMentions(text, businessName, url, brandAliases);
+      const competitors = extractCompetitors(text, businessName);
     
     // Debug logging for detection
-    const searchTerms = [...generateNameVariations(businessName, brandAliases), ...(url ? extractDomainKeywords(url) : [])];
-    console.log(`[GEMINI DETECTION] Business: "${businessName}" | URL: "${url}" | Aliases: ${brandAliases?.length || 0} | Search terms: ${JSON.stringify(searchTerms)} | Found: ${detection.found}${detection.matchedTerm ? ` (matched: "${detection.matchedTerm}")` : ''}`);
-    console.log(`[GEMINI] Extracted ${citations.length} citations`);
-    if (!detection.found) {
-      console.log(`[GEMINI] Response preview (first 300 chars): ${text.slice(0, 300).replace(/\n/g, ' ')}`);
-    }
+      const searchTerms = [...generateNameVariations(businessName, brandAliases), ...(url ? extractDomainKeywords(url) : [])];
+      console.log(`[GEMINI DETECTION] Business: "${businessName}" | URL: "${url}" | Aliases: ${brandAliases?.length || 0} | Search terms: ${JSON.stringify(searchTerms)} | Found: ${detection.found}${detection.matchedTerm ? ` (matched: "${detection.matchedTerm}")` : ''}`);
+      console.log(`[GEMINI] Extracted ${citations.length} citations`);
+      if (!detection.found) {
+        console.log(`[GEMINI] Response preview (first 300 chars): ${text.slice(0, 300).replace(/\n/g, ' ')}`);
+      }
 
     // Record success - circuit breaker will close if in half-open state
-    geminiCircuitBreaker.recordSuccess();
+      geminiCircuitBreaker.recordSuccess();
 
-    return { found: detection.found, response: text, competitors, citations, groundingMetadata };
+      return { found: detection.found, response: text, competitors, citations, groundingMetadata };
+    } finally {
+      releaseGeminiSlot();
+    }
   } catch (error) {
     console.error("Gemini API error:", error);
     
@@ -1181,7 +1220,7 @@ async function generateExecutiveSummary(
 ): Promise<string> {
   try {
     const userPrompt = `Write a 2-3 sentence executive summary for an AI visibility audit.
-Start with: "We analyzed ${businessName} across 20 high-intent AI prompts on ChatGPT and Google AI${location !== "nationwide" ? ` for ${keyword} in ${location}` : ` for ${keyword} nationwide`}."
+Start with: "We analyzed ${businessName} across ${LEAD_GEN_TOTAL_PROMPTS} high-intent AI prompts on ChatGPT and Google AI${location !== "nationwide" ? ` for ${keyword} in ${location}` : ` for ${keyword} nationwide`}."
 Key findings: overall score ${overallScore}/100, ChatGPT ${chatgptScore}%, Google AI ${googleAIScore}%, sentiment ${sentimentOverall}.
 Describe what this means for AI visibility. Be professional.`;
     
@@ -1198,10 +1237,10 @@ Describe what this means for AI visibility. Be professional.`;
         max_completion_tokens: 512,
       })
     );
-    return response.choices[0]?.message?.content || `We analyzed ${businessName} across 20 high-intent AI prompts on ChatGPT and Google AI. The results indicate a visibility score of ${overallScore}/100 with ${sentimentOverall} brand sentiment.`;
+    return response.choices[0]?.message?.content || `We analyzed ${businessName} across ${LEAD_GEN_TOTAL_PROMPTS} high-intent AI prompts on ChatGPT and Google AI. The results indicate a visibility score of ${overallScore}/100 with ${sentimentOverall} brand sentiment.`;
   } catch (error) {
     console.error("Executive summary generation error:", error);
-    return `We analyzed ${businessName} across 20 high-intent AI prompts on ChatGPT and Google AI. The results indicate a visibility score of ${overallScore}/100 with ${sentimentOverall} brand sentiment.`;
+    return `We analyzed ${businessName} across ${LEAD_GEN_TOTAL_PROMPTS} high-intent AI prompts on ChatGPT and Google AI. The results indicate a visibility score of ${overallScore}/100 with ${sentimentOverall} brand sentiment.`;
   }
 }
 
@@ -1538,9 +1577,9 @@ These queries should:
 - Ask about reviews, recommendations, reliability, quality
 - Be natural questions a potential customer would ask
 
-Return ONLY a valid JSON array of exactly 5 strings. No explanations, no markdown, just the JSON array.`;
+Return ONLY a valid JSON array of exactly ${SENTIMENT_PROMPT_COUNT} strings. No explanations, no markdown, just the JSON array.`;
   
-  const userPrompt = `Generate 5 brand-specific queries for:
+  const userPrompt = `Generate ${SENTIMENT_PROMPT_COUNT} brand-specific queries for:
 Business Name: ${businessName}
 Industry: ${keyword}
 Location: ${location !== "nationwide" ? location : "National"}
@@ -1577,10 +1616,10 @@ Example formats:
       const validPrompts = parsed
         .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
         .map(s => s.trim())
-        .slice(0, 5);
+        .slice(0, SENTIMENT_PROMPT_COUNT);
       
-      if (validPrompts.length === 5) {
-        console.log(`Generated 5 valid sentiment prompts`);
+      if (validPrompts.length === SENTIMENT_PROMPT_COUNT) {
+        console.log(`Generated ${SENTIMENT_PROMPT_COUNT} valid sentiment prompts`);
         return validPrompts;
       }
     }
@@ -1728,7 +1767,7 @@ export async function runAudit(
       generateResearchPrompts(keyword, scope, city, url),
       generateSentimentPrompts(businessName, keyword, scope, city),
     ]);
-    
+
     const totalPrompts = researchPrompts.length + sentimentPrompts.length;
     console.log(`[AUDIT] Generated ${researchPrompts.length} research prompts + ${sentimentPrompts.length} sentiment prompts`);
 
