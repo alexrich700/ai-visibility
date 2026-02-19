@@ -11,6 +11,18 @@ import {
 } from "@shared/schema";
 import { eq, desc, and, lte, lt, isNull, or, isNotNull, gte, asc, inArray } from "drizzle-orm";
 
+function normalizeBusinessNameForLookup(businessName: string): string {
+  return businessName.trim().toLowerCase();
+}
+
+function normalizeDomainForLookup(domain: string): string {
+  return domain
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/\/+$/, "");
+}
+
 export interface IStorage {
   createAudit(audit: InsertAudit): Promise<Audit>;
   getAudits(): Promise<Audit[]>;
@@ -180,6 +192,8 @@ export class DatabaseStorage implements IStorage {
     
     const [client] = await db.insert(monitoringClients).values({
       ...clientData,
+      normalizedBusinessName: normalizeBusinessNameForLookup(clientData.businessName),
+      normalizedDomain: normalizeDomainForLookup(clientData.domain),
       nextCheckAt: nextCheck,
     }).returning();
     return client;
@@ -202,28 +216,37 @@ export class DatabaseStorage implements IStorage {
 
   async getMonitoringClientByBusinessNameAndDomain(businessName: string, domain: string): Promise<MonitoringClient | undefined> {
     if (!businessName || !domain) return undefined;
-    
-    // Normalize inputs for consistent matching
-    const normalizedName = businessName.trim().toLowerCase();
-    const normalizedDomain = domain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '');
-    
-    // Get all clients and find a case-insensitive match
-    const allClients = await db.select().from(monitoringClients)
-      .orderBy(desc(monitoringClients.createdAt));
-    
-    const matchingClient = allClients.find(c => {
-      const clientName = c.businessName.trim().toLowerCase();
-      const clientDomain = c.domain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '');
-      return clientName === normalizedName && clientDomain === normalizedDomain;
-    });
-    
-    return matchingClient;
+
+    const normalizedName = normalizeBusinessNameForLookup(businessName);
+    const normalizedDomain = normalizeDomainForLookup(domain);
+
+    const [client] = await db.select()
+      .from(monitoringClients)
+      .where(and(
+        eq(monitoringClients.normalizedBusinessName, normalizedName),
+        eq(monitoringClients.normalizedDomain, normalizedDomain),
+      ))
+      .orderBy(desc(monitoringClients.createdAt))
+      .limit(1);
+
+    return client;
   }
 
   async updateMonitoringClient(id: number, data: Partial<InsertMonitoringClient>): Promise<MonitoringClient | undefined> {
+    const currentClient = await this.getMonitoringClientById(id);
+    if (!currentClient) return undefined;
+
+    const nextBusinessName = data.businessName ?? currentClient.businessName;
+    const nextDomain = data.domain ?? currentClient.domain;
+
     const [client] = await db
       .update(monitoringClients)
-      .set({ ...data, updatedAt: new Date() })
+      .set({
+        ...data,
+        normalizedBusinessName: normalizeBusinessNameForLookup(nextBusinessName),
+        normalizedDomain: normalizeDomainForLookup(nextDomain),
+        updatedAt: new Date(),
+      })
       .where(eq(monitoringClients.id, id))
       .returning();
     return client;
