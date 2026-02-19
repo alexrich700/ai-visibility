@@ -140,6 +140,8 @@ test("computeVisibilityMetrics uses prompt x platform exposure denominator", () 
   assert.equal(metrics.totalExposures, 4);
   assert.equal(metrics.foundCount, 2);
   assert.equal(metrics.citedCount, 2);
+  assert.equal(metrics.chatgptFoundCount, 1);
+  assert.equal(metrics.googleAIFoundCount, 1);
   assert.equal(metrics.visibilityRate, 50);
   assert.equal(metrics.citationRate, 50);
   assert.equal(metrics.chatgptVisibility, 50);
@@ -153,6 +155,8 @@ test("computeVisibilityMetrics returns 0 rates when no exposures have matches", 
   assert.equal(metrics.totalExposures, 4);
   assert.equal(metrics.foundCount, 0);
   assert.equal(metrics.citedCount, 0);
+  assert.equal(metrics.chatgptFoundCount, 0);
+  assert.equal(metrics.googleAIFoundCount, 0);
   assert.equal(metrics.visibilityRate, 0);
   assert.equal(metrics.citationRate, 0);
   assert.equal(metrics.chatgptVisibility, 0);

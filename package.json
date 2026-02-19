@@ -9,8 +9,9 @@
     "start": "NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
     "db:push": "drizzle-kit push",
-    "test:query-cache": "tsx --test client/src/lib/queryClient.test.ts",
-    "test": "npm run test:query-cache"
+    "test:query-cache": "npx tsx --test client/src/lib/queryClient.test.ts",
+    "test:selectors": "npx tsx --test client/src/features/monitor-dashboard/selectors.test.ts",
+    "test:logger": "npx tsx --test server/utils/logger.test.ts"
   },
   "dependencies": {
     "@google/genai": "^1.33.0",

@@ -2,6 +2,27 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 const ADMIN_TOKEN_KEY = "adminToken";
 
+const DATA_CLASS_POLICY_KEYS = new Set([
+  "/api/monitoring/dashboard",
+  "/api/monitoring/settings",
+]);
+
+export function hasDataClassPolicy(queryKey: readonly unknown[]): boolean {
+  const keyRoot = typeof queryKey[0] === "string" ? queryKey[0] : "";
+  return DATA_CLASS_POLICY_KEYS.has(keyRoot);
+}
+
+function maybeWarnUnmappedPolicy(queryKey: readonly unknown[]): void {
+  const keyRoot = typeof queryKey[0] === "string" ? queryKey[0] : "";
+  if (!keyRoot.startsWith("/api/")) {
+    return;
+  }
+  if (!hasDataClassPolicy(queryKey) && import.meta.env?.MODE === "development") {
+    console.warn(`[queryClient] Unmapped data class policy for query key: ${String(keyRoot)}`);
+  }
+}
+
+
 export function getAdminToken(): string | null {
   return sessionStorage.getItem(ADMIN_TOKEN_KEY);
 }
@@ -163,14 +184,24 @@ export const getAdminQueryFn: <T>(options: {
     return await res.json();
   };
 
-function applyDataClassQueryPolicies(client: QueryClient) {
-  for (const [tierName, keys] of Object.entries(QUERY_POLICY_BY_KEY_PREFIX)) {
-    const tierConfig = QUERY_CACHE_TIERS[tierName as keyof typeof QUERY_CACHE_TIERS];
-    for (const key of keys) {
-      client.setQueryDefaults(key, tierConfig);
+export const getSessionAwareQueryFn: <T>(options: {
+  on401: UnauthorizedBehavior;
+}) => QueryFunction<T> =
+  ({ on401: unauthorizedBehavior }) =>
+  async ({ queryKey }) => {
+    maybeWarnUnmappedPolicy(queryKey);
+
+    const res = await fetch(queryKey.join("/") as string, {
+      credentials: "include",
+    });
+
+    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
+      return null;
     }
-  }
-}
+
+    await throwIfResNotOk(res);
+    return await res.json();
+  };
 
 export const queryClient = new QueryClient({
   defaultOptions: {

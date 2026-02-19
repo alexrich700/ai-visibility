@@ -1,20 +1,18 @@
-name: Validate
+name: CI Validate
 
 on:
-  pull_request:
   push:
-    branches:
-      - main
+    branches: ["**"]
+  pull_request:
 
 jobs:
   validate:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -23,14 +21,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Type check
-        run: npm run check
+      - name: Run query-cache tests
+        run: npm run test:query-cache
 
-      - name: Selector tests
+      - name: Run selector tests
         run: npm run test:selectors
 
-      - name: Logger tests
+      - name: Run logger tests
         run: npm run test:logger
+
+      - name: Type check
+        run: npm run check
 
       - name: Build
         run: npm run build

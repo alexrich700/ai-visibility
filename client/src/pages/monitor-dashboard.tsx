@@ -41,20 +41,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import logoIcon from "@assets/images_1765741951084.png";
-import type { CheckResult } from "@shared/schema";
-import type {
-  CitationCount as Citation,
-  CompetitorTrendData,
-  CompetitorTrendsResponse,
-  CompetitorVisibility,
-  GroupTrendData,
-  GroupTrendsResponse,
-  MonitoringDashboardData as DashboardData,
-  MonitoringTrendDataPoint as TrendDataPoint,
-  ShareOfVoiceItem,
-  SentimentNarrative,
-  SentimentStatements,
-} from "@shared/monitoring-dto";
+import type { MonitoringClient, MonitoringGroup, CheckSession, CheckResult } from "@shared/schema";
 import {
   buildCompetitorTrendChartData,
   buildGroupBarData,
@@ -70,7 +57,69 @@ import {
   selectAggregatedScores,
   selectBrandSentimentGroupIds,
   selectCityScopedDashboardData,
+  type Citation,
+  type CompetitorTrendData,
+  type CompetitorVisibility,
+  type GroupResults,
+  type GroupTrendData,
+  type ShareOfVoiceItem,
 } from "@/features/monitor-dashboard/selectors";
+
+interface SentimentStatement {
+  text: string;
+  platform: 'chatgpt' | 'google';
+  promptText?: string;
+}
+
+interface SentimentStatements {
+  positive: SentimentStatement[];
+  negative: SentimentStatement[];
+}
+
+interface SentimentNarrative {
+  text: string;
+  strength: number; // 1-5 scale
+}
+
+interface SentimentNarratives {
+  strengths: SentimentNarrative[];
+  improvements: SentimentNarrative[];
+}
+
+interface Analytics {
+  shareOfVoice: ShareOfVoiceItem[];
+  avgChatgptRank: number | null;
+  avgGoogleAIRank: number | null;
+  firstPlaceCount: number;
+  sentimentBreakdown: { positive: number; neutral: number; negative: number };
+  topCitations: Citation[];
+  sentimentScore: number | null;
+  competitorVisibility: CompetitorVisibility[];
+  sentimentStatements: SentimentStatements;
+  sentimentNarratives?: SentimentNarratives;
+}
+
+interface TrendDataPoint {
+  date: string;
+  overallScore: number;
+  chatgptScore: number;
+  googleAIScore: number;
+  foundCount: number;
+  citedCount: number;
+  shareOfVoice: ShareOfVoiceItem[] | null;
+  avgRank: number | null;
+  sentiment: { positive: number; neutral: number; negative: number } | null;
+}
+
+interface DashboardData {
+  client: MonitoringClient;
+  groups: MonitoringGroup[];
+  sessions: CheckSession[];
+  latestResults: CheckResult[];
+  resultsByGroup: GroupResults[];
+  analytics: Analytics | null;
+  trendData: TrendDataPoint[];
+}
 
 const COLORS = {
   primary: "#5599f9",
@@ -447,31 +496,13 @@ export default function MonitorDashboard() {
     enabled: !!clientId && exportDialogOpen,
   });
 
-  if (!clientId) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p>Invalid client ID</p>
-      </div>
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-[#5599f9] animate-spin" />
-      </div>
-    );
-  }
-
-  if (!data) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p>No data found</p>
-      </div>
-    );
-  }
-
-  const { client, groups, sessions, latestResults, resultsByGroup, analytics, trendData } = data;
+  const maybeClient = data?.client;
+  const sessions = data?.sessions ?? [];
+  const latestResults = data?.latestResults ?? [];
+  const resultsByGroup = data?.resultsByGroup ?? [];
+  const analytics = data?.analytics ?? null;
+  const groups = data?.groups ?? [];
+  const clientBusinessName = maybeClient?.businessName ?? "";
 
   const cityScopedData = useMemo(
     () => selectCityScopedDashboardData(sessions, latestResults, resultsByGroup, selectedViewCity),
@@ -528,25 +559,18 @@ export default function MonitorDashboard() {
     citationRate,
     chatgptVisibility,
     googleAIVisibility,
+    chatgptFoundCount,
+    googleAIFoundCount,
   } = visibilityMetrics;
-
-  const chatgptFoundCount = useMemo(
-    () => serviceResultsOnly.filter((result) => result.chatgptFound).length,
-    [serviceResultsOnly],
-  );
-  const googleAIFoundCount = useMemo(
-    () => serviceResultsOnly.filter((result) => result.googleAIFound).length,
-    [serviceResultsOnly],
-  );
 
   const avgRank = useMemo(() => computeAverageRank(serviceResultsOnly), [serviceResultsOnly]);
   const computedCompetitorVisibility = useMemo(
-    () => computeCompetitorVisibility(serviceResultsOnly, client.businessName),
-    [serviceResultsOnly, client.businessName],
+    () => computeCompetitorVisibility(serviceResultsOnly, clientBusinessName),
+    [serviceResultsOnly, clientBusinessName],
   );
   const computedShareOfVoice = useMemo(
-    () => computeShareOfVoice(serviceResultsOnly, client.businessName),
-    [serviceResultsOnly, client.businessName],
+    () => computeShareOfVoice(serviceResultsOnly, clientBusinessName),
+    [serviceResultsOnly, clientBusinessName],
   );
   const computedTopCitations = useMemo(() => computeTopCitations(serviceResultsOnly), [serviceResultsOnly]);
   const firstPlaceCount = useMemo(() => computeFirstPlaceCount(serviceResultsOnly), [serviceResultsOnly]);
@@ -565,6 +589,33 @@ export default function MonitorDashboard() {
     () => buildCompetitorTrendChartData(competitorTrendsData?.competitorTrends ?? []),
     [competitorTrendsData],
   );
+
+  if (!clientId) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p>Invalid client ID</p>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-[#5599f9] animate-spin" />
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p>No data found</p>
+      </div>
+    );
+  }
+
+  const client = data.client;
+
 
   // Colors for group/competitor lines
   const trendLineColors = [

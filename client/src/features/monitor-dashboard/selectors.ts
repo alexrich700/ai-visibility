@@ -1,6 +1,8 @@
 import { format } from "date-fns";
 import type { CheckResult, CheckSession } from "@shared/schema";
 
+export type SessionWithCity = CheckSession & { city?: string | null };
+
 export interface Citation {
   domain: string;
   count: number;
@@ -53,6 +55,8 @@ export interface VisibilityMetrics {
   citationRate: number;
   chatgptVisibility: number;
   googleAIVisibility: number;
+  chatgptFoundCount: number;
+  googleAIFoundCount: number;
 }
 
 export interface CityScopedDashboardData {
@@ -93,7 +97,7 @@ export function selectCityScopedDashboardData(
   const isSpecificCitySelected = Boolean(selectedViewCity && selectedViewCity !== "all");
 
   const filteredSessions = isSpecificCitySelected
-    ? sessions.filter((session) => (session as CheckSession & { city?: string | null }).city === selectedViewCity)
+    ? sessions.filter((session) => (session as SessionWithCity).city === selectedViewCity)
     : sessions;
 
   const latestSession = filteredSessions[0];
@@ -146,7 +150,7 @@ export function selectAggregatedScores(
 
   const citySessionMap = new Map<string | null, CheckSession>();
   for (const session of sortedSessions) {
-    const city = (session as CheckSession & { city?: string | null }).city ?? null;
+    const city = (session as SessionWithCity).city ?? null;
     if (!citySessionMap.has(city)) {
       citySessionMap.set(city, session);
     }
@@ -194,6 +198,8 @@ export function computeVisibilityMetrics(serviceResultsOnly: CheckResult[]): Vis
     citationRate: totalExposures > 0 ? Math.round((citedCount / totalExposures) * 100) : 0,
     chatgptVisibility: promptCount > 0 ? Math.round((chatgptFoundCount / promptCount) * 100) : 0,
     googleAIVisibility: promptCount > 0 ? Math.round((googleAIFoundCount / promptCount) * 100) : 0,
+    chatgptFoundCount,
+    googleAIFoundCount,
   };
 }
 
@@ -350,7 +356,7 @@ export function buildSessionChartData(
       overall: session.overallScore,
       chatgpt: session.chatgptScore,
       googleAI: session.googleAIScore,
-      city: (session as CheckSession & { city?: string | null }).city ?? null,
+      city: (session as SessionWithCity).city ?? null,
     }));
   }
 
