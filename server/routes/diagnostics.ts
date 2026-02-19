@@ -12,13 +12,13 @@ export function registerDiagnosticsRoutes(app: Express): void {
   });
 
   // OpenAI connectivity test (admin only - checks if API is working)
-  app.get("/api/diagnostics/openai", requireAdminAuth, async (_req, res) => {
+  app.get("/api/diagnostics/openai", requireAdminAuth, async (req, res) => {
     const result = await testOpenAIConnectivity();
     res.json(result);
   });
 
   // Prompt generation statistics (admin only)
-  app.get("/api/diagnostics/prompt-stats", requireAdminAuth, async (_req, res) => {
+  app.get("/api/diagnostics/prompt-stats", requireAdminAuth, async (req, res) => {
     const stats = getPromptGenerationStats();
     res.json({
       ...stats,
