@@ -1808,7 +1808,8 @@ const AUDIT_BATCH_SIZE = 13; // Run ALL prompts in parallel (10 research + 3 sen
 const AUDIT_BATCH_DELAY_MS = 500; // Minimal delay since bottleneck is API response time, not rate limits
 
 // Progress callback type for SSE streaming
-export type ProgressCallback = (stage: string, progress?: number, total?: number) => void;
+// percentage: 0-100 value for granular progress tracking
+export type ProgressCallback = (stage: string, progress?: number, total?: number, percentage?: number) => void;
 export type WarningCallback = (message: string, subtext?: string) => void;
 
 async function runBatchedAIQueries<T>(
@@ -1910,15 +1911,19 @@ export async function runAudit(
     const searchLocation = city || undefined;
 
     // Stage 2: Query AI platforms (ChatGPT and Gemini)
-    onProgress?.("querying_ai", 0, totalPrompts);
+    // 10 prompts × 2 platforms = 20 individual API responses
+    // Each response = 4.5% progress (90% / 20 = 4.5%)
+    const totalAPIResponses = totalPrompts * 2;
+    let completedAPIResponses = 0;
+    const BASE_PROGRESS = 10; // 10% for prompt generation
+    const QUERY_PROGRESS_RANGE = 90; // remaining 90% for API responses
     
-    // Track combined progress from both parallel query streams
-    let researchCompleted = 0;
-    let sentimentCompleted = 0;
-    const updateQueryProgress = () => {
-      const completed = researchCompleted + sentimentCompleted;
-      onProgress?.("querying_ai", completed, totalPrompts);
+    const reportAPIProgress = () => {
+      const percentage = Math.round(BASE_PROGRESS + (completedAPIResponses / totalAPIResponses) * QUERY_PROGRESS_RANGE);
+      onProgress?.("querying_ai", completedAPIResponses, totalAPIResponses, Math.min(percentage, 99));
     };
+    
+    reportAPIProgress(); // Send initial 10%
 
     // Run research and sentiment prompts in PARALLEL for maximum speed
     // Both use batched execution internally to respect rate limits
@@ -1928,8 +1933,16 @@ export async function runAudit(
         researchPrompts,
         async (prompt) => {
           const [chatgpt, googleAI] = await Promise.all([
-            queryChatGPT(prompt, businessName, url, searchLocation, undefined, { skipRateLimitDelay: true }),
-            queryGemini(prompt, businessName, url),
+            queryChatGPT(prompt, businessName, url, searchLocation, undefined, { skipRateLimitDelay: true }).then(result => {
+              completedAPIResponses++;
+              reportAPIProgress();
+              return result;
+            }),
+            queryGemini(prompt, businessName, url).then(result => {
+              completedAPIResponses++;
+              reportAPIProgress();
+              return result;
+            }),
           ]);
           const summary = generatePromptSummary(
             chatgpt.found,
@@ -1940,19 +1953,23 @@ export async function runAudit(
           );
           return { prompt, summary, chatgpt, googleAI };
         },
-        AUDIT_BATCH_SIZE,
-        (completed) => {
-          researchCompleted = completed;
-          updateQueryProgress();
-        }
+        AUDIT_BATCH_SIZE
       ),
       // Sentiment prompts (run in parallel with research)
       runBatchedAIQueries(
         sentimentPrompts,
         async (prompt) => {
           const [chatgptResult, googleAIResult] = await Promise.all([
-            queryChatGPT(prompt, businessName, url, searchLocation, undefined, { skipRateLimitDelay: true }),
-            queryGemini(prompt, businessName, url),
+            queryChatGPT(prompt, businessName, url, searchLocation, undefined, { skipRateLimitDelay: true }).then(result => {
+              completedAPIResponses++;
+              reportAPIProgress();
+              return result;
+            }),
+            queryGemini(prompt, businessName, url).then(result => {
+              completedAPIResponses++;
+              reportAPIProgress();
+              return result;
+            }),
           ]);
           return {
             prompt,
@@ -1966,11 +1983,7 @@ export async function runAudit(
             },
           };
         },
-        AUDIT_BATCH_SIZE,
-        (completed) => {
-          sentimentCompleted = completed;
-          updateQueryProgress();
-        }
+        AUDIT_BATCH_SIZE
       ),
     ]);
 

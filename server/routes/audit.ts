@@ -92,8 +92,8 @@ export async function handleAuditStream(
     }, 15000);
 
     // Progress callback for real-time updates
-    const onProgress: ProgressCallback = (stage, progress, total) => {
-      sendEvent("progress", { stage, progress, total });
+    const onProgress: ProgressCallback = (stage, progress, total, percentage) => {
+      sendEvent("progress", { stage, progress, total, percentage });
     };
 
     const onWarning: WarningCallback = (message, subtext) => {

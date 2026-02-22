@@ -19,7 +19,7 @@ import logoIcon from "@assets/images_1765741951084.png";
 type Step = "input" | "scanning";
 
 // Map backend stages to user-friendly messages
-function getStageMessage(stage: string, progress?: number, total?: number): { text: string; subtext: string; progress: number } {
+function getStageMessage(stage: string, progress?: number, total?: number, percentage?: number): { text: string; subtext: string; progress: number } {
   switch (stage) {
     case "generating_prompts":
       return { 
@@ -28,31 +28,27 @@ function getStageMessage(stage: string, progress?: number, total?: number): { te
         progress: 10 
       };
     case "querying_ai":
-      const hasTotals = typeof total === "number" && total > 0;
-      const completedCount = typeof progress === "number" ? progress : 0;
-      const totalCount = hasTotals ? total : 0;
-      const pct = hasTotals ? Math.round((completedCount / totalCount) * 70) + 15 : 30;
-      const completed = progress || 0;
-      const totalPrompts = total || 0;
-      const etaSeconds = hasTotals
-        ? Math.max(20, Math.round((totalCount - completedCount) * 4))
-        : 60;
+      const completedResponses = typeof progress === "number" ? progress : 0;
+      const totalResponses = typeof total === "number" && total > 0 ? total : 20;
+      const remaining = totalResponses - completedResponses;
+      const etaSeconds = Math.max(10, Math.round(remaining * 3));
+      const pct = typeof percentage === "number" ? percentage : 10;
       return { 
         text: `Querying ChatGPT & Google AI...`, 
-        subtext: `Processing ${completed}/${totalPrompts} prompts across AI platforms • ~${etaSeconds}s remaining`,
-        progress: Math.min(pct, 85)
+        subtext: `${completedResponses}/${totalResponses} AI responses received • ~${etaSeconds}s remaining`,
+        progress: pct
       };
     case "analyzing_results":
       return { 
         text: "Analyzing Results...", 
         subtext: "Calculating visibility scores and sentiment",
-        progress: 90 
+        progress: 99 
       };
     case "generating_summary":
       return { 
         text: "Creating Executive Summary...", 
         subtext: "Generating personalized insights for your business",
-        progress: 95 
+        progress: 99 
       };
     case "complete":
       return { 
@@ -191,7 +187,7 @@ export default function Home() {
               
               if (eventType === "progress") {
                 const { stage, progress, total } = data;
-                const msg = getStageMessage(stage, progress, total);
+                const msg = getStageMessage(stage, progress, total, data.percentage);
                 setScanProgress(msg.progress);
                 setScanStatus(msg.text);
                 setActivePrompt(msg.subtext);
