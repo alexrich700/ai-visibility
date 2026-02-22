@@ -590,6 +590,13 @@ export default function MonitorDashboard() {
     [competitorTrendsData],
   );
 
+  const groupBarData = useMemo(() => buildGroupBarData(serviceResultsByGroup), [serviceResultsByGroup]);
+
+  const filteredResults = useMemo(
+    () => filterResultsByGroup(serviceResultsOnly, selectedGroup),
+    [serviceResultsOnly, selectedGroup],
+  );
+
   if (!clientId) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -655,16 +662,6 @@ export default function MonitorDashboard() {
     "#5599f9", "#ffb41c", "#22c55e", "#ef4444", "#8b5cf6", 
     "#ec4899", "#14b8a6", "#f97316", "#6366f1", "#84cc16"
   ];
-
-  // Use service groups only for visibility bar chart (excludes brand sentiment)
-  const groupBarData = useMemo(() => buildGroupBarData(serviceResultsByGroup), [serviceResultsByGroup]);
-
-  // Filter results by selected group (applied on top of city filtering)
-  // Use service results only for Prompt Results section (excludes brand sentiment)
-  const filteredResults = useMemo(
-    () => filterResultsByGroup(serviceResultsOnly, selectedGroup),
-    [serviceResultsOnly, selectedGroup],
-  );
 
   return (
     <div className="min-h-screen bg-gray-50 selection:bg-[#5599f9] selection:text-white">
