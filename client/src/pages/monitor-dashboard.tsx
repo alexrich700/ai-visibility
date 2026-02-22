@@ -1762,17 +1762,17 @@ export default function MonitorDashboard() {
 
       {/* Response Detail Dialog */}
       <Dialog open={!!selectedResult} onOpenChange={() => setSelectedResult(null)}>
-        <DialogContent className="max-w-3xl max-h-[80vh]">
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-hidden">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold tracking-tight">
               AI Response Details
             </DialogTitle>
           </DialogHeader>
           {selectedResult && (
-            <div className="space-y-4">
+            <div className="space-y-4 overflow-hidden">
               <div className="bg-gray-50 rounded-lg p-4">
                 <p className="text-xs text-gray-500 uppercase tracking-wider font-bold mb-1">Prompt</p>
-                <p className="text-gray-900">{selectedResult.promptText}</p>
+                <p className="text-gray-900 break-words">{selectedResult.promptText}</p>
               </div>
               
               <Tabs defaultValue="chatgpt" className="w-full">
@@ -1794,10 +1794,10 @@ export default function MonitorDashboard() {
                 </TabsList>
                 
                 <TabsContent value="chatgpt" className="mt-4 space-y-3">
-                  <ScrollArea className="h-[350px] rounded-lg border p-4">
+                  <ScrollArea className="h-[350px] rounded-lg border p-4 overflow-x-hidden">
                     {selectedResult.chatgptResponse ? (
                       <div 
-                        className="prose prose-sm max-w-none text-gray-700"
+                        className="prose prose-sm max-w-none text-gray-700 break-words overflow-hidden"
                         dangerouslySetInnerHTML={{ 
                           __html: selectedResult.chatgptResponse
                             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
@@ -1845,10 +1845,10 @@ export default function MonitorDashboard() {
                 </TabsContent>
                 
                 <TabsContent value="googleai" className="mt-4 space-y-3">
-                  <ScrollArea className="h-[350px] rounded-lg border p-4">
+                  <ScrollArea className="h-[350px] rounded-lg border p-4 overflow-x-hidden">
                     {selectedResult.googleAIResponse ? (
                       <div 
-                        className="prose prose-sm max-w-none text-gray-700"
+                        className="prose prose-sm max-w-none text-gray-700 break-words overflow-hidden"
                         dangerouslySetInnerHTML={{ 
                           __html: selectedResult.googleAIResponse
                             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
