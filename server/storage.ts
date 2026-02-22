@@ -119,8 +119,10 @@ export interface IStorage {
   deleteClientSession(token: string): Promise<void>;
   deleteExpiredClientSessions(): Promise<number>;
   
+  getAllAdminUsers(): Promise<AdminUser[]>;
+
   // Admin session operations (for admin portal auth - database-backed for persistence)
-  createAdminSession(sessionToken: string, expiresAt: Date): Promise<DbAdminSession>;
+  createAdminSession(sessionToken: string, expiresAt: Date, userId?: number): Promise<DbAdminSession>;
   getAdminSessionByToken(token: string): Promise<DbAdminSession | undefined>;
   deleteAdminSession(token: string): Promise<void>;
   deleteExpiredAdminSessions(): Promise<number>;
@@ -779,10 +781,15 @@ export class DatabaseStorage implements IStorage {
     return result.length;
   }
 
+  async getAllAdminUsers(): Promise<AdminUser[]> {
+    return await db.select().from(adminUsers).orderBy(adminUsers.createdAt);
+  }
+
   // Admin session operations (database-backed for persistence across restarts)
-  async createAdminSession(sessionToken: string, expiresAt: Date): Promise<DbAdminSession> {
+  async createAdminSession(sessionToken: string, expiresAt: Date, userId?: number): Promise<DbAdminSession> {
     const [session] = await db.insert(adminSessions).values({
       sessionToken,
+      userId: userId ?? null,
       expiresAt,
     }).returning();
     return session;

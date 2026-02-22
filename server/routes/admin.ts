@@ -7,6 +7,7 @@ import {
   generateAdminToken,
   resetLoginAttempts,
   invalidateAdminToken,
+  getAdminUserIdFromToken,
 } from "../middleware/auth";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
@@ -36,7 +37,7 @@ router.post("/login", loginRateLimiter, async (req, res) => {
     const ip = req.ip || req.socket.remoteAddress || "unknown";
     resetLoginAttempts(ip);
     
-    const token = await generateAdminToken();
+    const token = await generateAdminToken(user.id);
     res.json({ 
       success: true, 
       token,
@@ -153,6 +154,124 @@ router.post("/logout", requireAdminAuth, async (req, res) => {
   } catch (error) {
     logError("ADMIN LOGOUT ERROR", error);
     res.status(500).json(getSafeErrorResponse("Logout failed"));
+  }
+});
+
+router.get("/me", requireAdminAuth, async (req, res) => {
+  try {
+    const token = req.headers.authorization!.substring(7);
+    const userId = await getAdminUserIdFromToken(token);
+    if (!userId) {
+      return res.status(401).json({ error: "Session not associated with a user" });
+    }
+    const user = await storage.getAdminUserById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    res.json({ id: user.id, email: user.email, name: user.name, createdAt: user.createdAt });
+  } catch (error) {
+    logError("GET ADMIN ME ERROR", error);
+    res.status(500).json(getSafeErrorResponse("Failed to get user info"));
+  }
+});
+
+router.patch("/me", requireAdminAuth, async (req, res) => {
+  try {
+    const token = req.headers.authorization!.substring(7);
+    const userId = await getAdminUserIdFromToken(token);
+    if (!userId) {
+      return res.status(401).json({ error: "Session not associated with a user" });
+    }
+    const { name, email } = req.body;
+    const updateData: Record<string, unknown> = {};
+    if (name && typeof name === "string") updateData.name = name;
+    if (email && typeof email === "string") {
+      const existing = await storage.getAdminUserByEmail(email.toLowerCase());
+      if (existing && existing.id !== userId) {
+        return res.status(400).json({ error: "Email is already in use" });
+      }
+      updateData.email = email.toLowerCase();
+    }
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({ error: "No valid fields to update" });
+    }
+    const user = await storage.updateAdminUser(userId, updateData);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    res.json({ id: user.id, email: user.email, name: user.name });
+  } catch (error) {
+    logError("UPDATE ADMIN ME ERROR", error);
+    res.status(500).json(getSafeErrorResponse("Failed to update profile"));
+  }
+});
+
+router.post("/change-password", requireAdminAuth, async (req, res) => {
+  try {
+    const token = req.headers.authorization!.substring(7);
+    const userId = await getAdminUserIdFromToken(token);
+    if (!userId) {
+      return res.status(401).json({ error: "Session not associated with a user" });
+    }
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: "Current password and new password are required" });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: "New password must be at least 6 characters" });
+    }
+    const user = await storage.getAdminUserById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    const isValid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!isValid) {
+      return res.status(400).json({ error: "Current password is incorrect" });
+    }
+    const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    await storage.updateAdminUser(userId, { passwordHash });
+    res.json({ success: true });
+  } catch (error) {
+    logError("CHANGE PASSWORD ERROR", error);
+    res.status(500).json(getSafeErrorResponse("Failed to change password"));
+  }
+});
+
+router.get("/users", requireAdminAuth, async (req, res) => {
+  try {
+    const users = await storage.getAllAdminUsers();
+    res.json(users.map(u => ({ id: u.id, email: u.email, name: u.name, createdAt: u.createdAt })));
+  } catch (error) {
+    logError("GET ADMIN USERS ERROR", error);
+    res.status(500).json(getSafeErrorResponse("Failed to get users"));
+  }
+});
+
+router.post("/invite-user", requireAdminAuth, async (req, res) => {
+  try {
+    const { email, name, password } = req.body;
+    if (!email || !name || !password) {
+      return res.status(400).json({ error: "Email, name, and password are required" });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ error: "Password must be at least 6 characters" });
+    }
+    const existingUser = await storage.getAdminUserByEmail(email.toLowerCase());
+    if (existingUser) {
+      return res.status(400).json({ error: "An account with this email already exists" });
+    }
+    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+    const user = await storage.createAdminUser({
+      email: email.toLowerCase(),
+      passwordHash,
+      name,
+      resetToken: null,
+      resetTokenExpiry: null,
+    });
+    res.json({ success: true, user: { id: user.id, email: user.email, name: user.name } });
+  } catch (error) {
+    logError("INVITE USER ERROR", error);
+    res.status(500).json(getSafeErrorResponse("Failed to invite user"));
   }
 });
 

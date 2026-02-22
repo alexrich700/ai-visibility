@@ -3,10 +3,15 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AuthProvider } from "@/lib/auth-context";
+import { AdminLayout } from "@/components/admin-layout";
 import Home from "@/pages/home";
-import Admin from "@/pages/admin";
+import AdminLogin from "@/pages/admin-login";
 import AdminResetPassword from "@/pages/admin-reset-password";
 import AdminAuditView from "@/pages/admin-audit-view";
+import Admin from "@/pages/admin";
+import AdminUsers from "@/pages/admin-users";
+import AdminProfile from "@/pages/admin-profile";
 import AuditView from "@/pages/audit-view";
 import MonitorClients from "@/pages/monitor-clients";
 import MonitorSetup from "@/pages/monitor-setup";
@@ -21,14 +26,22 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/audit/share/:token">{() => <AuditView isSharedView={true} />}</Route>
       <Route path="/audit/:id">{() => <AuditView />}</Route>
-      <Route path="/admin" component={Admin} />
+
+      <Route path="/admin/login" component={AdminLogin} />
       <Route path="/admin/reset-password" component={AdminResetPassword} />
-      <Route path="/admin/audit/:id" component={AdminAuditView} />
-      <Route path="/monitor/clients" component={MonitorClients} />
-      <Route path="/monitor/setup" component={MonitorSetup} />
-      <Route path="/monitor/dashboard/:id" component={MonitorDashboard} />
-      <Route path="/monitor/settings/:id" component={MonitorSettings} />
+
+      <Route path="/admin">{() => <AdminLayout><Admin /></AdminLayout>}</Route>
+      <Route path="/admin/audit/:id">{() => <AdminLayout><AdminAuditView /></AdminLayout>}</Route>
+      <Route path="/admin/users">{() => <AdminLayout><AdminUsers /></AdminLayout>}</Route>
+      <Route path="/admin/profile">{() => <AdminLayout><AdminProfile /></AdminLayout>}</Route>
+      <Route path="/admin/monitor/clients">{() => <AdminLayout><MonitorClients /></AdminLayout>}</Route>
+
+      <Route path="/monitor/clients">{() => <AdminLayout><MonitorClients /></AdminLayout>}</Route>
+      <Route path="/monitor/setup">{() => <AdminLayout><MonitorSetup /></AdminLayout>}</Route>
+      <Route path="/monitor/dashboard/:id">{() => <AdminLayout><MonitorDashboard /></AdminLayout>}</Route>
+      <Route path="/monitor/settings/:id">{() => <AdminLayout><MonitorSettings /></AdminLayout>}</Route>
       <Route path="/monitor/client-access/:token" component={MonitorClientAccess} />
+
       <Route component={NotFound} />
     </Switch>
   );
@@ -38,8 +51,10 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <Toaster />
-        <Router />
+        <AuthProvider>
+          <Toaster />
+          <Router />
+        </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );

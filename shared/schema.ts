@@ -527,6 +527,7 @@ export type ClientSession = typeof clientSessions.$inferSelect;
 export const adminSessions = pgTable("admin_sessions", {
   id: serial("id").primaryKey(),
   sessionToken: text("session_token").notNull().unique(),
+  userId: integer("user_id"),
   expiresAt: timestamp("expires_at").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

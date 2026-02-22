@@ -391,44 +391,41 @@ export default function MonitorSettings() {
   const groups = data?.groups || [];
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="bg-card border-b sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto px-4 py-4">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <img src={logoIcon} alt="Rossman Media" className="h-8 w-auto" />
-              <div className="flex flex-col">
-                <h1 className="text-lg font-bold tracking-tight">{client?.businessName || "Settings"}</h1>
-                <p className="text-sm text-muted-foreground">Monitoring Settings</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setLocation(`/monitor/dashboard/${clientId}`)}
-                className="flex items-center gap-2"
-                data-testid="button-back-to-dashboard"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Back to Dashboard
-              </Button>
-              {hasChanges && (
-                <Button
-                  size="sm"
-                  onClick={handleSaveClientSettings}
-                  disabled={isSaving}
-                  className="flex items-center gap-2"
-                  data-testid="button-save-settings"
-                >
-                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  Save Changes
-                </Button>
-              )}
+    <div className="bg-background h-full overflow-auto">
+      <div className="bg-card border-b px-4 py-3">
+        <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="flex flex-col">
+              <h1 className="text-lg font-bold tracking-tight">{client?.businessName || "Settings"}</h1>
+              <p className="text-sm text-muted-foreground">Monitoring Settings</p>
             </div>
           </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setLocation(`/monitor/dashboard/${clientId}`)}
+              className="flex items-center gap-2"
+              data-testid="button-back-to-dashboard"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back to Dashboard
+            </Button>
+            {hasChanges && (
+              <Button
+                size="sm"
+                onClick={handleSaveClientSettings}
+                disabled={isSaving}
+                className="flex items-center gap-2"
+                data-testid="button-save-settings"
+              >
+                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                Save Changes
+              </Button>
+            )}
+          </div>
         </div>
-      </header>
+      </div>
 
       <main className="max-w-6xl mx-auto px-4 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

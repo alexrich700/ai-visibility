@@ -754,23 +754,7 @@ export default function MonitorSetup() {
   const currentGroupPrompts = prompts.filter(p => p.groupId === activeGroupTab);
 
   return (
-    <div className="min-h-screen bg-gray-50 selection:bg-[#5599f9] selection:text-white">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <button onClick={() => setLocation("/")} className="flex items-center gap-2" data-testid="link-home">
-            <img src={logoIcon} alt="Rossman Media" className="w-8 h-8 rounded" />
-            <span className="text-xl font-bold tracking-tight">
-              <span className="text-gray-900">ROSSMAN</span>
-              <span className="font-light text-gray-500">MEDIA</span>
-            </span>
-          </button>
-          <Badge variant="outline" className="text-xs uppercase font-bold tracking-wider">
-            AI Visibility Monitor
-          </Badge>
-        </div>
-      </header>
-
+    <div className="bg-gray-50 selection:bg-[#5599f9] selection:text-white h-full">
       {/* Progress Steps */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-4xl mx-auto px-6 py-4">

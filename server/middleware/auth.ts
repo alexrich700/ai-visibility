@@ -23,17 +23,22 @@ sessionCleanupInterval.unref();
 // ADMIN SESSION MANAGEMENT (Database-backed for persistence)
 // ============================================
 
-export async function generateAdminToken(): Promise<string> {
+export async function generateAdminToken(userId?: number): Promise<string> {
   const token = randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + ADMIN_SESSION_EXPIRY_HOURS * 60 * 60 * 1000);
   
-  await storage.createAdminSession(token, expiresAt);
+  await storage.createAdminSession(token, expiresAt, userId);
   return token;
 }
 
 export async function validateAdminToken(token: string): Promise<boolean> {
   const session = await storage.getAdminSessionByToken(token);
   return session !== undefined;
+}
+
+export async function getAdminUserIdFromToken(token: string): Promise<number | null> {
+  const session = await storage.getAdminSessionByToken(token);
+  return session?.userId ?? null;
 }
 
 export async function invalidateAdminToken(token: string): Promise<void> {

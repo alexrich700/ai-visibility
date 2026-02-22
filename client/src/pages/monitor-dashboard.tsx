@@ -683,23 +683,13 @@ export default function MonitorDashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 selection:bg-[#5599f9] selection:text-white">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
+    <div className="bg-gray-50 selection:bg-[#5599f9] selection:text-white h-full overflow-auto">
+      {/* Toolbar */}
+      <div className="bg-white border-b border-gray-200 px-6 py-3">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button onClick={() => setLocation("/")} className="flex items-center gap-2" data-testid="link-home">
-              <img src={logoIcon} alt="Rossman Media" className="w-8 h-8 rounded" />
-              <span className="text-xl font-bold tracking-tight">
-                <span className="text-gray-900">ROSSMAN</span>
-                <span className="font-light text-gray-500">MEDIA</span>
-              </span>
-            </button>
-            <span className="text-gray-300">|</span>
-            <div className="flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-gray-400" />
-              <span className="font-medium text-gray-700">{client.businessName}</span>
-            </div>
+          <div className="flex items-center gap-2">
+            <Building2 className="w-5 h-5 text-gray-400" />
+            <span className="font-medium text-gray-700">{client.businessName}</span>
           </div>
           <div className="flex items-center gap-3">
             <Button
@@ -712,7 +702,6 @@ export default function MonitorDashboard() {
               <Download className="w-4 h-4" />
               Export
             </Button>
-            {/* City selector for multi-city businesses */}
             {client.cities && client.cities.length > 1 && (
               <Select value={selectedScanCity} onValueChange={setSelectedScanCity}>
                 <SelectTrigger className="w-[160px] h-9" data-testid="select-scan-city">
@@ -774,7 +763,7 @@ export default function MonitorDashboard() {
             )}
           </div>
         </div>
-      </header>
+      </div>
 
       {/* Scanning Progress Overlay */}
       {isScanning && (
