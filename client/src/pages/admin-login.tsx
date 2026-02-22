@@ -22,11 +22,6 @@ export default function AdminLogin() {
 
   const redirect = new URLSearchParams(searchString).get("redirect") || "/admin";
 
-  if (isAuthenticated) {
-    navigate(redirect);
-    return null;
-  }
-
   const loginMutation = useMutation({
     mutationFn: async ({ email, password }: { email: string; password: string }) => {
       const response = await apiRequest("POST", "/api/admin/login", { email, password });
@@ -60,6 +55,11 @@ export default function AdminLogin() {
       setLoginError("Failed to send reset email. Please try again.");
     },
   });
+
+  if (isAuthenticated) {
+    navigate(redirect);
+    return null;
+  }
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
