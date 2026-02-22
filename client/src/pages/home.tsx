@@ -333,7 +333,7 @@ export default function Home() {
 
               <div id="audit-form" className="scroll-mt-8">
                   <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-2xl shadow-black/[0.06]">
-                    <div className="bg-gray-50 border-b border-gray-200 px-6 py-4">
+                    <div className="bg-gray-50 border-b border-gray-200 px-6 py-4 text-center">
                       <h2 className="text-lg font-bold text-[#010400]" data-testid="text-form-title">Get Your Free AI Visibility Audit</h2>
                       <p className="text-sm text-gray-400 mt-0.5">Takes 30 seconds. No credit card required.</p>
                     </div>
