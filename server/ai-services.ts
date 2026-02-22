@@ -351,7 +351,7 @@ export async function testOpenAIConnectivity(): Promise<{ success: boolean; mess
   
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-5-mini",
+      model: "gpt-5-nano",
       messages: [{ role: "user", content: "Reply with just the word 'OK'" }],
       max_completion_tokens: 10,
     });
@@ -866,7 +866,7 @@ async function queryChatGPT(prompt: string, businessName: string, url?: string, 
     // Use Responses API with web_search tool for real-time grounded search results
     // The Responses API uses 'input' and 'instructions' instead of 'messages'
     const response = await openai.responses.create({
-      model: "gpt-5-mini",
+      model: "gpt-5-nano",
       tools: [webSearchTool],
       instructions: "You are a helpful assistant that provides factual, detailed answers about local and national businesses. When asked about service providers, list specific company names with their website URLs when possible. At the end of your response, provide a clean bullet list of just the business names you mentioned (no ratings, reviews, hours, or other details).",
       input: prompt
@@ -1267,8 +1267,26 @@ Describe what this means for AI visibility. Be professional.`;
 
   const templateFallback = `We analyzed ${businessName} across ${LEAD_GEN_TOTAL_PROMPTS} high-intent AI prompts on ChatGPT and Google AI. The results indicate a visibility score of ${overallScore}/100 with ${sentimentOverall} brand sentiment.`;
 
+  // Primary: Try Gemini 2.5 Flash (faster, free via Replit AI Integrations)
+  if (!geminiCircuitBreaker.isOpen() && process.env.AI_INTEGRATIONS_GEMINI_API_KEY) {
+    try {
+      console.log(`[EXEC_SUMMARY] Generating executive summary with Gemini 2.5 Flash...`);
+      const geminiText = await queryGeminiText(systemPrompt, userPrompt, 512);
+      if (geminiText && geminiText.length > 20) {
+        console.log(`[EXEC_SUMMARY] Gemini generated executive summary successfully`);
+        return geminiText;
+      }
+    } catch (geminiError) {
+      console.error("[EXEC_SUMMARY] Gemini primary failed:", geminiError);
+    }
+  } else {
+    console.log(`[EXEC_SUMMARY] Gemini unavailable, skipping to OpenAI fallback...`);
+  }
+
+  // Fallback: Try OpenAI gpt-5-mini
   if (!openAICircuitBreaker.isOpen() && process.env.MY_OPENAI_API_KEY) {
     try {
+      console.log(`[EXEC_SUMMARY] Falling back to GPT-5-Mini...`);
       await rateLimitDelay();
       const response = await retryWithBackoff(() =>
         openai.chat.completions.create({
@@ -1283,21 +1301,10 @@ Describe what this means for AI visibility. Be professional.`;
       const content = response.choices[0]?.message?.content;
       if (content) return content;
     } catch (error) {
-      console.error("Executive summary generation error (OpenAI):", error);
+      console.error("Executive summary generation error (OpenAI fallback):", error);
     }
   } else {
-    console.log(`[EXEC_SUMMARY] OpenAI unavailable, skipping to Gemini...`);
-  }
-
-  console.log(`[EXEC_SUMMARY] Trying Gemini fallback for executive summary...`);
-  try {
-    const geminiText = await queryGeminiText(systemPrompt, userPrompt, 512);
-    if (geminiText && geminiText.length > 20) {
-      console.log(`[EXEC_SUMMARY] Gemini fallback generated executive summary successfully`);
-      return geminiText;
-    }
-  } catch (geminiError) {
-    console.error("[EXEC_SUMMARY] Gemini fallback also failed:", geminiError);
+    console.log(`[EXEC_SUMMARY] OpenAI also unavailable`);
   }
 
   console.log(`[EXEC_SUMMARY] Using template fallback`);
@@ -1486,17 +1493,12 @@ ${homepageContent}`;
   // Track this call for diagnostics
   fallbackStats.totalCalls++;
   
-  // Check API key and circuit breaker before making call
-  const openAIAvailable = !!process.env.MY_OPENAI_API_KEY && !openAICircuitBreaker.isOpen();
+  // Primary: Try Gemini 2.5 Flash (faster, free via Replit AI Integrations)
+  const geminiAvailable = !!process.env.AI_INTEGRATIONS_GEMINI_API_KEY && !geminiCircuitBreaker.isOpen();
   
-  if (!openAIAvailable) {
-    const reason = !process.env.MY_OPENAI_API_KEY ? 'API_KEY_MISSING' : 'API_RATE_LIMIT';
-    const message = !process.env.MY_OPENAI_API_KEY 
-      ? 'MY_OPENAI_API_KEY environment variable is not set'
-      : 'OpenAI circuit breaker is open, trying Gemini fallback';
-    console.log(`[PROMPT_GEN] OpenAI unavailable (${reason}), trying Gemini for research prompts...`);
-    
+  if (geminiAvailable) {
     try {
+      console.log(`[PROMPT_GEN] Generating ${promptCount} research prompts with Gemini 2.5 Flash for "${targetService}"...`);
       const geminiText = await queryGeminiText(systemPrompt, userPrompt, 4096, true);
       const cleanText = geminiText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
       const parsed = JSON.parse(cleanText);
@@ -1506,18 +1508,26 @@ ${homepageContent}`;
           .map(s => s.trim())
           .slice(0, promptCount);
         if (validPrompts.length >= 3) {
-          console.log(`[PROMPT_GEN] Gemini fallback generated ${validPrompts.length} research prompts for "${targetService}"`);
+          console.log(`[PROMPT_GEN] Gemini generated ${validPrompts.length} research prompts for "${targetService}"`);
           const fallbackPad = getFallbackResearchPrompts(keyword, location, serviceCategory);
           return [...validPrompts, ...fallbackPad].slice(0, promptCount);
         }
       }
     } catch (geminiError) {
-      console.error(`[PROMPT_GEN] Gemini fallback also failed:`, geminiError);
+      console.error(`[PROMPT_GEN] Gemini primary failed for research prompts:`, geminiError);
     }
-    
+  } else {
+    console.log(`[PROMPT_GEN] Gemini unavailable, skipping to OpenAI fallback...`);
+  }
+  
+  // Fallback: Try OpenAI gpt-5-mini
+  const openAIAvailable = !!process.env.MY_OPENAI_API_KEY && !openAICircuitBreaker.isOpen();
+  
+  if (!openAIAvailable) {
+    console.log(`[PROMPT_GEN] OpenAI also unavailable, using hardcoded fallback prompts`);
     const diagnostics: PromptGenerationDiagnostics = {
-      reason,
-      message,
+      reason: !process.env.MY_OPENAI_API_KEY ? 'API_KEY_MISSING' : 'API_RATE_LIMIT',
+      message: 'Both Gemini and OpenAI unavailable for prompt generation',
       timestamp: new Date().toISOString(),
       details: { targetService, location }
     };
@@ -1526,9 +1536,8 @@ ${homepageContent}`;
   }
   
   try {
-    console.log(`Generating ${promptCount} research prompts with GPT-5.2 for "${targetService}"...`);
+    console.log(`[PROMPT_GEN] Falling back to GPT-5-Mini for "${targetService}"...`);
     
-    // Add rate limit delay before API call to spread requests evenly (as OpenAI recommends)
     await rateLimitDelay();
     
     const response = await retryWithBackoff(() => 
@@ -1542,7 +1551,6 @@ ${homepageContent}`;
       })
     );
     
-    // Detailed logging to diagnose empty responses
     const choice = response.choices[0];
     const text = choice?.message?.content || "";
     const finishReason = choice?.finish_reason;
@@ -1550,41 +1558,15 @@ ${homepageContent}`;
     
     console.log(`[OPENAI_DEBUG] Response for "${targetService}":`);
     console.log(`  - finish_reason: ${finishReason}`);
-    console.log(`  - refusal: ${refusal || 'none'}`);
     console.log(`  - content length: ${text.length} chars`);
-    console.log(`  - has choices: ${response.choices?.length || 0}`);
-    if (response.usage) {
-      console.log(`  - tokens: prompt=${response.usage.prompt_tokens}, completion=${response.usage.completion_tokens}`);
-    }
-    if (!text && finishReason !== 'stop') {
-      console.log(`  - FULL RESPONSE: ${JSON.stringify(response).slice(0, 1000)}`);
-    }
     
-    console.log("OpenAI research prompts response:", text.slice(0, 200));
-    
-    // Check for refusal or abnormal finish reason
     if (refusal) {
-      const diagnostics: PromptGenerationDiagnostics = {
-        reason: 'CONTENT_FILTER',
-        message: `OpenAI refused to generate content: ${refusal}`,
-        timestamp: new Date().toISOString(),
-        details: { targetService, refusal, finishReason }
-      };
       console.log(`[OPENAI_REFUSAL] ${refusal}`);
-      await recordFallback(diagnostics, { industry: keyword, promptCount });
       return getFallbackResearchPrompts(keyword, location, serviceCategory).slice(0, promptCount);
     }
     
-    // Check for empty response with abnormal finish reason
     if (!text && finishReason !== 'stop') {
-      const diagnostics: PromptGenerationDiagnostics = {
-        reason: 'EMPTY_RESPONSE',
-        message: `OpenAI returned empty content with finish_reason: ${finishReason}`,
-        timestamp: new Date().toISOString(),
-        details: { targetService, finishReason, choiceCount: response.choices?.length || 0 }
-      };
       console.log(`[OPENAI_EMPTY] Empty response, finish_reason=${finishReason}`);
-      await recordFallback(diagnostics, { industry: keyword, promptCount });
       return getFallbackResearchPrompts(keyword, location, serviceCategory).slice(0, promptCount);
     }
     
@@ -1713,9 +1695,27 @@ Example formats:
     return null;
   };
 
+  // Primary: Try Gemini 2.5 Flash (faster, free via Replit AI Integrations)
+  if (!geminiCircuitBreaker.isOpen() && process.env.AI_INTEGRATIONS_GEMINI_API_KEY) {
+    try {
+      console.log("[PROMPT_GEN] Generating sentiment prompts with Gemini 2.5 Flash...");
+      const geminiText = await queryGeminiText(systemPrompt, userPrompt, 512, true);
+      const result = parseSentimentResponse(geminiText);
+      if (result) {
+        console.log(`[PROMPT_GEN] Gemini generated ${SENTIMENT_PROMPT_COUNT} valid sentiment prompts`);
+        return result;
+      }
+    } catch (geminiError) {
+      console.error("[PROMPT_GEN] Gemini primary failed for sentiment prompts:", geminiError);
+    }
+  } else {
+    console.log(`[PROMPT_GEN] Gemini unavailable for sentiment prompts, skipping to OpenAI fallback...`);
+  }
+
+  // Fallback: Try OpenAI gpt-5-mini
   if (!openAICircuitBreaker.isOpen() && process.env.MY_OPENAI_API_KEY) {
     try {
-      console.log("Generating sentiment prompts with GPT-5.2...");
+      console.log("[PROMPT_GEN] Falling back to GPT-5-Mini for sentiment prompts...");
       await rateLimitDelay();
       
       const response = await retryWithBackoff(() =>
@@ -1734,26 +1734,14 @@ Example formats:
       
       const result = parseSentimentResponse(text);
       if (result) {
-        console.log(`Generated ${SENTIMENT_PROMPT_COUNT} valid sentiment prompts`);
+        console.log(`Generated ${SENTIMENT_PROMPT_COUNT} valid sentiment prompts via OpenAI fallback`);
         return result;
       }
     } catch (error) {
-      console.error("Sentiment prompt generation error (OpenAI):", error);
+      console.error("Sentiment prompt generation error (OpenAI fallback):", error);
     }
   } else {
-    console.log(`[PROMPT_GEN] OpenAI unavailable for sentiment prompts, skipping to Gemini...`);
-  }
-
-  console.log(`[PROMPT_GEN] Trying Gemini fallback for sentiment prompts...`);
-  try {
-    const geminiText = await queryGeminiText(systemPrompt, userPrompt, 512, true);
-    const result = parseSentimentResponse(geminiText);
-    if (result) {
-      console.log(`[PROMPT_GEN] Gemini fallback generated ${SENTIMENT_PROMPT_COUNT} valid sentiment prompts`);
-      return result;
-    }
-  } catch (geminiError) {
-    console.error("[PROMPT_GEN] Gemini fallback also failed for sentiment:", geminiError);
+    console.log(`[PROMPT_GEN] OpenAI also unavailable for sentiment prompts`);
   }
   
   console.log("Using fallback sentiment prompts");
@@ -2227,8 +2215,24 @@ CRITICAL REQUIREMENTS:
 3. Each group name must be a SPECIFIC, SEARCHABLE service that real customers would type into an AI assistant
 4. Do NOT use generic terms like "Core Services" or "Specialty Services" - use actual service names like "Drain Cleaning", "AC Repair", "Roof Leak Repair", etc.`;
 
-  async function attemptGeneration(isRetry: boolean = false): Promise<ServiceGroupsResult> {
-    // Add rate limit delay before API call
+  async function attemptGenerationGemini(isRetry: boolean = false): Promise<ServiceGroupsResult> {
+    const prompt = isRetry 
+      ? userPrompt + "\n\nYour previous response contained generic terms. Please provide SPECIFIC service names only."
+      : userPrompt;
+    const geminiText = await queryGeminiText(systemPrompt, prompt, 4096, true);
+    const cleanText = geminiText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const parsed = JSON.parse(cleanText);
+    
+    const highLevelCategory = parsed.highLevelCategory || {
+      name: industry,
+      description: `${industry} services and products`
+    };
+    
+    const groups = Array.isArray(parsed.groups) ? parsed.groups : (parsed.categories || []);
+    return { highLevelCategory, groups };
+  }
+
+  async function attemptGenerationOpenAI(isRetry: boolean = false): Promise<ServiceGroupsResult> {
     await rateLimitDelay();
     
     const response = await retryWithBackoff(() =>
@@ -2256,8 +2260,26 @@ CRITICAL REQUIREMENTS:
     };
     
     const groups = Array.isArray(parsed.groups) ? parsed.groups : (parsed.categories || []);
-    
     return { highLevelCategory, groups };
+  }
+
+  // Primary: Gemini, Fallback: OpenAI
+  async function attemptGeneration(isRetry: boolean = false): Promise<ServiceGroupsResult> {
+    if (!geminiCircuitBreaker.isOpen() && process.env.AI_INTEGRATIONS_GEMINI_API_KEY) {
+      try {
+        console.log(`[SERVICE_GROUPS] ${isRetry ? 'Retrying' : 'Generating'} service groups with Gemini 2.5 Flash...`);
+        return await attemptGenerationGemini(isRetry);
+      } catch (geminiError) {
+        console.error("[SERVICE_GROUPS] Gemini primary failed:", geminiError);
+      }
+    }
+    
+    if (!openAICircuitBreaker.isOpen() && process.env.MY_OPENAI_API_KEY) {
+      console.log(`[SERVICE_GROUPS] Falling back to GPT-5-Mini...`);
+      return await attemptGenerationOpenAI(isRetry);
+    }
+    
+    throw new Error("Both Gemini and OpenAI unavailable for service group generation");
   }
 
   try {
@@ -2421,43 +2443,72 @@ CRITICAL REQUIREMENTS:
 4. Each group name must be specific and searchable (e.g., "Drain Cleaning", "AC Repair")
 5. Do NOT use generic terms like "Core Services" or "Specialty Services"`;
 
-  try {
-    // Add rate limit delay before API call
-    await rateLimitDelay();
-    
-    const response = await retryWithBackoff(() =>
-      openai.chat.completions.create({
-        model: "gpt-5-mini",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
-        ],
-        response_format: { type: "json_object" }
-      })
-    );
-
-    const content = response.choices[0]?.message?.content || "{}";
+  async function parseMultiCategoryResponse(content: string): Promise<MultiCategoryServiceGroupsResult | null> {
     const parsed = JSON.parse(content);
     
-    // Extract high-level categories
     const highLevelCategories = Array.isArray(parsed.highLevelCategories) 
       ? parsed.highLevelCategories 
       : primaryCategories.map(cat => ({ name: cat, description: `${cat} services` }));
     
-    // Extract and validate groups
     let groups = Array.isArray(parsed.groups) ? parsed.groups : [];
-    
-    // Filter out generic group names
     groups = groups.filter((g: { name: string }) => !isGenericGroupName(g.name));
     
-    // If not enough valid groups, fall back to generating for each category separately
     if (groups.length < 8) {
-      console.log("Multi-category generation produced insufficient groups, falling back to category-by-category generation...");
-      return await generateServiceGroupsFallback(businessName, primaryCategories, scope, city);
+      return null;
     }
     
-    console.log(`Generated ${groups.length} deduplicated service groups for ${primaryCategories.length} categories`);
     return { highLevelCategories, groups };
+  }
+
+  try {
+    // Primary: Try Gemini 2.5 Flash
+    if (!geminiCircuitBreaker.isOpen() && process.env.AI_INTEGRATIONS_GEMINI_API_KEY) {
+      try {
+        console.log(`[MULTI_CATEGORY] Generating with Gemini 2.5 Flash...`);
+        const geminiText = await queryGeminiText(systemPrompt, userPrompt, 4096, true);
+        const cleanText = geminiText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        const result = await parseMultiCategoryResponse(cleanText);
+        if (result) {
+          console.log(`Generated ${result.groups.length} deduplicated service groups for ${primaryCategories.length} categories via Gemini`);
+          return result;
+        }
+        console.log("Gemini multi-category generation produced insufficient groups");
+      } catch (geminiError) {
+        console.error("[MULTI_CATEGORY] Gemini primary failed:", geminiError);
+      }
+    }
+
+    // Fallback: Try OpenAI gpt-5-mini
+    if (!openAICircuitBreaker.isOpen() && process.env.MY_OPENAI_API_KEY) {
+      try {
+        console.log(`[MULTI_CATEGORY] Falling back to GPT-5-Mini...`);
+        await rateLimitDelay();
+        
+        const response = await retryWithBackoff(() =>
+          openai.chat.completions.create({
+            model: "gpt-5-mini",
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userPrompt }
+            ],
+            response_format: { type: "json_object" }
+          })
+        );
+
+        const content = response.choices[0]?.message?.content || "{}";
+        const result = await parseMultiCategoryResponse(content);
+        if (result) {
+          console.log(`Generated ${result.groups.length} deduplicated service groups for ${primaryCategories.length} categories via OpenAI fallback`);
+          return result;
+        }
+        console.log("OpenAI multi-category generation also produced insufficient groups");
+      } catch (openaiError) {
+        console.error("[MULTI_CATEGORY] OpenAI fallback also failed:", openaiError);
+      }
+    }
+
+    console.log("Multi-category generation produced insufficient groups, falling back to category-by-category generation...");
+    return await generateServiceGroupsFallback(businessName, primaryCategories, scope, city);
     
   } catch (error) {
     console.error("Error generating multi-category service groups:", error);
@@ -2788,25 +2839,44 @@ Return ONLY valid JSON:
   ]
 }`;
 
-    // Add rate limit delay before API call
-    await rateLimitDelay();
+    const sentimentSystemPrompt = "You are a brand visibility analyst. Create SPECIFIC, ACTIONABLE insights from AI response data. Each insight MUST reference the exact prompt that triggered it. Never write generic statements. Always respond with valid JSON only.";
     
-    const response = await retryWithBackoff(() =>
-      openai.chat.completions.create({
-        model: "gpt-5-mini",
-        messages: [
-          {
-            role: "system",
-            content: "You are a brand visibility analyst. Create SPECIFIC, ACTIONABLE insights from AI response data. Each insight MUST reference the exact prompt that triggered it. Never write generic statements. Always respond with valid JSON only."
-          },
-          { role: "user", content: prompt }
-        ],
-        temperature: 0.3,
-        max_completion_tokens: 2000,
-      })
-    );
+    let content = "";
     
-    const content = response.choices[0]?.message?.content?.trim() || "";
+    // Primary: Try Gemini 2.5 Flash
+    const geminiAvail = !geminiCircuitBreaker.isOpen() && !!process.env.AI_INTEGRATIONS_GEMINI_API_KEY;
+    if (geminiAvail) {
+      try {
+        console.log("[SENTIMENT_NARRATIVES] Generating with Gemini 2.5 Flash...");
+        content = await queryGeminiText(sentimentSystemPrompt, prompt, 2000, true);
+      } catch (geminiError) {
+        console.error("[SENTIMENT_NARRATIVES] Gemini primary failed:", geminiError);
+      }
+    }
+    
+    // Fallback: Try OpenAI gpt-5-mini
+    if (!content && !openAICircuitBreaker.isOpen() && process.env.MY_OPENAI_API_KEY) {
+      console.log("[SENTIMENT_NARRATIVES] Falling back to GPT-5-Mini...");
+      await rateLimitDelay();
+      
+      const response = await retryWithBackoff(() =>
+        openai.chat.completions.create({
+          model: "gpt-5-mini",
+          messages: [
+            { role: "system", content: sentimentSystemPrompt },
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.3,
+          max_completion_tokens: 2000,
+        })
+      );
+      content = response.choices[0]?.message?.content?.trim() || "";
+    }
+    
+    if (!content) {
+      console.log("[SENTIMENT_NARRATIVES] Both Gemini and OpenAI unavailable");
+      return result;
+    }
     
     // Extract JSON from response (handle potential markdown code blocks)
     let jsonStr = content;

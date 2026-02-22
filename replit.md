@@ -31,19 +31,19 @@ The backend handles AI service integration, data processing, and persistence. It
 
 ### AI Service Integration
 The tool integrates with:
-1.  **OpenAI/ChatGPT**: Uses `MY_OPENAI_API_KEY` with `gpt-5-mini` model via Responses API, utilizing a `web_search` tool for grounding.
-2.  **Google Gemini**: Integrates via Replit AI Integrations (no API key needed), using a `googleSearch` tool for grounding. Captures grounding metadata (`webSearchQueries`, `groundingSupports`) for geo-optimization analysis.
+1.  **OpenAI/ChatGPT**: Uses `MY_OPENAI_API_KEY` with `gpt-5-nano` model via Responses API for visibility checking, utilizing a `web_search` tool for grounding. `gpt-5-mini` is used as a fallback for prompt generation when Gemini is unavailable.
+2.  **Google Gemini**: Integrates via Replit AI Integrations (no API key needed). **Primary model for all prompt generation** (research prompts, sentiment prompts, service groups, executive summaries, sentiment narratives) using `gemini-2.5-flash` via `queryGeminiText()`. Also uses `googleSearch` tool for grounding in visibility checks. Captures grounding metadata (`webSearchQueries`, `groundingSupports`) for geo-optimization analysis.
 3.  **Perplexity**: Requires `PERPLEXITY_API_KEY`.
 
 AI queries are processed with maximum parallelization for speed:
 -   **Research prompts**: AI-generated industry-specific prompts tailored to the business, scope (local/national), and location
--   **Sentiment prompts**: AI-generated brand perception prompts using GPT-5.2
+-   **Sentiment prompts**: AI-generated brand perception prompts using Gemini 2.5 Flash
 -   **Executive Summary**: AI-generated personalized insights (not templated)
 -   **Parallel execution**: Research and sentiment prompts generated and run in parallel, with each prompt querying both ChatGPT and Gemini simultaneously
 -   **Performance**: Optimized through parallel batch execution and skipRateLimitDelay for batched contexts
 -   **Bottleneck**: ChatGPT web search API response time (10-30s per call) is the limiting factor
 -   **Real-time Progress**: SSE streaming shows actual progress stages (generating prompts, querying AI with counts, analyzing, creating summary, complete)
--   **Gemini Fallback (Feb 2026)**: All prompt generation and executive summary functions have Gemini as a fallback when OpenAI is unavailable (circuit breaker open, quota exceeded, or API key missing). Fallback order: OpenAI → Gemini → hardcoded templates. SSE `warning` events notify the frontend when fallback providers are used. `queryGeminiText()` is the shared helper for text-only Gemini calls (no search grounding).
+-   **Model Strategy (Feb 2026)**: Gemini 2.5 Flash is primary for all prompt generation (fastest, free via Replit AI Integrations). `gpt-5-nano` is used for visibility checking via Responses API (25% faster, 4.6x cheaper than mini). Fallback order: Gemini → OpenAI gpt-5-mini → hardcoded templates. SSE `warning` events notify the frontend when fallback providers are used. `queryGeminiText()` is the shared helper for text-only Gemini calls (no search grounding).
 
 ### Gemini Grounding Metadata
 -   **Purpose**: Captures what geographic search queries Gemini uses internally when answering prompts (e.g., "best plumber Woodbury MN"). This reveals how AI platforms interpret location-specific queries.
@@ -154,6 +154,6 @@ The `shared/` directory contains common TypeScript schemas and types, using Zod 
 ### Environment Variables
 -   `DATABASE_URL`: PostgreSQL connection string.
 -   `MY_OPENAI_API_KEY`: OpenAI API key.
--   `GEMINI_API_KEY`: Google Gemini API key (optional).
+-   `AI_INTEGRATIONS_GEMINI_API_KEY`: Google Gemini API key (auto-configured via Replit AI Integrations).
 -   `PERPLEXITY_API_KEY`: Perplexity API key (optional).
 -   `ADMIN_PASSWORD`: Admin portal password.
