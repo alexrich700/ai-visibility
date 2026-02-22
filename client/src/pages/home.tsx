@@ -184,6 +184,11 @@ export default function Home() {
                 setScanProgress(msg.progress);
                 setScanStatus(msg.text);
                 setActivePrompt(msg.subtext);
+              } else if (eventType === "warning") {
+                console.warn("[Audit warning]", data.message);
+                if (data.subtext) {
+                  setActivePrompt(data.subtext);
+                }
               } else if (eventType === "complete") {
                 auditResult = data as AuditResults;
                 setScanProgress(100);

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { storage } from "../storage";
-import { runAudit, ProgressCallback } from "../ai-services";
+import { runAudit, ProgressCallback, WarningCallback } from "../ai-services";
 import { auditRequestSchema } from "@shared/schema";
 import crypto from "crypto";
 import { withDatabaseRetry } from "../db-utils";
@@ -77,6 +77,10 @@ export async function handleAuditStream(
       sendEvent("progress", { stage, progress, total });
     };
 
+    const onWarning: WarningCallback = (message, subtext) => {
+      sendEvent("warning", { message, subtext });
+    };
+
     // Run the audit with progress streaming
     const results = await deps.runAuditFn(
       businessName,
@@ -84,7 +88,8 @@ export async function handleAuditStream(
       keyword,
       scope,
       city,
-      onProgress
+      onProgress,
+      onWarning
     );
 
     // Save to database

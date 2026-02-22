@@ -43,6 +43,7 @@ AI queries are processed with maximum parallelization for speed:
 -   **Performance**: Optimized through parallel batch execution and skipRateLimitDelay for batched contexts
 -   **Bottleneck**: ChatGPT web search API response time (10-30s per call) is the limiting factor
 -   **Real-time Progress**: SSE streaming shows actual progress stages (generating prompts, querying AI with counts, analyzing, creating summary, complete)
+-   **Gemini Fallback (Feb 2026)**: All prompt generation and executive summary functions have Gemini as a fallback when OpenAI is unavailable (circuit breaker open, quota exceeded, or API key missing). Fallback order: OpenAI → Gemini → hardcoded templates. SSE `warning` events notify the frontend when fallback providers are used. `queryGeminiText()` is the shared helper for text-only Gemini calls (no search grounding).
 
 ### Gemini Grounding Metadata
 -   **Purpose**: Captures what geographic search queries Gemini uses internally when answering prompts (e.g., "best plumber Woodbury MN"). This reveals how AI platforms interpret location-specific queries.

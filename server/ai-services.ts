@@ -441,6 +441,47 @@ async function retryWithBackoff<T>(
   throw lastError;
 }
 
+async function queryGeminiText(systemPrompt: string, userPrompt: string, maxTokens: number = 4096, expectJson: boolean = false): Promise<string> {
+  if (!process.env.AI_INTEGRATIONS_GEMINI_API_KEY) {
+    throw new Error("Gemini API key not configured");
+  }
+  if (geminiCircuitBreaker.isOpen()) {
+    throw new Error("Gemini circuit breaker is open");
+  }
+
+  const releaseGeminiSlot = await geminiConcurrencyLimiter.acquire();
+  try {
+    const { GoogleGenAI } = await import("@google/genai");
+    const ai = new GoogleGenAI({
+      apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
+      httpOptions: {
+        apiVersion: "",
+        baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL,
+      },
+    });
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: expectJson 
+        ? `${systemPrompt}\n\nIMPORTANT: Return ONLY valid JSON with no markdown formatting, no code blocks, no explanations.\n\n${userPrompt}`
+        : `${systemPrompt}\n\n${userPrompt}`,
+      config: {
+        maxOutputTokens: maxTokens,
+      }
+    });
+
+    const text = response.text || "";
+    geminiCircuitBreaker.recordSuccess();
+    return text;
+  } catch (error) {
+    const isRateLimit = isRateLimitError(error);
+    geminiCircuitBreaker.recordFailure(isRateLimit);
+    throw error;
+  } finally {
+    releaseGeminiSlot();
+  }
+}
+
 // ============================================
 // BRAND SENTIMENT PROMPT TEMPLATES
 // These prompts ask AI directly about a specific business to get sentiment feedback
@@ -1218,30 +1259,49 @@ async function generateExecutiveSummary(
   sentimentOverall: string,
   location: string
 ): Promise<string> {
-  try {
-    const userPrompt = `Write a 2-3 sentence executive summary for an AI visibility audit.
+  const systemPrompt = "You write professional, matter-of-fact executive summaries for AI visibility audit reports. Be concise and data-driven.";
+  const userPrompt = `Write a 2-3 sentence executive summary for an AI visibility audit.
 Start with: "We analyzed ${businessName} across ${LEAD_GEN_TOTAL_PROMPTS} high-intent AI prompts on ChatGPT and Google AI${location !== "nationwide" ? ` for ${keyword} in ${location}` : ` for ${keyword} nationwide`}."
 Key findings: overall score ${overallScore}/100, ChatGPT ${chatgptScore}%, Google AI ${googleAIScore}%, sentiment ${sentimentOverall}.
 Describe what this means for AI visibility. Be professional.`;
-    
-    // Add rate limit delay before API call
-    await rateLimitDelay();
-    
-    const response = await retryWithBackoff(() =>
-      openai.chat.completions.create({
-        model: "gpt-5-mini",
-        messages: [
-          { role: "system", content: "You write professional, matter-of-fact executive summaries for AI visibility audit reports. Be concise and data-driven." },
-          { role: "user", content: userPrompt }
-        ],
-        max_completion_tokens: 512,
-      })
-    );
-    return response.choices[0]?.message?.content || `We analyzed ${businessName} across ${LEAD_GEN_TOTAL_PROMPTS} high-intent AI prompts on ChatGPT and Google AI. The results indicate a visibility score of ${overallScore}/100 with ${sentimentOverall} brand sentiment.`;
-  } catch (error) {
-    console.error("Executive summary generation error:", error);
-    return `We analyzed ${businessName} across ${LEAD_GEN_TOTAL_PROMPTS} high-intent AI prompts on ChatGPT and Google AI. The results indicate a visibility score of ${overallScore}/100 with ${sentimentOverall} brand sentiment.`;
+
+  const templateFallback = `We analyzed ${businessName} across ${LEAD_GEN_TOTAL_PROMPTS} high-intent AI prompts on ChatGPT and Google AI. The results indicate a visibility score of ${overallScore}/100 with ${sentimentOverall} brand sentiment.`;
+
+  if (!openAICircuitBreaker.isOpen() && process.env.MY_OPENAI_API_KEY) {
+    try {
+      await rateLimitDelay();
+      const response = await retryWithBackoff(() =>
+        openai.chat.completions.create({
+          model: "gpt-5-mini",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt }
+          ],
+          max_completion_tokens: 512,
+        })
+      );
+      const content = response.choices[0]?.message?.content;
+      if (content) return content;
+    } catch (error) {
+      console.error("Executive summary generation error (OpenAI):", error);
+    }
+  } else {
+    console.log(`[EXEC_SUMMARY] OpenAI unavailable, skipping to Gemini...`);
   }
+
+  console.log(`[EXEC_SUMMARY] Trying Gemini fallback for executive summary...`);
+  try {
+    const geminiText = await queryGeminiText(systemPrompt, userPrompt, 512);
+    if (geminiText && geminiText.length > 20) {
+      console.log(`[EXEC_SUMMARY] Gemini fallback generated executive summary successfully`);
+      return geminiText;
+    }
+  } catch (geminiError) {
+    console.error("[EXEC_SUMMARY] Gemini fallback also failed:", geminiError);
+  }
+
+  console.log(`[EXEC_SUMMARY] Using template fallback`);
+  return templateFallback;
 }
 
 // Scrape website homepage content
@@ -1426,11 +1486,38 @@ ${homepageContent}`;
   // Track this call for diagnostics
   fallbackStats.totalCalls++;
   
-  // Check API key before making call
-  if (!process.env.MY_OPENAI_API_KEY) {
+  // Check API key and circuit breaker before making call
+  const openAIAvailable = !!process.env.MY_OPENAI_API_KEY && !openAICircuitBreaker.isOpen();
+  
+  if (!openAIAvailable) {
+    const reason = !process.env.MY_OPENAI_API_KEY ? 'API_KEY_MISSING' : 'API_RATE_LIMIT';
+    const message = !process.env.MY_OPENAI_API_KEY 
+      ? 'MY_OPENAI_API_KEY environment variable is not set'
+      : 'OpenAI circuit breaker is open, trying Gemini fallback';
+    console.log(`[PROMPT_GEN] OpenAI unavailable (${reason}), trying Gemini for research prompts...`);
+    
+    try {
+      const geminiText = await queryGeminiText(systemPrompt, userPrompt, 4096, true);
+      const cleanText = geminiText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      const parsed = JSON.parse(cleanText);
+      if (Array.isArray(parsed)) {
+        const validPrompts = parsed
+          .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+          .map(s => s.trim())
+          .slice(0, promptCount);
+        if (validPrompts.length >= 3) {
+          console.log(`[PROMPT_GEN] Gemini fallback generated ${validPrompts.length} research prompts for "${targetService}"`);
+          const fallbackPad = getFallbackResearchPrompts(keyword, location, serviceCategory);
+          return [...validPrompts, ...fallbackPad].slice(0, promptCount);
+        }
+      }
+    } catch (geminiError) {
+      console.error(`[PROMPT_GEN] Gemini fallback also failed:`, geminiError);
+    }
+    
     const diagnostics: PromptGenerationDiagnostics = {
-      reason: 'API_KEY_MISSING',
-      message: 'MY_OPENAI_API_KEY environment variable is not set',
+      reason,
+      message,
       timestamp: new Date().toISOString(),
       details: { targetService, location }
     };
@@ -1556,6 +1643,26 @@ ${homepageContent}`;
     const diagnostics = classifyError(error);
     diagnostics.details = { ...diagnostics.details, targetService, location };
     await recordFallback(diagnostics, { industry: keyword, promptCount });
+    
+    console.log(`[PROMPT_GEN] OpenAI failed for research prompts, trying Gemini fallback...`);
+    try {
+      const geminiText = await queryGeminiText(systemPrompt, userPrompt, 4096, true);
+      const cleanText = geminiText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      const parsed = JSON.parse(cleanText);
+      if (Array.isArray(parsed)) {
+        const validPrompts = parsed
+          .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+          .map(s => s.trim())
+          .slice(0, promptCount);
+        if (validPrompts.length >= 3) {
+          console.log(`[PROMPT_GEN] Gemini fallback generated ${validPrompts.length} research prompts for "${targetService}"`);
+          const fallbackPad = getFallbackResearchPrompts(keyword, location, serviceCategory);
+          return [...validPrompts, ...fallbackPad].slice(0, promptCount);
+        }
+      }
+    } catch (geminiError) {
+      console.error(`[PROMPT_GEN] Gemini fallback also failed:`, geminiError);
+    }
   }
   
   return getFallbackResearchPrompts(keyword, location, serviceCategory).slice(0, promptCount);
@@ -1589,42 +1696,64 @@ Example formats:
 - "Is [business name] a good [service]?"
 - "What do customers say about [business name]?"`;
   
-  try {
-    console.log("Generating sentiment prompts with GPT-5.2...");
-    
-    // Add rate limit delay before API call
-    await rateLimitDelay();
-    
-    const response = await retryWithBackoff(() =>
-      openai.chat.completions.create({
-        model: "gpt-5-mini",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
-        ],
-        max_completion_tokens: 512,
-      })
-    );
-    
-    const text = response.choices[0]?.message?.content || "";
-    console.log("GPT-4o sentiment prompts response:", text.slice(0, 200));
-    
+  const parseSentimentResponse = (text: string): string[] | null => {
     const cleanText = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    const parsed = JSON.parse(cleanText);
-    
-    if (Array.isArray(parsed)) {
-      const validPrompts = parsed
-        .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
-        .map(s => s.trim())
-        .slice(0, SENTIMENT_PROMPT_COUNT);
-      
-      if (validPrompts.length === SENTIMENT_PROMPT_COUNT) {
-        console.log(`Generated ${SENTIMENT_PROMPT_COUNT} valid sentiment prompts`);
-        return validPrompts;
+    try {
+      const parsed = JSON.parse(cleanText);
+      if (Array.isArray(parsed)) {
+        const validPrompts = parsed
+          .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+          .map(s => s.trim())
+          .slice(0, SENTIMENT_PROMPT_COUNT);
+        if (validPrompts.length === SENTIMENT_PROMPT_COUNT) {
+          return validPrompts;
+        }
       }
+    } catch {}
+    return null;
+  };
+
+  if (!openAICircuitBreaker.isOpen() && process.env.MY_OPENAI_API_KEY) {
+    try {
+      console.log("Generating sentiment prompts with GPT-5.2...");
+      await rateLimitDelay();
+      
+      const response = await retryWithBackoff(() =>
+        openai.chat.completions.create({
+          model: "gpt-5-mini",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt }
+          ],
+          max_completion_tokens: 512,
+        })
+      );
+      
+      const text = response.choices[0]?.message?.content || "";
+      console.log("GPT sentiment prompts response:", text.slice(0, 200));
+      
+      const result = parseSentimentResponse(text);
+      if (result) {
+        console.log(`Generated ${SENTIMENT_PROMPT_COUNT} valid sentiment prompts`);
+        return result;
+      }
+    } catch (error) {
+      console.error("Sentiment prompt generation error (OpenAI):", error);
     }
-  } catch (error) {
-    console.error("Sentiment prompt generation error:", error);
+  } else {
+    console.log(`[PROMPT_GEN] OpenAI unavailable for sentiment prompts, skipping to Gemini...`);
+  }
+
+  console.log(`[PROMPT_GEN] Trying Gemini fallback for sentiment prompts...`);
+  try {
+    const geminiText = await queryGeminiText(systemPrompt, userPrompt, 512, true);
+    const result = parseSentimentResponse(geminiText);
+    if (result) {
+      console.log(`[PROMPT_GEN] Gemini fallback generated ${SENTIMENT_PROMPT_COUNT} valid sentiment prompts`);
+      return result;
+    }
+  } catch (geminiError) {
+    console.error("[PROMPT_GEN] Gemini fallback also failed for sentiment:", geminiError);
   }
   
   console.log("Using fallback sentiment prompts");
@@ -1680,6 +1809,7 @@ const AUDIT_BATCH_DELAY_MS = 500; // Minimal delay since bottleneck is API respo
 
 // Progress callback type for SSE streaming
 export type ProgressCallback = (stage: string, progress?: number, total?: number) => void;
+export type WarningCallback = (message: string, subtext?: string) => void;
 
 async function runBatchedAIQueries<T>(
   items: T[],
@@ -1725,7 +1855,8 @@ export async function runAudit(
   keyword: string,
   scope: "local" | "national",
   city?: string,
-  onProgress?: ProgressCallback
+  onProgress?: ProgressCallback,
+  onWarning?: WarningCallback
 ): Promise<{
   promptResults: Array<{
     prompt: string;
@@ -1761,6 +1892,10 @@ export async function runAudit(
     console.log("[AUDIT] Generating industry-specific prompts...");
     onProgress?.("generating_prompts");
     const location = scope === "local" && city ? city : "nationwide";
+    
+    if (openAICircuitBreaker.isOpen()) {
+      onWarning?.("Switching to backup AI provider for prompt generation", "Using Google AI while ChatGPT recovers...");
+    }
     
     // Generate both prompt types in parallel for speed
     const [researchPrompts, sentimentPrompts] = await Promise.all([
@@ -1882,6 +2017,9 @@ export async function runAudit(
 
     // Stage 4: Generate AI-crafted executive summary with personalized insights
     onProgress?.("generating_summary");
+    if (openAICircuitBreaker.isOpen()) {
+      onWarning?.("Switching to backup AI provider for summary", "Using Google AI for your executive summary...");
+    }
     console.log("[AUDIT] Generating executive summary...");
     const executiveSummary = await generateExecutiveSummary(
       businessName,
