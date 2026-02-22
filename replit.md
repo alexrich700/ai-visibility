@@ -8,6 +8,15 @@ Preferred communication style: Simple, everyday language.
 
 **CRITICAL Design Requirement**: The existing UI design must be preserved exactly as implemented. Keep all colors, fonts, styles, layouts, and visual elements unchanged.
 
+### Landing Page (Feb 2026 Redesign)
+The root `/` landing page was redesigned for paid social media traffic conversion. It uses Gemini 3.1 Pro-generated copy. Key sections:
+- **Urgency banner** (dark bar at top)
+- **2-column hero**: Left side has headline, 3 benefit bullets with icons, platform badges (ChatGPT, Google AI, Perplexity). Right side has the audit form card.
+- **How It Works** (3 steps below the fold)
+- **FAQ accordion** (3 expandable items)
+- **Bottom CTA** (dark section with CTA button that scrolls to form)
+- **Footer** with branding
+
 ## System Architecture
 ### Frontend
 -   **Framework**: React 18 with TypeScript
