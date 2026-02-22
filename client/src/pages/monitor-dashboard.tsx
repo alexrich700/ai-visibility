@@ -29,7 +29,7 @@ import {
   TrendingUp, TrendingDown, Eye, Target, Calendar, Clock, Settings,
   ArrowLeft, RefreshCw, Loader2, CheckCircle2, XCircle, Minus, Building2,
   Users, Link2, Award, ThumbsUp, ThumbsDown, Meh, ExternalLink, Download, HelpCircle, AlertTriangle,
-  Share2, Copy, Check
+  Share2, Copy, Check, Search, ChevronLeft, ChevronRight
 } from "lucide-react";
 import {
   Tooltip as InfoTooltip,
@@ -178,7 +178,9 @@ export default function MonitorDashboard() {
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [selectedExportDate, setSelectedExportDate] = useState<string>("");
   const [isExporting, setIsExporting] = useState(false);
-  const [displayLimit, setDisplayLimit] = useState(20);
+  const [promptSearch, setPromptSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 20;
   
   // Client share link state
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
@@ -593,9 +595,26 @@ export default function MonitorDashboard() {
   const groupBarData = useMemo(() => buildGroupBarData(serviceResultsByGroup), [serviceResultsByGroup]);
 
   const filteredResults = useMemo(
-    () => filterResultsByGroup(serviceResultsOnly, selectedGroup),
-    [serviceResultsOnly, selectedGroup],
+    () => {
+      let results = filterResultsByGroup(serviceResultsOnly, selectedGroup);
+      if (promptSearch.trim()) {
+        const search = promptSearch.toLowerCase();
+        results = results.filter(r => r.promptText.toLowerCase().includes(search));
+      }
+      return results;
+    },
+    [serviceResultsOnly, selectedGroup, promptSearch],
   );
+
+  const totalPages = Math.max(1, Math.ceil(filteredResults.length / ITEMS_PER_PAGE));
+  const paginatedResults = useMemo(
+    () => filteredResults.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE),
+    [filteredResults, currentPage, ITEMS_PER_PAGE],
+  );
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(Math.max(1, totalPages));
+  }, [totalPages, currentPage]);
 
   if (!clientId) {
     return (
@@ -1410,79 +1429,188 @@ export default function MonitorDashboard() {
           </CardContent>
         </Card>
 
-        {/* Detailed Results */}
+        {/* Detailed Results - Table Layout */}
         <Card className="shadow-2xl shadow-blue-900/5">
-          <CardHeader className="flex flex-row items-center justify-between gap-4">
-            <CardTitle className="text-lg font-bold tracking-tight">Prompt Results</CardTitle>
-            <Select value={selectedGroup} onValueChange={setSelectedGroup}>
-              <SelectTrigger className="w-48" data-testid="select-group-filter">
-                <SelectValue placeholder="Filter by group" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Service Groups</SelectItem>
-                {groups.filter(g => g.promptCategory !== 'brand_sentiment').map((group) => (
-                  <SelectItem key={group.id} value={group.id.toString()}>
-                    {group.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <CardHeader className="pb-3">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle className="text-lg font-bold tracking-tight">Prompt Results</CardTitle>
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Input
+                    placeholder="Search prompts..."
+                    value={promptSearch}
+                    onChange={(e) => { setPromptSearch(e.target.value); setCurrentPage(1); }}
+                    className="pl-9 w-56 h-9 text-sm"
+                    data-testid="input-prompt-search"
+                  />
+                </div>
+                <Select value={selectedGroup} onValueChange={(v) => { setSelectedGroup(v); setCurrentPage(1); }}>
+                  <SelectTrigger className="w-48 h-9 text-sm" data-testid="select-group-filter">
+                    <SelectValue placeholder="All Groups" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Service Groups</SelectItem>
+                    {groups.filter(g => g.promptCategory !== 'brand_sentiment').map((group) => (
+                      <SelectItem key={group.id} value={group.id.toString()}>
+                        {group.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="divide-y divide-gray-100">
-              {filteredResults.slice(0, displayLimit).map((result) => {
-                const groupName = serviceResultsByGroup.find(g => g.groupId === result.groupId)?.groupName || resultsByGroup.find(g => g.groupId === result.groupId)?.groupName;
-                const isVisible = result.chatgptFound || result.googleAIFound;
-                const isCited = result.chatgptCited || result.googleAICited;
-                
-                return (
-                  <button 
-                    key={result.id} 
-                    className="w-full py-4 flex items-start gap-4 text-left hover-elevate rounded-lg transition-colors cursor-pointer"
-                    onClick={() => setSelectedResult(result)}
-                    data-testid={`button-result-${result.id}`}
-                  >
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                      isCited ? "bg-green-100" :
-                      isVisible ? "bg-blue-100" :
-                      "bg-red-100"
-                    }`}>
-                      {isCited ? <CheckCircle2 className="w-5 h-5 text-green-600" /> :
-                       isVisible ? <Eye className="w-5 h-5 text-blue-600" /> :
-                       <XCircle className="w-5 h-5 text-red-600" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-gray-900 font-medium">{result.promptText}</p>
-                      <div className="flex flex-wrap items-center gap-2 mt-2">
-                        <Badge variant={groupName ? "secondary" : "outline"} className="text-xs">
-                          {groupName || "Unknown Group"}
-                        </Badge>
-                        <div className="flex items-center gap-2 text-sm text-gray-500">
-                          <span className={result.chatgptFound ? "text-green-600" : "text-gray-400"}>
-                            ChatGPT: {result.chatgptFound ? (result.chatgptCited ? "Cited" : "Found") : "Not found"}
-                          </span>
-                          <span className="text-gray-300">|</span>
-                          <span className={result.googleAIFound ? "text-green-600" : "text-gray-400"}>
-                            Google AI: {result.googleAIFound ? (result.googleAICited ? "Cited" : "Found") : "Not found"}
-                          </span>
-                        </div>
-                        <ExternalLink className="w-3 h-3 text-gray-400 ml-auto flex-shrink-0" />
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
+          <CardContent className="px-0 pb-0">
+            {/* Table Header */}
+            <div className="grid grid-cols-[3rem_1fr_minmax(100px,160px)_100px_100px_80px] items-center gap-2 px-6 py-2.5 border-b border-gray-200 bg-gray-50/80 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              <span className="text-center">#</span>
+              <span>Prompt</span>
+              <span className="hidden md:block">Group</span>
+              <span className="text-center">ChatGPT</span>
+              <span className="text-center">Google AI</span>
+              <span className="text-center">Rank</span>
             </div>
             
-            {filteredResults.length > displayLimit && (
-              <div className="pt-4 text-center">
-                <Button 
-                  variant="outline" 
-                  data-testid="button-load-more"
-                  onClick={() => setDisplayLimit(prev => prev + 20)}
-                >
-                  Load More ({filteredResults.length - displayLimit} remaining)
-                </Button>
+            {/* Table Rows */}
+            <div className="divide-y divide-gray-100">
+              {paginatedResults.length === 0 ? (
+                <div className="px-6 py-12 text-center text-gray-500 text-sm">
+                  {promptSearch ? "No prompts match your search" : "No prompt results available"}
+                </div>
+              ) : (
+                paginatedResults.map((result, idx) => {
+                  const groupName = serviceResultsByGroup.find(g => g.groupId === result.groupId)?.groupName || resultsByGroup.find(g => g.groupId === result.groupId)?.groupName;
+                  const avgRank = (() => {
+                    const ranks = [result.chatgptRank, result.googleAIRank].filter((r): r is number => r != null && r > 0);
+                    return ranks.length > 0 ? (ranks.reduce((a, b) => a + b, 0) / ranks.length) : null;
+                  })();
+                  const globalIdx = (currentPage - 1) * ITEMS_PER_PAGE + idx + 1;
+
+                  return (
+                    <button
+                      key={result.id}
+                      className="w-full grid grid-cols-[3rem_1fr_minmax(100px,160px)_100px_100px_80px] items-center gap-2 px-6 py-3.5 text-left hover-elevate rounded-lg transition-colors cursor-pointer group"
+                      onClick={() => setSelectedResult(result)}
+                      data-testid={`button-result-${result.id}`}
+                    >
+                      {/* Row number */}
+                      <span className="text-center text-sm text-gray-400 font-medium tabular-nums">{globalIdx}</span>
+
+                      {/* Prompt text */}
+                      <div className="min-w-0 pr-2">
+                        <p className="text-sm text-gray-900 font-medium truncate transition-colors" data-testid={`text-prompt-${result.id}`}>{result.promptText}</p>
+                      </div>
+
+                      {/* Group */}
+                      <div className="hidden md:block min-w-0">
+                        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-md truncate inline-block max-w-full">
+                          {groupName || "—"}
+                        </span>
+                      </div>
+
+                      {/* ChatGPT status */}
+                      <div className="flex items-center justify-center gap-1.5" data-testid={`status-chatgpt-${result.id}`}>
+                        <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
+                          result.chatgptCited ? "bg-green-500" :
+                          result.chatgptFound ? "bg-blue-500" :
+                          "bg-gray-300"
+                        }`} />
+                        <span className={`text-xs font-medium ${
+                          result.chatgptCited ? "text-green-700" :
+                          result.chatgptFound ? "text-blue-600" :
+                          "text-gray-400"
+                        }`}>
+                          {result.chatgptCited ? "Cited" : result.chatgptFound ? "Found" : "—"}
+                        </span>
+                      </div>
+
+                      {/* Google AI status */}
+                      <div className="flex items-center justify-center gap-1.5" data-testid={`status-googleai-${result.id}`}>
+                        <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
+                          result.googleAICited ? "bg-green-500" :
+                          result.googleAIFound ? "bg-blue-500" :
+                          "bg-gray-300"
+                        }`} />
+                        <span className={`text-xs font-medium ${
+                          result.googleAICited ? "text-green-700" :
+                          result.googleAIFound ? "text-blue-600" :
+                          "text-gray-400"
+                        }`}>
+                          {result.googleAICited ? "Cited" : result.googleAIFound ? "Found" : "—"}
+                        </span>
+                      </div>
+
+                      {/* Average Rank */}
+                      <div className="flex items-center justify-center" data-testid={`text-rank-${result.id}`}>
+                        {avgRank != null ? (
+                          <span className={`text-sm font-bold tabular-nums ${
+                            avgRank <= 3 ? "text-green-600" :
+                            avgRank <= 5 ? "text-amber-600" :
+                            "text-gray-500"
+                          }`}>
+                            #{avgRank.toFixed(1)}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-300">—</span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Pagination Footer */}
+            {filteredResults.length > 0 && (
+              <div className="flex items-center justify-between px-6 py-3 border-t border-gray-200 bg-gray-50/50">
+                <p className="text-sm text-gray-500" data-testid="text-pagination-info">
+                  {(currentPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, filteredResults.length)} of {filteredResults.length}
+                </p>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={currentPage <= 1}
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    data-testid="button-prev-page"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                    let pageNum: number;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={pageNum === currentPage ? "default" : "ghost"}
+                        size="sm"
+                        className="text-xs"
+                        onClick={() => setCurrentPage(pageNum)}
+                        data-testid={`button-page-${pageNum}`}
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={currentPage >= totalPages}
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    data-testid="button-next-page"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
             )}
           </CardContent>
