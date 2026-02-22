@@ -3,6 +3,8 @@ import { useRoute, useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { getAdminToken, getSessionAwareQueryFn } from "@/lib/queryClient";
+import { AdminLayout } from "@/components/admin-layout";
+import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -166,14 +168,63 @@ function MetricInfo({ tooltip, id }: { tooltip: string; id: string }) {
 }
 
 
-export default function MonitorDashboard() {
+export default function MonitorDashboardPage() {
+  const { isAuthenticated: isAdminAuth, isLoading: isAdminLoading } = useAuth();
+
+  const { data: clientSession, isLoading: isClientSessionLoading } = useQuery<{ authenticated: boolean; isAdmin: boolean }>({
+    queryKey: ["/api/monitoring/client-session"],
+    queryFn: getSessionAwareQueryFn({ on401: "returnNull" }),
+    staleTime: 30 * 1000,
+  });
+
+  const isCheckingAuth = isAdminLoading || isClientSessionLoading;
+  const hasClientSession = clientSession?.authenticated === true;
+  const hasAccess = isAdminAuth || hasClientSession;
+
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!hasAccess) {
+    return <RedirectToLogin />;
+  }
+
+  if (isAdminAuth) {
+    return (
+      <AdminLayout>
+        <MonitorDashboardContent isAdminUser={true} />
+      </AdminLayout>
+    );
+  }
+
+  return <MonitorDashboardContent isAdminUser={false} />;
+}
+
+function RedirectToLogin() {
+  const [location, navigate] = useLocation();
+  useEffect(() => {
+    const returnTo = encodeURIComponent(location);
+    navigate(`/admin/login?redirect=${returnTo}`);
+  }, [location, navigate]);
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <Loader2 className="w-8 h-8 animate-spin text-primary" />
+    </div>
+  );
+}
+
+function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
   const [, params] = useRoute("/monitor/dashboard/:id");
   const [, setLocation] = useLocation();
   const clientId = params?.id ? parseInt(params.id) : null;
   const [selectedGroup, setSelectedGroup] = useState<string>("all");
   const [timeRange, setTimeRange] = useState<string>("30");
   const [trendView, setTrendView] = useState<"overall" | "groups" | "competitors">("overall");
-  const [selectedViewCity, setSelectedViewCity] = useState<string>("all"); // Filter dashboard view by city
+  const [selectedViewCity, setSelectedViewCity] = useState<string>("all");
   const [selectedResult, setSelectedResult] = useState<CheckResult | null>(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [selectedExportDate, setSelectedExportDate] = useState<string>("");
@@ -182,30 +233,23 @@ export default function MonitorDashboard() {
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 20;
   
-  // Client share link state
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   
-  // Rescan state - using background job system
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   const [scanStatus, setScanStatus] = useState("");
   const [scanSubStatus, setScanSubStatus] = useState("");
-  const [selectedScanCity, setSelectedScanCity] = useState<string>("all"); // Selected city for next scan
-  const [currentScanCityIndex, setCurrentScanCityIndex] = useState(0); // Multi-city: current city index
-  const [totalScanCities, setTotalScanCities] = useState(0); // Multi-city: total cities to scan
-  const [activeJobId, setActiveJobId] = useState<number | null>(null); // Track background job
+  const [selectedScanCity, setSelectedScanCity] = useState<string>("all");
+  const [currentScanCityIndex, setCurrentScanCityIndex] = useState(0);
+  const [totalScanCities, setTotalScanCities] = useState(0);
+  const [activeJobId, setActiveJobId] = useState<number | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const isMountedRef = useRef(true); // Track mount state
+  const isMountedRef = useRef(true);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: authSession } = useQuery<{ authenticated: boolean; isAdmin: boolean }>({
-    queryKey: ["/api/monitoring/client-session"],
-    queryFn: getSessionAwareQueryFn({ on401: "returnNull" }),
-    staleTime: 30 * 1000,
-  });
-  const isAdmin = authSession?.isAdmin === true;
+  const isAdmin = isAdminUser;
   
   // Cleanup polling on unmount
   useEffect(() => {

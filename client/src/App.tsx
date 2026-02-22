@@ -38,7 +38,7 @@ function Router() {
 
       <Route path="/monitor/clients">{() => <AdminLayout><MonitorClients /></AdminLayout>}</Route>
       <Route path="/monitor/setup">{() => <AdminLayout><MonitorSetup /></AdminLayout>}</Route>
-      <Route path="/monitor/dashboard/:id">{() => <AdminLayout><MonitorDashboard /></AdminLayout>}</Route>
+      <Route path="/monitor/dashboard/:id" component={MonitorDashboard} />
       <Route path="/monitor/settings/:id">{() => <AdminLayout><MonitorSettings /></AdminLayout>}</Route>
       <Route path="/monitor/client-access/:token" component={MonitorClientAccess} />
 
