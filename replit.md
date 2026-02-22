@@ -11,7 +11,7 @@ Preferred communication style: Simple, everyday language.
 ### Landing Page (Feb 2026 Redesign)
 The root `/` landing page was redesigned for paid social media traffic conversion. It uses Gemini 3.1 Pro-generated copy. Key sections:
 - **Urgency banner** (dark bar at top)
-- **2-column hero**: Left side has headline, 3 benefit bullets with icons, platform badges (ChatGPT, Google AI, Perplexity). Right side has the audit form card.
+- **Centered hero**: Headline, 3 benefit pill badges with icons, platform badges (ChatGPT, Google AI Overviews), then the audit form card — all centered for optimal paid social traffic conversion.
 - **How It Works** (3 steps below the fold)
 - **FAQ accordion** (3 expandable items)
 - **Bottom CTA** (dark section with CTA button that scrolls to form)

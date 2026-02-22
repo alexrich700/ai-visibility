@@ -297,51 +297,41 @@ export default function Home() {
 
         <main className="flex-1 flex flex-col">
           <section className="px-4 pt-8 pb-16 md:pt-14 md:pb-24">
-            <div className="max-w-6xl mx-auto">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-start">
-                <div className="space-y-8 lg:pt-4">
-                  <div className="space-y-5">
-                    <h1
-                      className="text-4xl md:text-5xl lg:text-[3.25rem] font-bold text-[#010400] tracking-tight leading-[1.1]"
-                      data-testid="text-headline"
-                    >
-                      Is AI Recommending Your Business{" "}
-                      <span className="text-[#5599f9]">Or Your Competitors?</span>
-                    </h1>
-                    <p className="text-lg md:text-xl text-gray-500 leading-relaxed max-w-lg" data-testid="text-subheadline">
-                      If you aren't visible on ChatGPT, Google AI, and Perplexity, you are losing customers every single day.
-                    </p>
-                  </div>
+            <div className="max-w-3xl mx-auto">
+              <div className="text-center space-y-6 mb-10">
+                <h1
+                  className="text-4xl md:text-5xl font-bold text-[#010400] tracking-tight leading-[1.1]"
+                  data-testid="text-headline"
+                >
+                  Is AI Recommending Your Business{" "}
+                  <span className="text-[#5599f9]">Or Your Competitors?</span>
+                </h1>
+                <p className="text-lg md:text-xl text-gray-500 leading-relaxed max-w-2xl mx-auto" data-testid="text-subheadline">
+                  If you aren't visible on ChatGPT and Google AI, you are losing customers every single day.
+                </p>
 
-                  <div className="space-y-4">
-                    <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex-shrink-0 w-6 h-6 rounded-full bg-[#5599f9]/10 flex items-center justify-center">
-                        <Eye size={14} className="text-[#5599f9]" />
-                      </div>
-                      <p className="text-[#010400] font-medium" data-testid="text-benefit-1">See exactly what AI says about your brand</p>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex-shrink-0 w-6 h-6 rounded-full bg-[#5599f9]/10 flex items-center justify-center">
-                        <Target size={14} className="text-[#5599f9]" />
-                      </div>
-                      <p className="text-[#010400] font-medium" data-testid="text-benefit-2">Uncover hidden gaps in your AI search strategy</p>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex-shrink-0 w-6 h-6 rounded-full bg-[#5599f9]/10 flex items-center justify-center">
-                        <BarChart3 size={14} className="text-[#5599f9]" />
-                      </div>
-                      <p className="text-[#010400] font-medium" data-testid="text-benefit-3">Steal AI search share from your biggest competitors</p>
-                    </div>
+                <div className="flex flex-wrap items-center justify-center gap-5 pt-2">
+                  <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-full px-4 py-2">
+                    <Eye size={16} className="text-[#5599f9]" />
+                    <span className="text-sm text-[#010400] font-medium" data-testid="text-benefit-1">See exactly what AI says about you</span>
                   </div>
-
-                  <div className="flex flex-wrap items-center gap-6 text-sm text-gray-400 font-medium pt-2">
-                    <span className="flex items-center gap-2"><CheckCircle size={15} className="text-green-500" /> ChatGPT</span>
-                    <span className="flex items-center gap-2"><CheckCircle size={15} className="text-green-500" /> Google AI</span>
-                    <span className="flex items-center gap-2"><CheckCircle size={15} className="text-green-500" /> Perplexity</span>
+                  <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-full px-4 py-2">
+                    <Target size={16} className="text-[#5599f9]" />
+                    <span className="text-sm text-[#010400] font-medium" data-testid="text-benefit-2">Uncover gaps in your AI strategy</span>
+                  </div>
+                  <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-full px-4 py-2">
+                    <BarChart3 size={16} className="text-[#5599f9]" />
+                    <span className="text-sm text-[#010400] font-medium" data-testid="text-benefit-3">Outrank competitors in AI search</span>
                   </div>
                 </div>
 
-                <div id="audit-form" className="scroll-mt-8">
+                <div className="flex items-center justify-center gap-6 text-sm text-gray-400 font-medium pt-1">
+                  <span className="flex items-center gap-2"><CheckCircle size={15} className="text-green-500" /> ChatGPT</span>
+                  <span className="flex items-center gap-2"><CheckCircle size={15} className="text-green-500" /> Google AI Overviews</span>
+                </div>
+              </div>
+
+              <div id="audit-form" className="scroll-mt-8">
                   <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-2xl shadow-black/[0.06]">
                     <div className="bg-gray-50 border-b border-gray-200 px-6 py-4">
                       <h2 className="text-lg font-bold text-[#010400]" data-testid="text-form-title">Get Your Free AI Visibility Audit</h2>
@@ -468,9 +458,8 @@ export default function Home() {
                   </div>
 
                   <p className="text-center text-xs text-gray-400 font-medium mt-4">
-                    Generating {LEAD_GEN_TOTAL_PROMPTS} AI prompt variations across ChatGPT, Google AI & Perplexity
+                    Generating {LEAD_GEN_TOTAL_PROMPTS} AI prompt variations across ChatGPT & Google AI
                   </p>
-                </div>
               </div>
             </div>
           </section>
@@ -510,7 +499,7 @@ export default function Home() {
                       <h3 className="font-bold text-[#010400]" data-testid="text-step-2-title">AI Engines Scanned</h3>
                     </div>
                     <p className="text-gray-500 text-sm leading-relaxed" data-testid="text-step-2-desc">
-                      We analyze ChatGPT, Perplexity, and Google AI Overviews for your brand.
+                      We analyze ChatGPT and Google AI Overviews for your brand.
                     </p>
                   </div>
                 </div>
@@ -544,7 +533,7 @@ export default function Home() {
               <div className="border-t border-gray-100" data-testid="faq-section">
                 <FAQItem
                   question="Which AI platforms do you check?"
-                  answer="Our audit comprehensively scans the top AI search engines, including ChatGPT, Google AI Overviews, and Perplexity, to see if they actively recommend your business."
+                  answer="Our audit comprehensively scans the top AI search engines, including ChatGPT and Google AI Overviews, to see if they actively recommend your business."
                 />
                 <FAQItem
                   question="Why does AI visibility matter now?"
@@ -564,7 +553,7 @@ export default function Home() {
                 Ready to See Where You Stand in AI Search?
               </h2>
               <p className="text-gray-400 text-base">
-                Discover exactly how ChatGPT, Google AI, and Perplexity recommend (or ignore) your brand.
+                Discover exactly how ChatGPT and Google AI recommend (or ignore) your brand.
               </p>
               <button
                 type="button"
