@@ -10,6 +10,13 @@ import {
   CheckCircle,
   AlertCircle,
   XCircle,
+  Zap,
+  BarChart3,
+  FileText,
+  ChevronDown,
+  Shield,
+  Eye,
+  Target,
 } from "lucide-react";
 import type { AuditRequest, AuditResults } from "@shared/schema";
 import { LEAD_GEN_TOTAL_PROMPTS } from "@shared/audit-constants";
@@ -18,7 +25,6 @@ import logoIcon from "@assets/images_1765741951084.png";
 
 type Step = "input" | "scanning";
 
-// Map backend stages to user-friendly messages
 function getStageMessage(stage: string, progress?: number, total?: number, percentage?: number): { text: string; subtext: string; progress: number } {
   switch (stage) {
     case "generating_prompts":
@@ -65,18 +71,41 @@ function getStageMessage(stage: string, progress?: number, total?: number, perce
   }
 }
 
+function FAQItem({ question, answer }: { question: string; answer: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border-b border-gray-100 last:border-0">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between py-5 text-left group"
+        data-testid={`faq-toggle-${question.slice(0, 20).replace(/\s+/g, '-').toLowerCase()}`}
+      >
+        <span className="text-[#010400] font-semibold text-base pr-4">{question}</span>
+        <ChevronDown
+          size={20}
+          className={`text-gray-400 transition-transform duration-200 flex-shrink-0 ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+      <div
+        className={`overflow-hidden transition-all duration-200 ${open ? "max-h-40 pb-5" : "max-h-0"}`}
+      >
+        <p className="text-gray-500 text-sm leading-relaxed">{answer}</p>
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   const [, setLocation] = useLocation();
   const [step, setStep] = useState<Step>("input");
 
-  // Input State
   const [businessName, setBusinessName] = useState("");
   const [url, setUrl] = useState("");
   const [keyword, setKeyword] = useState("");
   const [scope, setScope] = useState<"local" | "national">("local");
   const [city, setCity] = useState("");
 
-  // Scanning State
   const [scanProgress, setScanProgress] = useState(0);
   const [scanStatus, setScanStatus] = useState("");
   const [activePrompt, setActivePrompt] = useState("");
@@ -84,12 +113,10 @@ export default function Home() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Scroll to top when step changes
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [step]);
 
-  // Cleanup abort controller on unmount
   useEffect(() => {
     return () => {
       if (abortControllerRef.current) {
@@ -110,7 +137,6 @@ export default function Home() {
     setScanStatus("Initializing Audit...");
     setActivePrompt("Connecting to AI platforms...");
 
-    // Create abort controller for cleanup
     abortControllerRef.current = new AbortController();
 
     try {
@@ -122,7 +148,6 @@ export default function Home() {
         city: scope === "local" ? city : undefined,
       };
 
-      // Use fetch with SSE to stream progress
       const response = await fetch("/api/audit/stream", {
         method: "POST",
         headers: {
@@ -158,14 +183,12 @@ export default function Home() {
         buffer += chunk;
         console.log(`[SSE] Chunk #${chunkCount}: ${chunk.length} bytes`);
         
-        // Parse SSE events from buffer - split on double newlines (event separator)
         const events = buffer.split("\n\n");
-        buffer = events.pop() || ""; // Keep incomplete event in buffer
+        buffer = events.pop() || "";
 
         for (const eventBlock of events) {
           if (!eventBlock.trim()) continue;
           
-          // Skip SSE comment lines (heartbeats)
           if (eventBlock.trim().startsWith(":")) continue;
           
           const lines = eventBlock.split("\n");
@@ -213,18 +236,16 @@ export default function Home() {
         }
       }
 
-      // Navigate to results after stream ends
       if (auditResult?.auditId) {
         setLocation(`/audit/${auditResult.auditId}`);
       } else {
-        // Stream ended without complete event - show error
         console.error("Audit stream ended without completion data");
         setErrorMessage("We couldn't finish your audit. Please try again.");
         setStep("input");
       }
     } catch (error) {
       if ((error as Error).name === "AbortError") {
-        return; // User navigated away
+        return;
       }
       console.error("Audit failed:", error);
       setErrorMessage((error as Error).message || "Audit failed. Please try again.");
@@ -248,159 +269,326 @@ export default function Home() {
     </div>
   );
 
-  // --- View: Input ---
+  const scrollToForm = () => {
+    document.getElementById("audit-form")?.scrollIntoView({ behavior: "smooth" });
+  };
+
   if (step === "input") {
     return (
       <div className="min-h-screen bg-white flex flex-col font-sans text-[#010400] selection:bg-[#5599f9] selection:text-white">
-        <header className="px-6 py-8 flex justify-center items-center max-w-7xl mx-auto w-full">
+        <div className="bg-[#010400] text-white text-center py-2.5 px-4">
+          <p className="text-sm font-medium tracking-wide" data-testid="text-urgency-banner">
+            <Zap size={14} className="inline mr-1.5 text-[#ffb41c]" />
+            Stop losing customers to competitors. Check your AI visibility today.
+          </p>
+        </div>
+
+        <header className="px-6 py-5 flex justify-between items-center max-w-6xl mx-auto w-full">
           <Branding />
+          <button
+            type="button"
+            onClick={scrollToForm}
+            className="hidden sm:inline-flex items-center gap-2 bg-[#5599f9] hover:bg-[#4a8ce8] text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors"
+            data-testid="button-header-cta"
+          >
+            Get My Free AI Audit <ArrowRight size={16} />
+          </button>
         </header>
 
-        <main className="flex-1 flex flex-col items-center justify-center px-4 -mt-10">
-          <div className="max-w-3xl w-full text-center space-y-12">
-            <div className="space-y-4 pt-8">
-              <h1 className="text-4xl md:text-5xl font-bold text-[#010400] tracking-tighter leading-tight">
-                Your competitors are getting recommended.
-              </h1>
-              <p className="text-3xl md:text-4xl font-bold text-[#010400] tracking-tight italic">
-                Are you?
-              </p>
-              <p className="text-lg md:text-xl text-gray-500 max-w-xl mx-auto leading-relaxed font-light pt-4">
-                See exactly how ChatGPT and Google AI Overviews recommend (or ignore) your brand.
-              </p>
-            </div>
+        <main className="flex-1 flex flex-col">
+          <section className="px-4 pt-8 pb-16 md:pt-14 md:pb-24">
+            <div className="max-w-6xl mx-auto">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-start">
+                <div className="space-y-8 lg:pt-4">
+                  <div className="space-y-5">
+                    <h1
+                      className="text-4xl md:text-5xl lg:text-[3.25rem] font-bold text-[#010400] tracking-tight leading-[1.1]"
+                      data-testid="text-headline"
+                    >
+                      Is AI Recommending Your Business{" "}
+                      <span className="text-[#5599f9]">Or Your Competitors?</span>
+                    </h1>
+                    <p className="text-lg md:text-xl text-gray-500 leading-relaxed max-w-lg" data-testid="text-subheadline">
+                      If you aren't visible on ChatGPT, Google AI, and Perplexity, you are losing customers every single day.
+                    </p>
+                  </div>
 
-            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-2xl shadow-blue-900/5">
-              <form onSubmit={startScan} className="flex flex-col">
-                <div className="flex border-b border-gray-200">
-                  <button
-                    type="button"
-                    onClick={() => setScope("local")}
-                    className={`flex-1 py-4 text-sm font-bold tracking-widest uppercase transition-all flex items-center justify-center gap-2 ${
-                      scope === "local"
-                        ? "bg-gray-50 text-[#010400] border-b-2 border-[#5599f9]"
-                        : "bg-white text-gray-400 hover:text-gray-600 hover:bg-gray-50"
-                    }`}
-                    data-testid="button-scope-local"
-                  >
-                    <MapPin size={16} className={scope === "local" ? "text-[#5599f9]" : ""} /> Local Business
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setScope("national")}
-                    className={`flex-1 py-4 text-sm font-bold tracking-widest uppercase transition-all flex items-center justify-center gap-2 ${
-                      scope === "national"
-                        ? "bg-gray-50 text-[#010400] border-b-2 border-[#5599f9]"
-                        : "bg-white text-gray-400 hover:text-gray-600 hover:bg-gray-50"
-                    }`}
-                    data-testid="button-scope-national"
-                  >
-                    <Globe size={16} className={scope === "national" ? "text-[#5599f9]" : ""} /> National Brand
-                  </button>
+                  <div className="space-y-4">
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5 flex-shrink-0 w-6 h-6 rounded-full bg-[#5599f9]/10 flex items-center justify-center">
+                        <Eye size={14} className="text-[#5599f9]" />
+                      </div>
+                      <p className="text-[#010400] font-medium" data-testid="text-benefit-1">See exactly what AI says about your brand</p>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5 flex-shrink-0 w-6 h-6 rounded-full bg-[#5599f9]/10 flex items-center justify-center">
+                        <Target size={14} className="text-[#5599f9]" />
+                      </div>
+                      <p className="text-[#010400] font-medium" data-testid="text-benefit-2">Uncover hidden gaps in your AI search strategy</p>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5 flex-shrink-0 w-6 h-6 rounded-full bg-[#5599f9]/10 flex items-center justify-center">
+                        <BarChart3 size={14} className="text-[#5599f9]" />
+                      </div>
+                      <p className="text-[#010400] font-medium" data-testid="text-benefit-3">Steal AI search share from your biggest competitors</p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-6 text-sm text-gray-400 font-medium pt-2">
+                    <span className="flex items-center gap-2"><CheckCircle size={15} className="text-green-500" /> ChatGPT</span>
+                    <span className="flex items-center gap-2"><CheckCircle size={15} className="text-green-500" /> Google AI</span>
+                    <span className="flex items-center gap-2"><CheckCircle size={15} className="text-green-500" /> Perplexity</span>
+                  </div>
                 </div>
 
-                <div className="p-8 space-y-4 bg-white">
-                  {errorMessage && (
-                    <div className="rounded-lg border border-red-100 bg-red-50 p-3 text-left flex items-start gap-2" data-testid="audit-error-message">
-                      <AlertCircle size={16} className="text-red-500 mt-0.5" />
-                      <p className="text-sm text-red-700 font-medium">{errorMessage}</p>
-                    </div>
-                  )}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="group relative">
-                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <Building2 className="text-gray-400 group-focus-within:text-[#5599f9] transition-colors" size={20} />
-                      </div>
-                      <input
-                        type="text"
-                        placeholder="Business Name"
-                        className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 focus:border-[#5599f9] focus:ring-1 focus:ring-[#5599f9] outline-none transition-all font-medium rounded-lg"
-                        value={businessName}
-                        onChange={(e) => setBusinessName(e.target.value)}
-                        data-testid="input-business-name"
-                        required
-                      />
+                <div id="audit-form" className="scroll-mt-8">
+                  <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-2xl shadow-black/[0.06]">
+                    <div className="bg-gray-50 border-b border-gray-200 px-6 py-4">
+                      <h2 className="text-lg font-bold text-[#010400]" data-testid="text-form-title">Get Your Free AI Visibility Audit</h2>
+                      <p className="text-sm text-gray-400 mt-0.5">Takes 30 seconds. No credit card required.</p>
                     </div>
 
-                    <div className="group relative">
-                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <Layout className="text-gray-400 group-focus-within:text-[#5599f9] transition-colors" size={20} />
+                    <form onSubmit={startScan} className="flex flex-col">
+                      <div className="flex border-b border-gray-200">
+                        <button
+                          type="button"
+                          onClick={() => setScope("local")}
+                          className={`flex-1 py-3.5 text-sm font-bold tracking-widest uppercase transition-all flex items-center justify-center gap-2 ${
+                            scope === "local"
+                              ? "bg-white text-[#010400] border-b-2 border-[#5599f9]"
+                              : "bg-gray-50 text-gray-400 hover:text-gray-600"
+                          }`}
+                          data-testid="button-scope-local"
+                        >
+                          <MapPin size={15} className={scope === "local" ? "text-[#5599f9]" : ""} /> Local
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setScope("national")}
+                          className={`flex-1 py-3.5 text-sm font-bold tracking-widest uppercase transition-all flex items-center justify-center gap-2 ${
+                            scope === "national"
+                              ? "bg-white text-[#010400] border-b-2 border-[#5599f9]"
+                              : "bg-gray-50 text-gray-400 hover:text-gray-600"
+                          }`}
+                          data-testid="button-scope-national"
+                        >
+                          <Globe size={15} className={scope === "national" ? "text-[#5599f9]" : ""} /> National
+                        </button>
                       </div>
-                      <input
-                        type="text"
-                        placeholder="Website (e.g. rossmanmedia.com)"
-                        className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 focus:border-[#5599f9] focus:ring-1 focus:ring-[#5599f9] outline-none transition-all font-medium rounded-lg"
-                        value={url}
-                        onChange={(e) => setUrl(e.target.value)}
-                        data-testid="input-url"
-                        required
-                      />
-                    </div>
-                  </div>
 
-                  <div className={`grid gap-4 ${scope === "local" ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"}`}>
-                    <div className="group relative">
-                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <Search className="text-gray-400 group-focus-within:text-[#5599f9] transition-colors" size={20} />
-                      </div>
-                      <input
-                        type="text"
-                        placeholder="Main Service (e.g. Plumber, SEO Agency)"
-                        className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 focus:border-[#5599f9] focus:ring-1 focus:ring-[#5599f9] outline-none transition-all font-medium rounded-lg"
-                        value={keyword}
-                        onChange={(e) => setKeyword(e.target.value)}
-                        data-testid="input-keyword"
-                        required
-                      />
-                    </div>
+                      <div className="p-6 space-y-3.5">
+                        {errorMessage && (
+                          <div className="rounded-lg border border-red-100 bg-red-50 p-3 text-left flex items-start gap-2" data-testid="audit-error-message">
+                            <AlertCircle size={16} className="text-red-500 mt-0.5" />
+                            <p className="text-sm text-red-700 font-medium">{errorMessage}</p>
+                          </div>
+                        )}
 
-                    {scope === "local" && (
-                      <div className="group relative">
-                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                          <MapPin className="text-gray-400 group-focus-within:text-[#5599f9] transition-colors" size={20} />
+                        <div className="group relative">
+                          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                            <Building2 className="text-gray-400 group-focus-within:text-[#5599f9] transition-colors" size={18} />
+                          </div>
+                          <input
+                            type="text"
+                            placeholder="Business Name"
+                            className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 focus:border-[#5599f9] focus:ring-1 focus:ring-[#5599f9] outline-none transition-all font-medium rounded-lg text-sm"
+                            value={businessName}
+                            onChange={(e) => setBusinessName(e.target.value)}
+                            data-testid="input-business-name"
+                            required
+                          />
                         </div>
-                        <input
-                          type="text"
-                          placeholder="Target City (e.g. Dallas, TX)"
-                          className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 focus:border-[#5599f9] focus:ring-1 focus:ring-[#5599f9] outline-none transition-all font-medium rounded-lg"
-                          value={city}
-                          onChange={(e) => setCity(e.target.value)}
-                          data-testid="input-city"
-                          required={scope === "local"}
-                        />
+
+                        <div className="group relative">
+                          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                            <Layout className="text-gray-400 group-focus-within:text-[#5599f9] transition-colors" size={18} />
+                          </div>
+                          <input
+                            type="text"
+                            placeholder="Website (e.g. rossmanmedia.com)"
+                            className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 focus:border-[#5599f9] focus:ring-1 focus:ring-[#5599f9] outline-none transition-all font-medium rounded-lg text-sm"
+                            value={url}
+                            onChange={(e) => setUrl(e.target.value)}
+                            data-testid="input-url"
+                            required
+                          />
+                        </div>
+
+                        <div className="group relative">
+                          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                            <Search className="text-gray-400 group-focus-within:text-[#5599f9] transition-colors" size={18} />
+                          </div>
+                          <input
+                            type="text"
+                            placeholder="Main Service (e.g. Plumber, SEO Agency)"
+                            className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 focus:border-[#5599f9] focus:ring-1 focus:ring-[#5599f9] outline-none transition-all font-medium rounded-lg text-sm"
+                            value={keyword}
+                            onChange={(e) => setKeyword(e.target.value)}
+                            data-testid="input-keyword"
+                            required
+                          />
+                        </div>
+
+                        {scope === "local" && (
+                          <div className="group relative">
+                            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                              <MapPin className="text-gray-400 group-focus-within:text-[#5599f9] transition-colors" size={18} />
+                            </div>
+                            <input
+                              type="text"
+                              placeholder="Target City (e.g. Dallas, TX)"
+                              className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 focus:border-[#5599f9] focus:ring-1 focus:ring-[#5599f9] outline-none transition-all font-medium rounded-lg text-sm"
+                              value={city}
+                              onChange={(e) => setCity(e.target.value)}
+                              data-testid="input-city"
+                              required={scope === "local"}
+                            />
+                          </div>
+                        )}
+
+                        <button
+                          type="submit"
+                          className="w-full bg-[#5599f9] hover:bg-[#4a8ce8] text-white text-base font-bold tracking-wide py-4 uppercase transition-all transform active:scale-[0.99] flex items-center justify-center gap-2 mt-2 rounded-lg shadow-lg shadow-blue-500/20 disabled:opacity-50"
+                          data-testid="button-start-audit"
+                          disabled={isSubmitting}
+                        >
+                          {isSubmitting ? "Starting Audit..." : "Get My Free AI Audit"} <ArrowRight size={18} />
+                        </button>
+
+                        <div className="flex items-center justify-center gap-4 pt-1">
+                          <span className="flex items-center gap-1.5 text-xs text-gray-400">
+                            <Shield size={12} /> No credit card
+                          </span>
+                          <span className="flex items-center gap-1.5 text-xs text-gray-400">
+                            <Zap size={12} /> Results in 60 seconds
+                          </span>
+                        </div>
                       </div>
-                    )}
+                    </form>
                   </div>
 
-                  <button
-                    type="submit"
-                    className="w-full bg-[#5599f9] hover:bg-[#4a8ce8] text-white text-lg font-bold tracking-wide py-5 uppercase transition-all transform active:scale-[0.99] flex items-center justify-center gap-2 mt-4 rounded-lg shadow-lg shadow-blue-500/20 disabled:opacity-50"
-                    data-testid="button-start-audit"
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting ? "Starting Audit..." : "Start Visibility Audit"} <ArrowRight size={20} />
-                  </button>
+                  <p className="text-center text-xs text-gray-400 font-medium mt-4">
+                    Generating {LEAD_GEN_TOTAL_PROMPTS} AI prompt variations across ChatGPT, Google AI & Perplexity
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
 
-                  <div className="text-center pt-2">
-                    <p className="text-xs text-gray-400 font-medium">
-                      Generating {LEAD_GEN_TOTAL_PROMPTS} AI prompt variations - Checking ChatGPT & Google AI Overviews
+          <section className="bg-gray-50 border-t border-gray-100 py-16 md:py-20 px-4">
+            <div className="max-w-4xl mx-auto">
+              <div className="text-center mb-12">
+                <p className="text-sm font-bold text-[#5599f9] uppercase tracking-widest mb-3" data-testid="text-how-it-works-label">How It Works</p>
+                <h2 className="text-3xl md:text-4xl font-bold text-[#010400] tracking-tight" data-testid="text-how-it-works-title">
+                  Your AI Visibility Report in 3 Steps
+                </h2>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div className="text-center space-y-4">
+                  <div className="w-14 h-14 rounded-2xl bg-[#5599f9]/10 flex items-center justify-center mx-auto">
+                    <Layout size={24} className="text-[#5599f9]" />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-xs font-bold text-[#5599f9] bg-[#5599f9]/10 px-2 py-0.5 rounded-full">1</span>
+                      <h3 className="font-bold text-[#010400]" data-testid="text-step-1-title">Enter Your URL</h3>
+                    </div>
+                    <p className="text-gray-500 text-sm leading-relaxed" data-testid="text-step-1-desc">
+                      Drop your website link to begin the rapid AI discovery scan.
                     </p>
                   </div>
                 </div>
-              </form>
-            </div>
 
-            <div className="flex flex-wrap items-center justify-center gap-8 text-sm font-medium text-gray-400 uppercase tracking-widest">
-              <span className="flex items-center gap-2"><CheckCircle size={14} className="text-[#5599f9]" /> ChatGPT</span>
-              <span className="flex items-center gap-2"><CheckCircle size={14} className="text-[#5599f9]" /> Google AI Overviews</span>
+                <div className="text-center space-y-4">
+                  <div className="w-14 h-14 rounded-2xl bg-[#ffb41c]/10 flex items-center justify-center mx-auto">
+                    <BarChart3 size={24} className="text-[#ffb41c]" />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-xs font-bold text-[#ffb41c] bg-[#ffb41c]/10 px-2 py-0.5 rounded-full">2</span>
+                      <h3 className="font-bold text-[#010400]" data-testid="text-step-2-title">AI Engines Scanned</h3>
+                    </div>
+                    <p className="text-gray-500 text-sm leading-relaxed" data-testid="text-step-2-desc">
+                      We analyze ChatGPT, Perplexity, and Google AI Overviews for your brand.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="text-center space-y-4">
+                  <div className="w-14 h-14 rounded-2xl bg-green-500/10 flex items-center justify-center mx-auto">
+                    <FileText size={24} className="text-green-500" />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-xs font-bold text-green-500 bg-green-500/10 px-2 py-0.5 rounded-full">3</span>
+                      <h3 className="font-bold text-[#010400]" data-testid="text-step-3-title">Get Your Report</h3>
+                    </div>
+                    <p className="text-gray-500 text-sm leading-relaxed" data-testid="text-step-3-desc">
+                      Receive a customized breakdown of your AI visibility and improvement steps.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
+          </section>
+
+          <section className="py-16 md:py-20 px-4 bg-white">
+            <div className="max-w-2xl mx-auto">
+              <div className="text-center mb-10">
+                <h2 className="text-3xl md:text-4xl font-bold text-[#010400] tracking-tight" data-testid="text-faq-title">
+                  Frequently Asked Questions
+                </h2>
+              </div>
+
+              <div className="border-t border-gray-100" data-testid="faq-section">
+                <FAQItem
+                  question="Which AI platforms do you check?"
+                  answer="Our audit comprehensively scans the top AI search engines, including ChatGPT, Google AI Overviews, and Perplexity, to see if they actively recommend your business."
+                />
+                <FAQItem
+                  question="Why does AI visibility matter now?"
+                  answer="Millions of users now ask AI for recommendations instead of using traditional search. If AI doesn't know you exist, those potential customers go straight to your competitors."
+                />
+                <FAQItem
+                  question="How long does the audit take?"
+                  answer="The initial scan takes less than 60 seconds. You'll instantly receive a high-level overview of your brand's AI presence directly on your screen."
+                />
+              </div>
+            </div>
+          </section>
+
+          <section className="bg-[#010400] py-14 px-4">
+            <div className="max-w-2xl mx-auto text-center space-y-6">
+              <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight" data-testid="text-bottom-cta-title">
+                Ready to See Where You Stand in AI Search?
+              </h2>
+              <p className="text-gray-400 text-base">
+                Discover exactly how ChatGPT, Google AI, and Perplexity recommend (or ignore) your brand.
+              </p>
+              <button
+                type="button"
+                onClick={scrollToForm}
+                className="inline-flex items-center gap-2 bg-[#5599f9] hover:bg-[#4a8ce8] text-white font-bold text-base px-8 py-4 rounded-lg transition-colors shadow-lg shadow-blue-500/30"
+                data-testid="button-bottom-cta"
+              >
+                Get My Free AI Audit <ArrowRight size={18} />
+              </button>
+              <p className="text-gray-500 text-xs">No credit card required. Results in 60 seconds.</p>
+            </div>
+          </section>
+
+          <footer className="bg-white border-t border-gray-100 py-8 px-4">
+            <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+              <Branding />
+              <p className="text-xs text-gray-400">Developed by Rossman Media Group's growth team.</p>
+            </div>
+          </footer>
         </main>
       </div>
     );
   }
 
-  // --- View: Scanning ---
   return (
     <div className="min-h-screen bg-white flex flex-col items-center justify-center px-4 font-mono">
       <div className="max-w-xl w-full space-y-12">
