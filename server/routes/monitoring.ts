@@ -2581,7 +2581,7 @@ export function registerMonitoringRoutes(app: Express): void {
   app.patch("/api/monitoring/clients/:id", requireAdminAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const { businessName, domain, industry, scope, city, brandAliases, checkFrequencyDays, isActive } = req.body;
+      const { businessName, domain, industry, scope, city, cities, brandAliases, checkFrequencyDays, isActive } = req.body;
       
       const updateData: any = {};
       if (businessName !== undefined) updateData.businessName = businessName;
@@ -2589,6 +2589,7 @@ export function registerMonitoringRoutes(app: Express): void {
       if (industry !== undefined) updateData.industry = industry;
       if (scope !== undefined) updateData.scope = scope;
       if (city !== undefined) updateData.city = city;
+      if (cities !== undefined) updateData.cities = cities;
       if (brandAliases !== undefined) updateData.brandAliases = brandAliases;
       if (checkFrequencyDays !== undefined) updateData.checkFrequencyDays = checkFrequencyDays;
       if (isActive !== undefined) updateData.isActive = isActive;

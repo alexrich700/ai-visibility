@@ -69,7 +69,8 @@ export default function MonitorSettings() {
   const [domain, setDomain] = useState("");
   const [industry, setIndustry] = useState("");
   const [scope, setScope] = useState<"local" | "national">("local");
-  const [city, setCity] = useState("");
+  const [cities, setCities] = useState<string[]>([]);
+  const [newCity, setNewCity] = useState("");
   const [checkFrequencyDays, setCheckFrequencyDays] = useState(14);
   const [isActive, setIsActive] = useState(true);
   const [brandAliases, setBrandAliases] = useState<string[]>([]);
@@ -144,7 +145,10 @@ export default function MonitorSettings() {
       setDomain(data.client.domain);
       setIndustry(data.client.industry);
       setScope(data.client.scope as "local" | "national");
-      setCity(data.client.city || "");
+      const loadedCities = data.client.cities && data.client.cities.length > 0
+        ? data.client.cities
+        : data.client.city ? [data.client.city] : [];
+      setCities(loadedCities);
       setCheckFrequencyDays(data.client.checkFrequencyDays);
       setIsActive(data.client.isActive);
       setBrandAliases(data.client.brandAliases || []);
@@ -269,7 +273,8 @@ export default function MonitorSettings() {
         domain,
         industry,
         scope,
-        city: city || null,
+        city: scope === "national" ? null : (cities.length > 0 ? cities[0] : null),
+        cities: scope === "national" ? null : (cities.length > 0 ? cities : null),
         checkFrequencyDays,
         isActive,
         brandAliases,
@@ -290,6 +295,20 @@ export default function MonitorSettings() {
 
   const handleRemoveAlias = (alias: string) => {
     setBrandAliases(brandAliases.filter(a => a !== alias));
+    setHasChanges(true);
+  };
+
+  const handleAddCity = () => {
+    const trimmed = newCity.trim();
+    if (trimmed && !cities.includes(trimmed)) {
+      setCities([...cities, trimmed]);
+      setNewCity("");
+      setHasChanges(true);
+    }
+  };
+
+  const handleRemoveCity = (cityToRemove: string) => {
+    setCities(cities.filter(c => c !== cityToRemove));
     setHasChanges(true);
   };
 
@@ -457,34 +476,70 @@ export default function MonitorSettings() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Service Scope</Label>
-                  <Select value={scope} onValueChange={(v) => { setScope(v as "local" | "national"); setHasChanges(true); }}>
-                    <SelectTrigger data-testid="select-scope">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="local">Local</SelectItem>
-                      <SelectItem value="national">National</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="city">City</Label>
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-muted-foreground" />
-                    <Input
-                      id="city"
-                      value={city}
-                      onChange={(e) => { setCity(e.target.value); setHasChanges(true); }}
-                      placeholder="Fort Worth, TX"
-                      disabled={scope === "national"}
-                      data-testid="input-city"
-                    />
-                  </div>
-                </div>
+              <div className="space-y-2">
+                <Label>Service Scope</Label>
+                <Select value={scope} onValueChange={(v) => { setScope(v as "local" | "national"); setHasChanges(true); }}>
+                  <SelectTrigger data-testid="select-scope">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="local">Local</SelectItem>
+                    <SelectItem value="national">National</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
+
+              {scope === "local" && (
+                <div className="space-y-3">
+                  <Label className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-muted-foreground" />
+                    Service Cities
+                  </Label>
+                  <div className="flex flex-wrap gap-2">
+                    {cities.map((c, index) => (
+                      <Badge
+                        key={index}
+                        variant="secondary"
+                        className="flex items-center gap-1 px-3 py-1"
+                        data-testid={`badge-city-${index}`}
+                      >
+                        {c}
+                        <button
+                          onClick={() => handleRemoveCity(c)}
+                          className="ml-1 hover:text-destructive"
+                          data-testid={`button-remove-city-${index}`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                    {cities.length === 0 && (
+                      <p className="text-sm text-muted-foreground italic" data-testid="text-no-cities">No cities added yet</p>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      value={newCity}
+                      onChange={(e) => setNewCity(e.target.value)}
+                      placeholder="Add a city (e.g., Fort Worth, TX)"
+                      onKeyDown={(e) => e.key === "Enter" && handleAddCity()}
+                      data-testid="input-new-city"
+                    />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={handleAddCity}
+                      disabled={!newCity.trim()}
+                      data-testid="button-add-city"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Add all cities where this business provides services. Use the format "City, ST" (e.g., Dallas, TX).
+                  </p>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label>Check Frequency</Label>
