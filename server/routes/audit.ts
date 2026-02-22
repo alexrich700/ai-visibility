@@ -44,16 +44,31 @@ export async function handleAuditStream(
     res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders();
 
-    // Helper to send SSE events
+    // Disable Nagle algorithm to prevent TCP buffering of small SSE events
+    if (req.socket) {
+      req.socket.setNoDelay(true);
+    }
+
+    // Helper to send SSE events - single atomic write + explicit flush
     const sendEvent = (eventType: string, data: any) => {
       if (clientDisconnected || res.writableEnded) {
+        console.log(`[SSE] SKIPPED event: ${eventType} (clientDisconnected=${clientDisconnected}, writableEnded=${res.writableEnded})`);
         return;
       }
-      res.write(`event: ${eventType}\n`);
-      res.write(`data: ${JSON.stringify(data)}\n\n`);
+      try {
+        const payload = `event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`;
+        const writeResult = res.write(payload);
+        if (typeof (res as any).flush === 'function') {
+          (res as any).flush();
+        }
+        console.log(`[SSE] Sent event: ${eventType} (${payload.length} bytes, writeResult=${writeResult})`);
+      } catch (err) {
+        console.error(`[SSE] ERROR writing event ${eventType}:`, err);
+      }
     };
 
-    req.on("close", () => {
+    res.on("close", () => {
+      console.log(`[SSE] Client connection closed`);
       clientDisconnected = true;
       if (heartbeat) {
         clearInterval(heartbeat);
@@ -69,7 +84,11 @@ export async function handleAuditStream(
         }
         return;
       }
-      res.write(`: heartbeat ${Date.now()}\n\n`);
+      const hb = `: heartbeat ${Date.now()}\n\n`;
+      res.write(hb);
+      if (typeof (res as any).flush === 'function') {
+        (res as any).flush();
+      }
     }, 15000);
 
     // Progress callback for real-time updates

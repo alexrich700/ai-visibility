@@ -149,11 +149,18 @@ export default function Home() {
       let buffer = "";
       let auditResult: AuditResults | null = null;
 
+      let chunkCount = 0;
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          console.log(`[SSE] Stream ended after ${chunkCount} chunks`);
+          break;
+        }
 
-        buffer += decoder.decode(value, { stream: true });
+        chunkCount++;
+        const chunk = decoder.decode(value, { stream: true });
+        buffer += chunk;
+        console.log(`[SSE] Chunk #${chunkCount}: ${chunk.length} bytes`);
         
         // Parse SSE events from buffer - split on double newlines (event separator)
         const events = buffer.split("\n\n");
@@ -161,6 +168,9 @@ export default function Home() {
 
         for (const eventBlock of events) {
           if (!eventBlock.trim()) continue;
+          
+          // Skip SSE comment lines (heartbeats)
+          if (eventBlock.trim().startsWith(":")) continue;
           
           const lines = eventBlock.split("\n");
           let eventType = "";
@@ -177,6 +187,7 @@ export default function Home() {
           if (eventType && eventData) {
             try {
               const data = JSON.parse(eventData);
+              console.log(`[SSE] Parsed event: ${eventType}`, eventType === "progress" ? data : "(data omitted)");
               
               if (eventType === "progress") {
                 const { stage, progress, total } = data;
@@ -198,8 +209,10 @@ export default function Home() {
                 throw new Error(data.error || "Audit failed");
               }
             } catch (parseError) {
-              console.error("Failed to parse SSE event:", eventType, eventData, parseError);
+              console.error("Failed to parse SSE event:", eventType, eventData?.substring(0, 200), parseError);
             }
+          } else if (eventBlock.trim()) {
+            console.warn(`[SSE] Unparseable event block (${eventBlock.length} chars):`, eventBlock.substring(0, 200));
           }
         }
       }

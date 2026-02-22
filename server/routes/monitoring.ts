@@ -345,22 +345,28 @@ export function registerMonitoringRoutes(app: Express): void {
     res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders();
 
+    // Disable Nagle algorithm to prevent TCP buffering of small SSE events
+    if (req.socket) {
+      req.socket.setNoDelay(true);
+    }
+
     // Track if client disconnected to cancel remaining work
     let isClientConnected = true;
     let activeSessionId: number | null = null; // Track session for pause on disconnect
     
-    req.on("close", async () => {
+    res.on("close", async () => {
       isClientConnected = false;
       monitoringLogger.info("Client disconnected from scan stream - scan will continue in background", { requestId: "scan-stream" });
-      // Note: We do NOT mark the session as paused or cancel the scan
-      // The scan continues running on the server even if the client navigates away
-      // The user can check the monitoring dashboard to see the completed results
     });
 
-    // Helper to send SSE events
+    // Helper to send SSE events - single atomic write + explicit flush
     const sendEvent = (type: string, data: Record<string, unknown>) => {
       if (!isClientConnected) return;
-      res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`);
+      const payload = `data: ${JSON.stringify({ type, ...data })}\n\n`;
+      res.write(payload);
+      if (typeof (res as any).flush === 'function') {
+        (res as any).flush();
+      }
     };
 
     // Heartbeat interval to keep SSE connection alive (declared here so catch can clean up)
@@ -1291,21 +1297,28 @@ export function registerMonitoringRoutes(app: Express): void {
     res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders();
 
+    // Disable Nagle algorithm to prevent TCP buffering of small SSE events
+    if (req.socket) {
+      req.socket.setNoDelay(true);
+    }
+
     // Track if client disconnected (scan continues even if they disconnect)
     let isClientConnected = true;
     let activeSessionId: number | null = null;
     
-    req.on("close", async () => {
+    res.on("close", async () => {
       isClientConnected = false;
       monitoringLogger.info("Client disconnected from rescan stream - scan will continue in background", { requestId: "rescan-stream" });
-      // Note: We do NOT mark the session as paused or cancel the scan
-      // The scan continues running on the server even if the client navigates away
     });
 
-    // Helper to send SSE events
+    // Helper to send SSE events - single atomic write + explicit flush
     const sendEvent = (type: string, data: Record<string, unknown>) => {
       if (!isClientConnected) return;
-      res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`);
+      const payload = `data: ${JSON.stringify({ type, ...data })}\n\n`;
+      res.write(payload);
+      if (typeof (res as any).flush === 'function') {
+        (res as any).flush();
+      }
     };
 
     // Heartbeat interval to keep SSE connection alive (declared here so catch can clean up)
@@ -1842,18 +1855,26 @@ export function registerMonitoringRoutes(app: Express): void {
     res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders();
 
+    // Disable Nagle algorithm to prevent TCP buffering of small SSE events
+    if (req.socket) {
+      req.socket.setNoDelay(true);
+    }
+
     let isClientConnected = true;
     
-    req.on("close", async () => {
+    res.on("close", async () => {
       isClientConnected = false;
       monitoringLogger.info("Client disconnected from resume stream - scan will continue in background", { requestId: "resume-stream" });
-      // Note: We do NOT mark the session as paused or cancel the scan
-      // The scan continues running on the server even if the client navigates away
     });
 
+    // Helper to send SSE events - single atomic write + explicit flush
     const sendEvent = (type: string, data: Record<string, unknown>) => {
       if (!isClientConnected) return;
-      res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`);
+      const payload = `data: ${JSON.stringify({ type, ...data })}\n\n`;
+      res.write(payload);
+      if (typeof (res as any).flush === 'function') {
+        (res as any).flush();
+      }
     };
 
     let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
