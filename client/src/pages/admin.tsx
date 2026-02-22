@@ -19,7 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Lock, Check, X, Eye, ArrowLeft, Building2, Globe, Search, MapPin, Calendar, User, Mail, Phone, FileText, LogOut, KeyRound } from "lucide-react";
+import { Lock, Check, X, Eye, ArrowLeft, Building2, Globe, Search, MapPin, Calendar, User, Mail, Phone, FileText, LogOut, KeyRound, ChevronLeft, ChevronRight, Filter } from "lucide-react";
 import { Link } from "wouter";
 import { format } from "date-fns";
 
@@ -51,6 +51,14 @@ interface Lead {
   updatedAt: string;
 }
 
+interface PaginatedResponse {
+  data: Audit[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
 const statusLabels: Record<string, string> = {
   new: "New",
   contacted: "Contacted",
@@ -75,6 +83,12 @@ export default function Admin() {
   const [loginError, setLoginError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [selectedAudit, setSelectedAudit] = useState<Audit | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [filterHasLead, setFilterHasLead] = useState<string>("all");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const ITEMS_PER_PAGE = 10;
 
   useEffect(() => {
     const token = getAdminToken();
@@ -118,11 +132,32 @@ export default function Admin() {
     },
   });
 
-  const { data: audits = [], isLoading } = useQuery<Audit[]>({
-    queryKey: ["/api/admin/audits"],
-    queryFn: getAdminQueryFn({ on401: "throw" }),
+  const buildAuditsUrl = () => {
+    const params = new URLSearchParams();
+    params.set("page", String(currentPage));
+    params.set("limit", String(ITEMS_PER_PAGE));
+    if (searchQuery) params.set("search", searchQuery);
+    if (filterHasLead !== "all") params.set("hasLead", filterHasLead);
+    if (filterStatus !== "all") params.set("status", filterStatus);
+    return `/api/admin/audits?${params.toString()}`;
+  };
+
+  const { data: paginatedData, isLoading } = useQuery<PaginatedResponse>({
+    queryKey: ["/api/admin/audits", currentPage, searchQuery, filterHasLead, filterStatus],
+    queryFn: async () => {
+      const token = getAdminToken();
+      const headers: Record<string, string> = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      const res = await fetch(buildAuditsUrl(), { credentials: "include", headers });
+      if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
+      return res.json();
+    },
     enabled: isAuthenticated,
   });
+
+  const audits = paginatedData?.data ?? [];
+  const totalPages = paginatedData?.totalPages ?? 1;
+  const totalAudits = paginatedData?.total ?? 0;
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: number; status: string }) => {
@@ -374,6 +409,85 @@ export default function Admin() {
           <p className="text-gray-500 text-sm">Track visibility audits and manage leads</p>
         </div>
 
+        <div className="mb-4 flex flex-col sm:flex-row gap-3">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              setSearchQuery(searchInput);
+              setCurrentPage(1);
+            }}
+            className="flex-1 flex gap-2"
+          >
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input
+                placeholder="Search business, keyword, location..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                className="pl-9 bg-white border-gray-200"
+                data-testid="input-audit-search"
+              />
+            </div>
+            <Button type="submit" variant="outline" size="sm" className="px-4" data-testid="button-audit-search">
+              Search
+            </Button>
+            {searchQuery && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSearchInput("");
+                  setSearchQuery("");
+                  setCurrentPage(1);
+                }}
+                data-testid="button-clear-search"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            )}
+          </form>
+
+          <div className="flex gap-2">
+            <Select
+              value={filterHasLead}
+              onValueChange={(value) => {
+                setFilterHasLead(value);
+                setCurrentPage(1);
+              }}
+            >
+              <SelectTrigger className="w-36 bg-white border-gray-200" data-testid="select-filter-lead">
+                <Filter className="w-4 h-4 mr-1 text-gray-400" />
+                <SelectValue placeholder="Lead status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Leads</SelectItem>
+                <SelectItem value="true">Has Lead</SelectItem>
+                <SelectItem value="false">No Lead</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={filterStatus}
+              onValueChange={(value) => {
+                setFilterStatus(value);
+                setCurrentPage(1);
+              }}
+            >
+              <SelectTrigger className="w-36 bg-white border-gray-200" data-testid="select-filter-status">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="new">New</SelectItem>
+                <SelectItem value="contacted">Contacted</SelectItem>
+                <SelectItem value="not_reached">Not Reached</SelectItem>
+                <SelectItem value="closed">Closed</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
         {isLoading ? (
           <div className="text-center py-12">
             <div className="w-8 h-8 border-4 border-[#5599f9] border-t-transparent rounded-full animate-spin mx-auto"></div>
@@ -381,7 +495,28 @@ export default function Admin() {
           </div>
         ) : audits.length === 0 ? (
           <Card className="p-12 text-center bg-white rounded-xl border border-gray-200">
-            <p className="text-gray-500">No audits have been submitted yet.</p>
+            <p className="text-gray-500">
+              {searchQuery || filterHasLead !== "all" || filterStatus !== "all"
+                ? "No audits match your search or filters."
+                : "No audits have been submitted yet."}
+            </p>
+            {(searchQuery || filterHasLead !== "all" || filterStatus !== "all") && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-4"
+                onClick={() => {
+                  setSearchInput("");
+                  setSearchQuery("");
+                  setFilterHasLead("all");
+                  setFilterStatus("all");
+                  setCurrentPage(1);
+                }}
+                data-testid="button-clear-all-filters"
+              >
+                Clear all filters
+              </Button>
+            )}
           </Card>
         ) : (
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -494,6 +629,72 @@ export default function Admin() {
                 </tbody>
               </table>
             </div>
+
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
+                <div className="text-sm text-gray-500" data-testid="text-pagination-info">
+                  Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, totalAudits)} of {totalAudits} audits
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage <= 1}
+                    data-testid="button-prev-page"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter((p) => {
+                      if (totalPages <= 7) return true;
+                      if (p === 1 || p === totalPages) return true;
+                      if (Math.abs(p - currentPage) <= 1) return true;
+                      return false;
+                    })
+                    .reduce<(number | string)[]>((acc, p, idx, arr) => {
+                      if (idx > 0 && p - (arr[idx - 1] as number) > 1) {
+                        acc.push("...");
+                      }
+                      acc.push(p);
+                      return acc;
+                    }, [])
+                    .map((item, idx) =>
+                      item === "..." ? (
+                        <span key={`ellipsis-${idx}`} className="px-2 text-gray-400 text-sm">...</span>
+                      ) : (
+                        <Button
+                          key={item}
+                          variant={currentPage === item ? "default" : "outline"}
+                          size="sm"
+                          className={currentPage === item ? "bg-[#5599f9] hover:bg-[#4488e8] text-white" : ""}
+                          onClick={() => setCurrentPage(item as number)}
+                          data-testid={`button-page-${item}`}
+                        >
+                          {item}
+                        </Button>
+                      )
+                    )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage >= totalPages}
+                    data-testid="button-next-page"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {totalPages <= 1 && totalAudits > 0 && (
+              <div className="px-4 py-3 border-t border-gray-200 bg-gray-50">
+                <div className="text-sm text-gray-500" data-testid="text-pagination-info">
+                  Showing {totalAudits} audit{totalAudits !== 1 ? "s" : ""}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </main>

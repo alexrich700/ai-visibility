@@ -36,6 +36,13 @@ export interface IStorage {
   getLeadById(id: number): Promise<DbLead | undefined>;
   updateLeadStatus(id: number, status: string): Promise<DbLead | undefined>;
   getAuditsWithLeads(): Promise<(Audit & { lead?: DbLead })[]>;
+  getAuditsWithLeadsPaginated(options: {
+    page: number;
+    limit: number;
+    search?: string;
+    hasLead?: boolean;
+    status?: string;
+  }): Promise<{ data: (Audit & { lead?: DbLead })[]; total: number }>;
   
   // Monitoring client operations
   createMonitoringClient(client: InsertMonitoringClient): Promise<MonitoringClient>;
@@ -185,6 +192,70 @@ export class DatabaseStorage implements IStorage {
       ...row.audit,
       lead: row.lead ?? undefined,
     }));
+  }
+
+  async getAuditsWithLeadsPaginated(options: {
+    page: number;
+    limit: number;
+    search?: string;
+    hasLead?: boolean;
+    status?: string;
+  }): Promise<{ data: (Audit & { lead?: DbLead })[]; total: number }> {
+    const { page, limit, search, hasLead, status } = options;
+    const offset = (page - 1) * limit;
+
+    const conditions: ReturnType<typeof eq>[] = [];
+
+    if (search && search.trim()) {
+      const searchLower = `%${search.trim().toLowerCase()}%`;
+      conditions.push(
+        or(
+          sql`lower(${audits.businessName}) like ${searchLower}`,
+          sql`lower(${audits.keyword}) like ${searchLower}`,
+          sql`lower(${audits.city}) like ${searchLower}`,
+          sql`lower(${audits.url}) like ${searchLower}`
+        )! as any
+      );
+    }
+
+    if (hasLead === true) {
+      conditions.push(isNotNull(leads.id) as any);
+    } else if (hasLead === false) {
+      conditions.push(isNull(leads.id) as any);
+    }
+
+    if (status) {
+      conditions.push(eq(leads.status, status) as any);
+    }
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const countResult = await db
+      .select({ count: sql<number>`cast(count(distinct ${audits.id}) as int)` })
+      .from(audits)
+      .leftJoin(leads, eq(audits.id, leads.auditId))
+      .where(whereClause);
+
+    const total = countResult[0]?.count ?? 0;
+
+    const results = await db
+      .select({
+        audit: audits,
+        lead: leads,
+      })
+      .from(audits)
+      .leftJoin(leads, eq(audits.id, leads.auditId))
+      .where(whereClause)
+      .orderBy(desc(audits.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const data = results.map(row => ({
+      ...row.audit,
+      lead: row.lead ?? undefined,
+    }));
+
+    return { data, total };
   }
 
   // Monitoring client operations

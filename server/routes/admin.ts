@@ -158,8 +158,28 @@ router.post("/logout", requireAdminAuth, async (req, res) => {
 
 router.get("/audits", requireAdminAuth, async (req, res) => {
   try {
-    const auditsWithLeads = await storage.getAuditsWithLeads();
-    res.json(auditsWithLeads);
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 10));
+    const search = (req.query.search as string) || undefined;
+    const hasLeadParam = req.query.hasLead as string | undefined;
+    const hasLead = hasLeadParam === "true" ? true : hasLeadParam === "false" ? false : undefined;
+    const status = (req.query.status as string) || undefined;
+
+    const result = await storage.getAuditsWithLeadsPaginated({
+      page,
+      limit,
+      search,
+      hasLead,
+      status,
+    });
+
+    res.json({
+      data: result.data,
+      total: result.total,
+      page,
+      limit,
+      totalPages: Math.ceil(result.total / limit),
+    });
   } catch (error) {
     logError("GET AUDITS ERROR", error);
     res.status(500).json(getSafeErrorResponse("Failed to get audits"));
