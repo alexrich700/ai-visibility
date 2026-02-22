@@ -170,8 +170,15 @@ export const getSessionAwareQueryFn: <T>(options: {
   async ({ queryKey }) => {
     maybeWarnUnmappedPolicy(queryKey);
 
+    const headers: Record<string, string> = {};
+    const token = getAdminToken();
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
     const res = await fetch(queryKey.join("/") as string, {
       credentials: "include",
+      headers,
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {

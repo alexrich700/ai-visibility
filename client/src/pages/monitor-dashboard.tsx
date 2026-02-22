@@ -469,7 +469,7 @@ export default function MonitorDashboard() {
     }
   };
 
-  const { data, isLoading, refetch, isRefetching } = useQuery<DashboardData>({
+  const { data, isLoading, error, refetch, isRefetching } = useQuery<DashboardData>({
     queryKey: ["/api/monitoring/dashboard", clientId],
     queryFn: getSessionAwareQueryFn({ on401: "throw" }),
     enabled: !!clientId,
@@ -607,9 +607,42 @@ export default function MonitorDashboard() {
   }
 
   if (!data) {
+    const errorMessage = error instanceof Error ? error.message : "";
+    const isAuthError = errorMessage.includes("401") || errorMessage.includes("403");
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p>No data found</p>
+        <Card className="border border-gray-200 shadow-sm max-w-md">
+          <CardContent className="flex flex-col items-center justify-center py-12 px-6">
+            {isAuthError ? (
+              <>
+                <AlertTriangle className="w-10 h-10 text-amber-500 mb-3" />
+                <h3 className="text-lg font-semibold text-gray-900 mb-2" data-testid="text-auth-error">
+                  {errorMessage.includes("403") ? "Access denied" : "Session expired"}
+                </h3>
+                <p className="text-gray-500 text-center text-sm mb-4" data-testid="text-auth-error-detail">
+                  {errorMessage.includes("403")
+                    ? "You don't have permission to view this dashboard."
+                    : "Your login session has expired. Please log in again to view this dashboard."}
+                </p>
+                <Button onClick={() => setLocation("/")} data-testid="button-go-home">
+                  Go to Home
+                </Button>
+              </>
+            ) : (
+              <>
+                <XCircle className="w-10 h-10 text-gray-400 mb-3" />
+                <h3 className="text-lg font-semibold text-gray-900 mb-2" data-testid="text-no-data">No data found</h3>
+                <p className="text-gray-500 text-center text-sm mb-4" data-testid="text-no-data-detail">
+                  {error ? "Something went wrong loading the dashboard. Please try again." : "No monitoring data is available for this client yet."}
+                </p>
+                <Button onClick={() => refetch()} variant="outline" data-testid="button-retry">
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Retry
+                </Button>
+              </>
+            )}
+          </CardContent>
+        </Card>
       </div>
     );
   }
