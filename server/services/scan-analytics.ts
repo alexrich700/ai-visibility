@@ -353,7 +353,7 @@ export function detectMentionRank(
     
     if (!lowerLine.includes(lowerBrand)) continue;
     
-    const numberedMatch = line.match(/^[\s]*(\d+)[.\):\-]/);
+    const numberedMatch = line.match(/^[\s]*(?:\*{2})?(\d+)[.\):\-]/);
     if (numberedMatch) {
       return parseInt(numberedMatch[1], 10);
     }
@@ -373,12 +373,39 @@ export function detectMentionRank(
     }
   }
   
-  const numberedListRegex = /^[\s]*(\d+)[.\):\-]\s*[^\n]*$/gm;
+  const numberedListRegex = /^[\s]*(?:\*{2})?(\d+)[.\):\-]\s*[^\n]*$/gm;
   let match;
   while ((match = numberedListRegex.exec(responseText)) !== null) {
     const fullLine = match[0].toLowerCase();
     if (fullLine.includes(lowerBrand)) {
       return parseInt(match[1], 10);
+    }
+  }
+  
+  const bulletPattern = /^[\s]*[-*•–]\s+/;
+  const bulletItems: { lineIndex: number; line: string }[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (bulletPattern.test(lines[i]) && lines[i].trim().length > 5) {
+      bulletItems.push({ lineIndex: i, line: lines[i] });
+    }
+  }
+  
+  if (bulletItems.length >= 2) {
+    for (let pos = 0; pos < bulletItems.length; pos++) {
+      const item = bulletItems[pos];
+      let itemText = item.line.toLowerCase();
+      const nextBulletLineIndex = pos + 1 < bulletItems.length ? bulletItems[pos + 1].lineIndex : lines.length;
+      for (let j = item.lineIndex + 1; j < nextBulletLineIndex; j++) {
+        const subLine = lines[j];
+        if (subLine.trim() === '') break;
+        if (!bulletPattern.test(subLine)) {
+          itemText += ' ' + subLine.toLowerCase();
+        }
+      }
+      
+      if (itemText.includes(lowerBrand)) {
+        return pos + 1;
+      }
     }
   }
   
