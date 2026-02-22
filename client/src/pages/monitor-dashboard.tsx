@@ -31,7 +31,7 @@ import {
   TrendingUp, TrendingDown, Eye, Target, Calendar, Clock, Settings,
   ArrowLeft, RefreshCw, Loader2, CheckCircle2, XCircle, Minus, Building2,
   Users, Link2, Award, ThumbsUp, ThumbsDown, Meh, ExternalLink, Download, HelpCircle, AlertTriangle,
-  Share2, Copy, Check, Search, ChevronLeft, ChevronRight
+  Share2, Copy, Check, Search, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Filter
 } from "lucide-react";
 import {
   Tooltip as InfoTooltip,
@@ -232,6 +232,9 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
   const [promptSearch, setPromptSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 20;
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -638,6 +641,20 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
 
   const groupBarData = useMemo(() => buildGroupBarData(serviceResultsByGroup), [serviceResultsByGroup]);
 
+  const getVisibilityScore = (r: CheckResult) => {
+    const chatgptVisible = r.chatgptCited || r.chatgptFound;
+    const googleVisible = r.googleAICited || r.googleAIFound;
+    if (chatgptVisible && googleVisible) return 3;
+    if (chatgptVisible || googleVisible) return 2;
+    return 1;
+  };
+
+  const getPlatformStatusScore = (cited: boolean | null | undefined, found: boolean | null | undefined) => {
+    if (cited) return 3;
+    if (found) return 2;
+    return 1;
+  };
+
   const filteredResults = useMemo(
     () => {
       let results = filterResultsByGroup(serviceResultsOnly, selectedGroup);
@@ -645,9 +662,69 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
         const search = promptSearch.toLowerCase();
         results = results.filter(r => r.promptText.toLowerCase().includes(search));
       }
-      return results;
+      if (statusFilter !== "all") {
+        results = results.filter(r => {
+          const chatgptVisible = r.chatgptCited || r.chatgptFound;
+          const googleVisible = r.googleAICited || r.googleAIFound;
+          switch (statusFilter) {
+            case "both": return chatgptVisible && googleVisible;
+            case "chatgpt_only": return chatgptVisible && !googleVisible;
+            case "google_only": return !chatgptVisible && googleVisible;
+            case "not_found": return !chatgptVisible && !googleVisible;
+            default: return true;
+          }
+        });
+      }
+
+      const sorted = [...results];
+      if (sortColumn) {
+        sorted.sort((a, b) => {
+          let cmp = 0;
+          switch (sortColumn) {
+            case "prompt":
+              cmp = a.promptText.localeCompare(b.promptText);
+              break;
+            case "group": {
+              const gA = serviceResultsByGroup.find(g => g.groupId === a.groupId)?.groupName || "";
+              const gB = serviceResultsByGroup.find(g => g.groupId === b.groupId)?.groupName || "";
+              cmp = gA.localeCompare(gB);
+              break;
+            }
+            case "chatgpt":
+              cmp = getPlatformStatusScore(a.chatgptCited, a.chatgptFound) - getPlatformStatusScore(b.chatgptCited, b.chatgptFound);
+              break;
+            case "google":
+              cmp = getPlatformStatusScore(a.googleAICited, a.googleAIFound) - getPlatformStatusScore(b.googleAICited, b.googleAIFound);
+              break;
+            case "rank": {
+              const rA = [a.chatgptRank, a.googleAIRank].filter((r): r is number => r != null && r > 0);
+              const rB = [b.chatgptRank, b.googleAIRank].filter((r): r is number => r != null && r > 0);
+              const avgA = rA.length > 0 ? rA.reduce((s, v) => s + v, 0) / rA.length : 999;
+              const avgB = rB.length > 0 ? rB.reduce((s, v) => s + v, 0) / rB.length : 999;
+              cmp = avgA - avgB;
+              break;
+            }
+          }
+          return sortDirection === "desc" ? -cmp : cmp;
+        });
+      } else {
+        sorted.sort((a, b) => {
+          const scoreA = getVisibilityScore(a);
+          const scoreB = getVisibilityScore(b);
+          if (scoreA !== scoreB) return scoreB - scoreA;
+          const citedA = (a.chatgptCited ? 1 : 0) + (a.googleAICited ? 1 : 0);
+          const citedB = (b.chatgptCited ? 1 : 0) + (b.googleAICited ? 1 : 0);
+          if (citedA !== citedB) return citedB - citedA;
+          const ranksA = [a.chatgptRank, a.googleAIRank].filter((r): r is number => r != null && r > 0);
+          const ranksB = [b.chatgptRank, b.googleAIRank].filter((r): r is number => r != null && r > 0);
+          const avgA = ranksA.length > 0 ? ranksA.reduce((s, v) => s + v, 0) / ranksA.length : 999;
+          const avgB = ranksB.length > 0 ? ranksB.reduce((s, v) => s + v, 0) / ranksB.length : 999;
+          return avgA - avgB;
+        });
+      }
+      return sorted;
     },
-    [serviceResultsOnly, selectedGroup, promptSearch],
+    [serviceResultsOnly, selectedGroup, promptSearch, statusFilter, sortColumn, sortDirection, serviceResultsByGroup],
   );
 
   const totalPages = Math.max(1, Math.ceil(filteredResults.length / ITEMS_PER_PAGE));
@@ -655,6 +732,27 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
     () => filteredResults.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE),
     [filteredResults, currentPage, ITEMS_PER_PAGE],
   );
+
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      if (sortDirection === "asc") {
+        setSortDirection("desc");
+      } else {
+        setSortColumn(null);
+        setSortDirection("asc");
+      }
+    } else {
+      setSortColumn(column);
+      setSortDirection("asc");
+    }
+    setCurrentPage(1);
+  };
+
+  const SortIcon = ({ column }: { column: string }) => {
+    if (sortColumn !== column) return <ArrowUpDown className="w-3 h-3 ml-1 opacity-0 group-hover/sort:opacity-50 transition-opacity" />;
+    if (sortDirection === "asc") return <ArrowUp className="w-3 h-3 ml-1 text-blue-600" />;
+    return <ArrowDown className="w-3 h-3 ml-1 text-blue-600" />;
+  };
 
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(Math.max(1, totalPages));
@@ -1467,7 +1565,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
           <CardHeader className="pb-3">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle className="text-lg font-bold tracking-tight">Prompt Results</CardTitle>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <Input
@@ -1491,6 +1589,19 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
                     ))}
                   </SelectContent>
                 </Select>
+                <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setCurrentPage(1); }}>
+                  <SelectTrigger className="w-44 h-9 text-sm" data-testid="select-status-filter">
+                    <Filter className="w-3.5 h-3.5 mr-1.5 text-gray-400" />
+                    <SelectValue placeholder="All Statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Statuses</SelectItem>
+                    <SelectItem value="both">Found in Both</SelectItem>
+                    <SelectItem value="chatgpt_only">ChatGPT Only</SelectItem>
+                    <SelectItem value="google_only">Google AI Only</SelectItem>
+                    <SelectItem value="not_found">Not Found</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </CardHeader>
@@ -1498,18 +1609,53 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
             {/* Table Header */}
             <div className="grid grid-cols-[3rem_1fr_minmax(100px,160px)_100px_100px_80px] items-center gap-2 px-6 py-2.5 border-b border-gray-200 bg-gray-50/80 text-xs font-semibold text-gray-500 uppercase tracking-wider">
               <span className="text-center">#</span>
-              <span>Prompt</span>
-              <span className="hidden md:block">Group</span>
-              <span className="text-center">ChatGPT</span>
-              <span className="text-center">Google AI</span>
-              <span className="text-center">Rank</span>
+              <button
+                onClick={() => handleSort("prompt")}
+                className="group/sort flex items-center text-left hover:text-gray-900 transition-colors cursor-pointer"
+                data-testid="sort-prompt"
+              >
+                Prompt
+                <SortIcon column="prompt" />
+              </button>
+              <button
+                onClick={() => handleSort("group")}
+                className="group/sort hidden md:flex items-center hover:text-gray-900 transition-colors cursor-pointer"
+                data-testid="sort-group"
+              >
+                Group
+                <SortIcon column="group" />
+              </button>
+              <button
+                onClick={() => handleSort("chatgpt")}
+                className="group/sort flex items-center justify-center hover:text-gray-900 transition-colors cursor-pointer"
+                data-testid="sort-chatgpt"
+              >
+                ChatGPT
+                <SortIcon column="chatgpt" />
+              </button>
+              <button
+                onClick={() => handleSort("google")}
+                className="group/sort flex items-center justify-center hover:text-gray-900 transition-colors cursor-pointer"
+                data-testid="sort-google"
+              >
+                Google AI
+                <SortIcon column="google" />
+              </button>
+              <button
+                onClick={() => handleSort("rank")}
+                className="group/sort flex items-center justify-center hover:text-gray-900 transition-colors cursor-pointer"
+                data-testid="sort-rank"
+              >
+                Rank
+                <SortIcon column="rank" />
+              </button>
             </div>
             
             {/* Table Rows */}
             <div className="divide-y divide-gray-100">
               {paginatedResults.length === 0 ? (
                 <div className="px-6 py-12 text-center text-gray-500 text-sm">
-                  {promptSearch ? "No prompts match your search" : "No prompt results available"}
+                  {promptSearch || statusFilter !== "all" ? "No prompts match your filters" : "No prompt results available"}
                 </div>
               ) : (
                 paginatedResults.map((result, idx) => {
@@ -1519,11 +1665,13 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
                     return ranks.length > 0 ? (ranks.reduce((a, b) => a + b, 0) / ranks.length) : null;
                   })();
                   const globalIdx = (currentPage - 1) * ITEMS_PER_PAGE + idx + 1;
+                  const visScore = getVisibilityScore(result);
+                  const borderColor = visScore === 3 ? "border-l-green-500" : visScore === 2 ? "border-l-amber-400" : "border-l-transparent";
 
                   return (
                     <button
                       key={result.id}
-                      className="w-full grid grid-cols-[3rem_1fr_minmax(100px,160px)_100px_100px_80px] items-center gap-2 px-6 py-3.5 text-left hover-elevate rounded-lg transition-colors cursor-pointer group"
+                      className={`w-full grid grid-cols-[3rem_1fr_minmax(100px,160px)_100px_100px_80px] items-center gap-2 px-6 py-3.5 text-left hover-elevate rounded-lg transition-colors cursor-pointer group border-l-[3px] ${borderColor}`}
                       onClick={() => setSelectedResult(result)}
                       data-testid={`button-result-${result.id}`}
                     >
