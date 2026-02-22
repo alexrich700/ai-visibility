@@ -13,8 +13,18 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Plus, Mail, Calendar, Loader2, User } from "lucide-react";
+import { Users, Plus, Mail, Calendar, Loader2, User, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 
 interface AdminUser {
@@ -33,6 +43,7 @@ export default function AdminUsers() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [invitePassword, setInvitePassword] = useState("");
   const [inviteError, setInviteError] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
 
   const { data: users = [], isLoading } = useQuery<AdminUser[]>({
     queryKey: ["/api/admin/users"],
@@ -60,6 +71,22 @@ export default function AdminUsers() {
       } else {
         setInviteError("Failed to invite user. Please try again.");
       }
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("DELETE", `/api/admin/users/${id}`, undefined, { useAdminAuth: true });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      toast({ title: "User deleted", description: "The team member has been removed." });
+      setDeleteTarget(null);
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to delete user. Please try again.", variant: "destructive" });
+      setDeleteTarget(null);
     },
   });
 
@@ -140,6 +167,17 @@ export default function AdminUsers() {
                     </div>
                   </td>
                   <td className="px-4 py-4 text-center">
+                    {u.id !== currentUser?.id && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-gray-400 hover:text-red-500 hover:bg-red-50"
+                        onClick={() => setDeleteTarget(u)}
+                        data-testid={`button-delete-user-${u.id}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -178,7 +216,7 @@ export default function AdminUsers() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="invite-password">Temporary Password</Label>
+              <Label htmlFor="invite-password">Password</Label>
               <Input
                 id="invite-password"
                 type="password"
@@ -189,7 +227,7 @@ export default function AdminUsers() {
                 required
                 minLength={6}
               />
-              <p className="text-xs text-muted-foreground">The user can change this after signing in.</p>
+              <p className="text-xs text-muted-foreground">They can change their password at any time from their profile.</p>
             </div>
             {inviteError && (
               <p className="text-red-500 text-sm" data-testid="text-invite-error">{inviteError}</p>
@@ -210,6 +248,28 @@ export default function AdminUsers() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Team Member</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove <span className="font-semibold">{deleteTarget?.name}</span> ({deleteTarget?.email})? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+              disabled={deleteMutation.isPending}
+              data-testid="button-confirm-delete"
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

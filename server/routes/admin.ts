@@ -275,6 +275,29 @@ router.post("/invite-user", requireAdminAuth, async (req, res) => {
   }
 });
 
+router.delete("/users/:id", requireAdminAuth, async (req, res) => {
+  try {
+    const targetId = parseInt(req.params.id, 10);
+    if (isNaN(targetId)) {
+      return res.status(400).json({ error: "Invalid user ID" });
+    }
+    const token = req.headers.authorization!.substring(7);
+    const currentUserId = await getAdminUserIdFromToken(token);
+    if (currentUserId === targetId) {
+      return res.status(400).json({ error: "You cannot delete your own account" });
+    }
+    const targetUser = await storage.getAdminUserById(targetId);
+    if (!targetUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    await storage.deleteAdminUser(targetId);
+    res.json({ success: true });
+  } catch (error) {
+    logError("DELETE ADMIN USER ERROR", error);
+    res.status(500).json(getSafeErrorResponse("Failed to delete user"));
+  }
+});
+
 router.get("/audits", requireAdminAuth, async (req, res) => {
   try {
     const page = Math.max(1, parseInt(req.query.page as string) || 1);
