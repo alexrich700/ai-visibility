@@ -43,7 +43,6 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import logoIcon from "@assets/images_1765741951084.png";
-import { ContentGapAnalysis } from "@/components/content-gap-analysis";
 import type { MonitoringClient, MonitoringGroup, CheckSession, CheckResult } from "@shared/schema";
 import {
   buildCompetitorTrendChartData,
@@ -1940,9 +1939,6 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
             </CardContent>
           </Card>
         )}
-
-        {/* Content Gap Analysis Section */}
-        <ContentGapAnalysis clientId={clientId!} businessName={client.businessName} />
       </main>
 
       {/* Response Detail Dialog */}
