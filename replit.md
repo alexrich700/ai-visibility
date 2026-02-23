@@ -52,6 +52,7 @@ The tool captures `webSearchQueries` and `groundingSupports` from Gemini to unde
 -   **Prompt City Substitution**: Dynamic city name replacement in prompts for rescanning.
 -   **Shareable Audit Links**: Secure public links for sharing audit results without authentication.
 -   **Enhanced Negative Sentiment Display**: Detailed display of negative feedback snippets with platform attribution.
+-   **Content Gap Analysis**: Fetches and parses client website sitemaps (sitemap_index.xml, sitemap.xml, robots.txt), cross-references against Gemini webSearchQueries stored in check_results, identifies pages that match search terms (covered) vs. missed opportunities. Exports to Excel with Summary, Opportunities, Covered Terms, and All Terms sheets. Frontend component at `client/src/components/content-gap-analysis.tsx`, backend services at `server/services/sitemap-parser.ts` and `server/services/content-gap-analysis.ts`, API routes at `/api/monitoring/content-gaps/:clientId` and `/api/monitoring/content-gaps/:clientId/export`.
 
 ### Data Layer
 -   **ORM**: Drizzle ORM with PostgreSQL.

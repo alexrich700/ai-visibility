@@ -4,6 +4,7 @@ import { generateServiceGroups, generateServiceGroupsMultiCategory, generateProm
 import { monitoringClientRequestSchema } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { logError, getSafeErrorResponse } from "../utils/error-sanitizer";
+import { analyzeContentGaps, generateContentGapExcel } from "../services/content-gap-analysis";
 import { 
   analyzeResponse, 
   aggregateCitations, 
@@ -2753,6 +2754,48 @@ export function registerMonitoringRoutes(app: Express): void {
     } catch (error) {
       logError("DELETE PROMPT ERROR", error);
       res.status(500).json(getSafeErrorResponse("Failed to delete prompt"));
+    }
+  });
+
+  // Content Gap Analysis - analyze sitemap vs Gemini search terms
+  app.get("/api/monitoring/content-gaps/:clientId", requireAdminOrClientAuth("clientId"), async (req, res) => {
+    try {
+      const clientId = parseInt(req.params.clientId);
+      if (isNaN(clientId)) {
+        return res.status(400).json({ error: "Invalid client ID" });
+      }
+
+      const analysis = await analyzeContentGaps(clientId);
+      res.json(analysis);
+    } catch (error) {
+      logError("CONTENT GAP ANALYSIS ERROR", error);
+      res.status(500).json(getSafeErrorResponse("Failed to analyze content gaps"));
+    }
+  });
+
+  // Content Gap Analysis - export to Excel
+  app.get("/api/monitoring/content-gaps/:clientId/export", requireAdminOrClientAuth("clientId"), async (req, res) => {
+    try {
+      const clientId = parseInt(req.params.clientId);
+      if (isNaN(clientId)) {
+        return res.status(400).json({ error: "Invalid client ID" });
+      }
+
+      const client = await storage.getMonitoringClientById(clientId);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+
+      const analysis = await analyzeContentGaps(clientId);
+      const excelBuffer = generateContentGapExcel(analysis);
+
+      const filename = `content-gap-analysis-${client.businessName.replace(/[^a-zA-Z0-9]/g, "-")}.xlsx`;
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(excelBuffer);
+    } catch (error) {
+      logError("CONTENT GAP EXPORT ERROR", error);
+      res.status(500).json(getSafeErrorResponse("Failed to export content gap analysis"));
     }
   });
 
