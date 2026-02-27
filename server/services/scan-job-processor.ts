@@ -618,16 +618,6 @@ async function processScanJob(job: ScanJob, alreadyClaimed: boolean = false): Pr
       });
     }
 
-    const nextCheck = new Date();
-    nextCheck.setDate(nextCheck.getDate() + client.checkFrequencyDays);
-    await storage.updateMonitoringClient(job.clientId, {
-      lastCheckAt: new Date(),
-      nextCheckAt: nextCheck,
-    } as any);
-
-    const durationMs = Date.now() - startTime;
-    log(`[ScanJobProcessor] Job ${job.id} completed successfully in ${Math.round(durationMs / 1000)}s. Score: ${overallScore}%`, "job-processor");
-
     await storage.updateScanJob(job.id, {
       status: 'complete',
       completedAt: new Date(),
@@ -635,6 +625,25 @@ async function processScanJob(job: ScanJob, alreadyClaimed: boolean = false): Pr
       progressMessage: 'Scan complete!',
       resultScore: overallScore,
     });
+
+    const durationMs = Date.now() - startTime;
+    log(`[ScanJobProcessor] Job ${job.id} completed successfully in ${Math.round(durationMs / 1000)}s. Score: ${overallScore}%`, "job-processor");
+
+    const remainingJob = await storage.getActiveScanJobForClient(job.clientId);
+    if (!remainingJob) {
+      const nextCheck = new Date();
+      nextCheck.setDate(nextCheck.getDate() + client.checkFrequencyDays);
+      await storage.updateMonitoringClient(job.clientId, {
+        lastCheckAt: new Date(),
+        nextCheckAt: nextCheck,
+      } as any);
+      log(`[ScanJobProcessor] All city jobs complete for client ${job.clientId}, next check scheduled`, "job-processor");
+    } else {
+      await storage.updateMonitoringClient(job.clientId, {
+        lastCheckAt: new Date(),
+      } as any);
+      log(`[ScanJobProcessor] City job done, remaining queued jobs for client ${job.clientId}`, "job-processor");
+    }
 
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : String(error);

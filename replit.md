@@ -46,6 +46,7 @@ The tool captures `webSearchQueries` and `groundingSupports` from Gemini to unde
 -   **Brand Sentiment Prompts**: Gathers AI-driven feedback on brand perception.
 -   **Real-time Progress Streaming**: Uses Server-Sent Events (SSE) for live updates during scans.
 -   **Background-Safe and Resilient Scans**: Scans continue on the server even if the client disconnects, utilizing a checkpoint/resume architecture for long-running processes and partial result preservation. Individual city scans are wrapped in try-catch blocks to ensure overall process resilience.
+-   **Multi-City Scheduled Scans**: The scheduler creates one scan job per city for multi-city clients, with each city's `targetCity` set explicitly. The processor runs them sequentially and only updates `nextCheckAt` after the last city job completes.
 -   **Analytics Dashboard**: Provides a 3-column analytics grid with city-filtered analytics, top citations, prominence tracking, categorical sentiment analysis, competitor visibility, and historical trending.
 -   **Response Viewer**: Detailed viewing of AI responses with brand highlighting.
 -   **Data Export**: Comprehensive audit data export in ZIP format.

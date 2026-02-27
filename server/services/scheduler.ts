@@ -43,15 +43,24 @@ export async function queueScheduledScan(clientId: number): Promise<void> {
       return;
     }
 
-    const job = await storage.createScanJob({
-      clientId,
-      targetCity: null,
-      status: "queued",
-      progress: 0,
-      progressMessage: "Queued by scheduler...",
-      completedPrompts: 0,
-      totalPrompts: activePrompts.length,
-    });
+    const citiesToScan = client.cities && client.cities.length > 0
+      ? client.cities
+      : [client.city || null];
+
+    for (const city of citiesToScan) {
+      const job = await storage.createScanJob({
+        clientId,
+        targetCity: city,
+        status: "queued",
+        progress: 0,
+        progressMessage: city
+          ? `Queued by scheduler for ${city}...`
+          : "Queued by scheduler...",
+        completedPrompts: 0,
+        totalPrompts: activePrompts.length,
+      });
+      schedulerLogger.info(`Queued scheduled scan job ${job.id} for client ${clientId}, city: ${city || 'default'} (${activePrompts.length} prompts)`);
+    }
 
     const nextCheck = new Date();
     nextCheck.setDate(nextCheck.getDate() + client.checkFrequencyDays);
@@ -59,7 +68,7 @@ export async function queueScheduledScan(clientId: number): Promise<void> {
       nextCheckAt: nextCheck,
     } as any);
 
-    schedulerLogger.info(`Queued scheduled scan job ${job.id} for client ${clientId} (${activePrompts.length} prompts)`);
+    schedulerLogger.info(`Queued ${citiesToScan.length} scheduled scan job(s) for client ${clientId}`);
   } catch (error) {
     schedulerLogger.error(`Error queueing scheduled scan for client ${clientId}: ${error}`);
     const nextCheck = new Date();
