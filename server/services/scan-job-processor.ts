@@ -52,11 +52,9 @@ async function detectAndFailStuckJobs(): Promise<void> {
     const now = Date.now();
     
     for (const job of runningJobs) {
-      // Use lastProgressAt if available, otherwise fall back to startedAt
       const lastActivity = job.lastProgressAt || job.startedAt;
       
       if (!lastActivity) {
-        // Job is running but has no start time - mark as failed immediately
         log(`[ScanJobProcessor] Job ${job.id} has no start time, marking as failed`, "job-processor");
         await storage.updateScanJob(job.id, {
           status: 'failed',
@@ -71,20 +69,32 @@ async function detectAndFailStuckJobs(): Promise<void> {
       
       if (timeSinceActivity > STUCK_JOB_TIMEOUT_MS) {
         const minutesStuck = Math.round(timeSinceActivity / 60000);
-        log(`[ScanJobProcessor] Job ${job.id} stuck for ${minutesStuck} minutes, marking as failed`, "job-processor");
+        const hasNotStartedProcessing = (job.completedPrompts || 0) === 0 && !job.sessionId;
+        const wasAlreadyRequeued = job.errorMessage === 'requeued-after-stuck';
         
-        await storage.updateScanJob(job.id, {
-          status: 'failed',
-          completedAt: new Date(),
-          errorMessage: `Job stuck - no progress for ${minutesStuck} minutes`,
-          progressMessage: `Failed: No progress for ${minutesStuck} minutes`,
-        });
-        
-        // Also mark the session as failed if it exists
-        if (job.sessionId) {
-          await storage.updateCheckSession(job.sessionId, {
+        if (hasNotStartedProcessing && !wasAlreadyRequeued) {
+          log(`[ScanJobProcessor] Job ${job.id} stuck for ${minutesStuck} minutes with 0 progress, re-queuing for retry`, "job-processor");
+          await storage.updateScanJob(job.id, {
+            status: 'queued',
+            startedAt: null as any,
+            lastProgressAt: new Date(),
+            progressMessage: 'Re-queued after being stuck (deployment recovery)',
+            errorMessage: 'requeued-after-stuck',
+          });
+        } else {
+          log(`[ScanJobProcessor] Job ${job.id} stuck for ${minutesStuck} minutes, marking as failed`, "job-processor");
+          await storage.updateScanJob(job.id, {
             status: 'failed',
-          } as any);
+            completedAt: new Date(),
+            errorMessage: `Job stuck - no progress for ${minutesStuck} minutes`,
+            progressMessage: `Failed: No progress for ${minutesStuck} minutes`,
+          });
+          
+          if (job.sessionId) {
+            await storage.updateCheckSession(job.sessionId, {
+              status: 'failed',
+            } as any);
+          }
         }
       }
     }
