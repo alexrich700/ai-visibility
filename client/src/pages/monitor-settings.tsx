@@ -43,12 +43,12 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   ArrowLeft, Save, Plus, Trash2, Pencil, X, Tag, Building2,
-  Globe, MapPin, Clock, Loader2, FolderOpen, MessageSquare, Crown
+  Globe, MapPin, Clock, Loader2, FolderOpen, MessageSquare, Crown, History, Calendar
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, getSessionAwareQueryFn, queryClient } from "@/lib/queryClient";
 import logoIcon from "@assets/images_1765741951084.png";
-import type { MonitoringClient, MonitoringGroup, MonitoringPrompt } from "@shared/schema";
+import type { MonitoringClient, MonitoringGroup, MonitoringPrompt, CheckSession } from "@shared/schema";
 
 interface GroupWithPrompts extends MonitoringGroup {
   prompts: MonitoringPrompt[];
@@ -57,6 +57,7 @@ interface GroupWithPrompts extends MonitoringGroup {
 interface SettingsData {
   client: MonitoringClient;
   groups: GroupWithPrompts[];
+  sessions: CheckSession[];
 }
 
 export default function MonitorSettings() {
@@ -96,6 +97,9 @@ export default function MonitorSettings() {
 
   const [deletePromptConfirm, setDeletePromptConfirm] = useState<MonitoringPrompt | null>(null);
 
+  const [deleteSessionConfirm, setDeleteSessionConfirm] = useState<CheckSession | null>(null);
+  const [scanHistoryCityFilter, setScanHistoryCityFilter] = useState<string>("all");
+
   const [hasChanges, setHasChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -134,6 +138,7 @@ export default function MonitorSettings() {
       return {
         client: dashboardData.client,
         groups: groupsWithPrompts,
+        sessions: dashboardData.sessions || [],
       };
     },
     enabled: !!clientId,
@@ -262,6 +267,24 @@ export default function MonitorSettings() {
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to delete prompt", variant: "destructive" });
+    },
+  });
+
+  const scanSessions = data?.sessions;
+
+  const deleteSessionMutation = useMutation({
+    mutationFn: async (sessionId: number) => {
+      const res = await apiRequest("DELETE", `/api/monitoring/sessions/${sessionId}`, undefined, { useAdminAuth: true });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/monitoring/dashboard", clientId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/monitoring/settings", clientId] });
+      setDeleteSessionConfirm(null);
+      toast({ title: "Scan deleted", description: "Scan session and all its data have been deleted." });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to delete scan session", variant: "destructive" });
     },
   });
 
@@ -759,6 +782,115 @@ export default function MonitorSettings() {
             )}
           </CardContent>
         </Card>
+
+        <Card className="mt-6">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 pb-4">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <History className="w-5 h-5 text-primary" />
+              Scan History
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <Select value={scanHistoryCityFilter} onValueChange={setScanHistoryCityFilter}>
+                <SelectTrigger className="w-[180px]" data-testid="select-scan-history-city-filter">
+                  <SelectValue placeholder="Filter by city" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Cities</SelectItem>
+                  {(client?.cities || []).map((c) => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : !scanSessions || scanSessions.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Calendar className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p>No scan history yet</p>
+                <p className="text-sm">Scans will appear here after they complete</p>
+              </div>
+            ) : (
+              <div className="border rounded-md overflow-hidden">
+                <div className="grid grid-cols-[1fr_1fr_100px_100px_60px] gap-2 px-4 py-2 bg-muted/50 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  <span>Date</span>
+                  <span>City</span>
+                  <span>Score</span>
+                  <span>Status</span>
+                  <span></span>
+                </div>
+                <div className="divide-y max-h-[400px] overflow-y-auto">
+                  {scanSessions
+                    .filter((s) => scanHistoryCityFilter === "all" || (s.city || "") === scanHistoryCityFilter)
+                    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                    .map((session) => (
+                      <div
+                        key={session.id}
+                        className="grid grid-cols-[1fr_1fr_100px_100px_60px] gap-2 px-4 py-3 items-center text-sm hover:bg-muted/30 transition-colors"
+                        data-testid={`scan-row-${session.id}`}
+                      >
+                        <span className="flex items-center gap-2" data-testid={`scan-date-${session.id}`}>
+                          <Calendar className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                          {new Date(session.createdAt).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                            hour: "numeric",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                        <span className="flex items-center gap-2" data-testid={`scan-city-${session.id}`}>
+                          <MapPin className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                          {session.city || "All Cities"}
+                        </span>
+                        <span data-testid={`scan-score-${session.id}`}>
+                          <Badge variant={session.overallScore >= 50 ? "default" : "secondary"}>
+                            {session.overallScore}%
+                          </Badge>
+                        </span>
+                        <span data-testid={`scan-status-${session.id}`}>
+                          <Badge
+                            variant="outline"
+                            className={
+                              session.status === "complete"
+                                ? "border-green-500 text-green-600"
+                                : session.status === "running"
+                                ? "border-blue-500 text-blue-600"
+                                : session.status === "failed"
+                                ? "border-red-500 text-red-600"
+                                : ""
+                            }
+                          >
+                            {session.status}
+                          </Badge>
+                        </span>
+                        <span className="flex justify-end">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setDeleteSessionConfirm(session)}
+                            disabled={session.status === "running"}
+                            data-testid={`button-delete-scan-${session.id}`}
+                          >
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        </span>
+                      </div>
+                    ))}
+                  {scanSessions.filter((s) => scanHistoryCityFilter === "all" || (s.city || "") === scanHistoryCityFilter).length === 0 && (
+                    <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+                      No scans found for this city filter
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </main>
 
       <Dialog open={addGroupDialog} onOpenChange={setAddGroupDialog}>
@@ -982,6 +1114,38 @@ export default function MonitorSettings() {
               data-testid="button-confirm-delete-prompt"
             >
               {deletePromptMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!deleteSessionConfirm} onOpenChange={(open) => !open && setDeleteSessionConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Scan?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the scan from{" "}
+              <strong>
+                {deleteSessionConfirm && new Date(deleteSessionConfirm.createdAt).toLocaleDateString("en-US", {
+                  month: "long",
+                  day: "numeric",
+                  year: "numeric",
+                })}
+              </strong>
+              {deleteSessionConfirm?.city && (
+                <> for <strong>{deleteSessionConfirm.city}</strong></>
+              )}
+              , including all check results and metrics. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete-scan">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteSessionConfirm && deleteSessionMutation.mutate(deleteSessionConfirm.id)}
+              data-testid="button-confirm-delete-scan"
+            >
+              {deleteSessionMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete Scan"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

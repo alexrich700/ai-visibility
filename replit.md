@@ -53,6 +53,7 @@ The tool captures `webSearchQueries` and `groundingSupports` from Gemini to unde
 -   **Prompt City Substitution**: Dynamic city name replacement in prompts for rescanning.
 -   **Shareable Audit Links**: Secure public links for sharing audit results without authentication.
 -   **Enhanced Negative Sentiment Display**: Detailed display of negative feedback snippets with platform attribution.
+-   **Scan History Management**: Admin-only feature in Settings page to view and delete individual scan sessions. Supports city-based filtering and confirmation dialogs. Backend endpoints: `DELETE /api/monitoring/sessions/:sessionId` (single) and `DELETE /api/monitoring/clients/:clientId/sessions?date=YYYY-MM-DD&city=` (bulk by date/city). Deletion cascades through check_results, check_group_metrics, check_competitor_metrics, and nullifies scan_jobs references.
 
 ### Data Layer
 -   **ORM**: Drizzle ORM with PostgreSQL.

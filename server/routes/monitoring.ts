@@ -2766,4 +2766,49 @@ export function registerMonitoringRoutes(app: Express): void {
     }
   });
 
+  // ============================================
+  // SCAN SESSION DELETE ENDPOINTS
+  // ============================================
+
+  app.delete("/api/monitoring/sessions/:sessionId", requireAdminAuth, async (req, res) => {
+    try {
+      const sessionId = parseInt(req.params.sessionId);
+      const session = await storage.getCheckSessionById(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      if (session.status === 'running') {
+        return res.status(400).json({ error: "Cannot delete a running scan session" });
+      }
+      await storage.deleteCheckSession(sessionId);
+      res.json({ success: true, message: "Scan session deleted successfully" });
+    } catch (error) {
+      logError("DELETE SESSION ERROR", error);
+      res.status(500).json(getSafeErrorResponse("Failed to delete session"));
+    }
+  });
+
+  app.delete("/api/monitoring/clients/:clientId/sessions", requireAdminAuth, async (req, res) => {
+    try {
+      const clientId = parseInt(req.params.clientId);
+      const { date, city } = req.query;
+
+      if (!date || typeof date !== 'string') {
+        return res.status(400).json({ error: "Date query parameter is required (YYYY-MM-DD)" });
+      }
+
+      const client = await storage.getMonitoringClientById(clientId);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+
+      const cityParam = city === '' ? null : (city as string | undefined);
+      const deletedCount = await storage.deleteCheckSessionsByDateAndCity(clientId, date, cityParam);
+      res.json({ success: true, deletedCount, message: `Deleted ${deletedCount} scan session(s)` });
+    } catch (error) {
+      logError("BULK DELETE SESSIONS ERROR", error);
+      res.status(500).json(getSafeErrorResponse("Failed to delete sessions"));
+    }
+  });
+
 }

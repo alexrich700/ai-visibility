@@ -79,6 +79,8 @@ export interface IStorage {
   getCheckSessionById(sessionId: number): Promise<CheckSession | undefined>;
   getResumableSessions(clientId: number): Promise<CheckSession[]>;
   updateCheckSession(id: number, data: Partial<InsertCheckSession>): Promise<CheckSession | undefined>;
+  deleteCheckSession(sessionId: number): Promise<void>;
+  deleteCheckSessionsByDateAndCity(clientId: number, date: string, city?: string | null): Promise<number>;
   
   // Group metrics operations (for trending by group)
   createCheckGroupMetric(metric: InsertCheckGroupMetric): Promise<CheckGroupMetric>;
@@ -511,6 +513,45 @@ export class DatabaseStorage implements IStorage {
       .where(eq(checkSessions.id, id))
       .returning();
     return session;
+  }
+
+  async deleteCheckSession(sessionId: number): Promise<void> {
+    await db.transaction(async (tx) => {
+      await tx.update(scanJobs).set({ sessionId: null }).where(eq(scanJobs.sessionId, sessionId));
+      await tx.delete(checkResults).where(eq(checkResults.sessionId, sessionId));
+      await tx.delete(checkGroupMetrics).where(eq(checkGroupMetrics.sessionId, sessionId));
+      await tx.delete(checkCompetitorMetrics).where(eq(checkCompetitorMetrics.sessionId, sessionId));
+      await tx.delete(checkSessions).where(eq(checkSessions.id, sessionId));
+    });
+  }
+
+  async deleteCheckSessionsByDateAndCity(clientId: number, date: string, city?: string | null): Promise<number> {
+    const startOfDay = new Date(date + "T00:00:00.000Z");
+    const endOfDay = new Date(date + "T23:59:59.999Z");
+
+    const conditions = [
+      eq(checkSessions.clientId, clientId),
+      gte(checkSessions.createdAt, startOfDay),
+      lte(checkSessions.createdAt, endOfDay),
+    ];
+
+    if (city !== undefined) {
+      if (city === null) {
+        conditions.push(isNull(checkSessions.city));
+      } else {
+        conditions.push(eq(checkSessions.city, city));
+      }
+    }
+
+    const sessions = await db.select({ id: checkSessions.id })
+      .from(checkSessions)
+      .where(and(...conditions));
+
+    for (const session of sessions) {
+      await this.deleteCheckSession(session.id);
+    }
+
+    return sessions.length;
   }
 
   // Group metrics operations
