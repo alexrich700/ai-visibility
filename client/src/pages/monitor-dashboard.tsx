@@ -247,6 +247,10 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
   const [currentScanCityIndex, setCurrentScanCityIndex] = useState(0);
   const [totalScanCities, setTotalScanCities] = useState(0);
   const [activeJobId, setActiveJobId] = useState<number | null>(null);
+  const [totalScanJobs, setTotalScanJobs] = useState(0);
+  const [completedScanJobs, setCompletedScanJobs] = useState(0);
+  const totalScanJobsRef = useRef(0);
+  const completedScanJobsRef = useRef(0);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef(true);
   const { toast } = useToast();
@@ -302,7 +306,6 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
 
   // Poll for job status updates
   const startJobPolling = (jobId: number) => {
-    // Clear any existing poll
     if (pollIntervalRef.current) {
       clearInterval(pollIntervalRef.current);
     }
@@ -333,33 +336,74 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
         }
         
         if (job.status === 'complete') {
-          // Job finished successfully
+          const newCompleted = completedScanJobsRef.current + 1;
+          completedScanJobsRef.current = newCompleted;
+          setCompletedScanJobs(newCompleted);
+
+          let nextJob = null;
+          const total = totalScanJobsRef.current;
+          const maxRetries = total > 1 && newCompleted < total ? 3 : 1;
+          for (let attempt = 0; attempt < maxRetries; attempt++) {
+            if (attempt > 0) {
+              await new Promise(r => setTimeout(r, 2000));
+            }
+            const activeResponse = await fetch(`/api/monitoring/scan-job-active/${clientId}`, { headers });
+            if (activeResponse.ok) {
+              const activeData = await activeResponse.json();
+              if (activeData.hasActiveJob && activeData.job) {
+                nextJob = activeData.job;
+                break;
+              }
+            }
+          }
+
+          if (nextJob) {
+            setActiveJobId(nextJob.id);
+            setScanProgress(nextJob.progress || 0);
+            setScanStatus(nextJob.progressMessage || 'Processing next city...');
+            if (nextJob.targetCity) {
+              setScanSubStatus(`Scanning: ${nextJob.targetCity}`);
+            }
+            if (pollIntervalRef.current) {
+              clearInterval(pollIntervalRef.current);
+              pollIntervalRef.current = null;
+            }
+            startJobPolling(nextJob.id);
+            return;
+          }
+
           if (pollIntervalRef.current) {
             clearInterval(pollIntervalRef.current);
             pollIntervalRef.current = null;
           }
           setIsScanning(false);
           setActiveJobId(null);
+          setTotalScanJobs(0);
+          totalScanJobsRef.current = 0;
+          setCompletedScanJobs(0);
+          completedScanJobsRef.current = 0;
           setScanProgress(100);
           setScanStatus('Scan Complete!');
           setScanSubStatus(job.resultScore !== null ? `Overall Score: ${job.resultScore}%` : '');
           
           toast({
             title: "Scan Complete",
-            description: `Visibility scan finished with ${job.resultScore}% score.`,
+            description: `Visibility scan finished${job.resultScore !== null ? ` with ${job.resultScore}% score` : ''}.`,
           });
           
-          // Refresh dashboard data
           queryClient.invalidateQueries({ queryKey: ["/api/monitoring/dashboard", clientId] });
           
         } else if (job.status === 'failed') {
-          // Job failed
           if (pollIntervalRef.current) {
             clearInterval(pollIntervalRef.current);
             pollIntervalRef.current = null;
           }
           setIsScanning(false);
           setActiveJobId(null);
+          setTotalScanJobs(0);
+          totalScanJobsRef.current = 0;
+          setCompletedScanJobs(0);
+          completedScanJobsRef.current = 0;
           setScanProgress(0);
           setScanStatus('Scan Failed');
           setScanSubStatus(job.errorMessage || 'Unknown error');
@@ -370,14 +414,12 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
             variant: "destructive",
           });
         }
-        // If still queued or running, continue polling
         
       } catch (error) {
         console.error('Error polling job status:', error);
       }
     };
     
-    // Poll immediately, then every 3 seconds
     pollJob();
     pollIntervalRef.current = setInterval(pollJob, 3000);
   };
@@ -494,15 +536,25 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
       const result = await response.json();
       
       setActiveJobId(result.jobId);
+      const jobCount = result.totalJobs || 1;
+      setTotalScanJobs(jobCount);
+      totalScanJobsRef.current = jobCount;
+      setCompletedScanJobs(0);
+      completedScanJobsRef.current = 0;
       setScanStatus("Scan queued - processing...");
-      setScanSubStatus(`${result.totalPrompts} prompts to scan`);
+      setScanSubStatus(
+        result.totalJobs > 1
+          ? `${result.totalJobs} cities, ${result.totalPrompts} prompts each`
+          : `${result.totalPrompts} prompts to scan`
+      );
       
       toast({
         title: "Scan Started",
-        description: "Your scan is running in the background. You can close this page - it will continue running.",
+        description: result.totalJobs > 1
+          ? `Scanning ${result.totalJobs} cities. You can close this page - it will continue running.`
+          : "Your scan is running in the background. You can close this page - it will continue running.",
       });
       
-      // Start polling for job status
       startJobPolling(result.jobId);
       
     } catch (error) {

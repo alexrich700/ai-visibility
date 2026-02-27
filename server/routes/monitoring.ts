@@ -1155,21 +1155,31 @@ export function registerMonitoringRoutes(app: Express): void {
         });
       }
       
-      // Create the job - it will be picked up by the background processor
-      const job = await storage.createScanJob({
-        clientId,
-        targetCity: targetCity || null,
-        status: 'queued',
-        progress: 0,
-        progressMessage: 'Queued for processing...',
-        completedPrompts: 0,
-        totalPrompts: prompts.length,
-      });
-      
-      monitoringLogger.info("Created scan job", { jobId: job.id, clientId, prompts: prompts.length });
+      const citiesToScan = targetCity
+        ? [targetCity]
+        : (client.cities && client.cities.length > 0 ? client.cities : [null]);
+
+      const jobIds: number[] = [];
+      for (const city of citiesToScan) {
+        const job = await storage.createScanJob({
+          clientId,
+          targetCity: city,
+          status: 'queued',
+          progress: 0,
+          progressMessage: city
+            ? `Queued for ${city}...`
+            : 'Queued for processing...',
+          completedPrompts: 0,
+          totalPrompts: prompts.length,
+        });
+        jobIds.push(job.id);
+        monitoringLogger.info("Created scan job", { jobId: job.id, clientId, city: city || 'default', prompts: prompts.length });
+      }
       
       res.json({ 
-        jobId: job.id, 
+        jobId: jobIds[0], 
+        jobIds,
+        totalJobs: jobIds.length,
         status: 'queued',
         totalPrompts: prompts.length,
         message: 'Scan queued successfully. You can close this page - the scan will continue in the background.'
