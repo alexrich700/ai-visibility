@@ -781,13 +781,20 @@ async function queryGemini(prompt: string, businessName: string, url?: string, b
       });
     
     // Enable Google Search grounding for real-time search results
-      const response = await ai.models.generateContent({
+      const API_TIMEOUT_MS = 60000;
+      const geminiPromise = ai.models.generateContent({
         model: "gemini-2.5-flash",
         contents: prompt,
         config: {
           tools: [{ googleSearch: {} }]
         }
       });
+      const response = await Promise.race([
+        geminiPromise,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Gemini API call timed out after 60s')), API_TIMEOUT_MS)
+        ),
+      ]);
 
       const text = response.text || "";
     
@@ -865,12 +872,19 @@ async function queryChatGPT(prompt: string, businessName: string, url?: string, 
     
     // Use Responses API with web_search tool for real-time grounded search results
     // The Responses API uses 'input' and 'instructions' instead of 'messages'
-    const response = await openai.responses.create({
+    const API_TIMEOUT_MS = 60000;
+    const openaiPromise = openai.responses.create({
       model: "gpt-5-nano",
       tools: [webSearchTool],
       instructions: "You are a helpful assistant that provides factual, detailed answers about local and national businesses. When asked about service providers, list specific company names with their website URLs when possible. At the end of your response, provide a clean bullet list of just the business names you mentioned (no ratings, reviews, hours, or other details).",
       input: prompt
     } as any);
+    const response = await Promise.race([
+      openaiPromise,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('ChatGPT API call timed out after 60s')), API_TIMEOUT_MS)
+      ),
+    ]);
 
     // Extract text from Responses API response using output_text
     const text = (response as any).output_text || "";

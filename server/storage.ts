@@ -719,10 +719,13 @@ export class DatabaseStorage implements IStorage {
     try {
       await client.query('BEGIN');
       
-      // Select and lock the oldest queued job, skipping any that are already locked by other workers
+      // Select and lock the oldest queued job, skipping any that are already locked by other workers.
+      // Also skip jobs whose client already has a running job to serialize per-client processing
+      // and prevent overwhelming AI APIs with concurrent scans for the same client.
       const selectResult = await client.query<ScanJob>(`
         SELECT * FROM scan_jobs 
         WHERE status = 'queued' 
+          AND client_id NOT IN (SELECT client_id FROM scan_jobs WHERE status = 'running')
         ORDER BY created_at ASC 
         LIMIT 1 
         FOR UPDATE SKIP LOCKED
