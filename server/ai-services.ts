@@ -838,6 +838,67 @@ interface QueryOptions {
   skipRateLimitDelay?: boolean; // Skip delay for batched contexts that handle rate limiting at batch level
 }
 
+const CHATGPT_MODEL = "gpt-5-nano";
+const CHATGPT_API_TIMEOUT_MS = 60000;
+const CHATGPT_INSTRUCTIONS = "You are a helpful assistant that provides factual, detailed answers about local and national businesses. When asked about service providers, list specific company names with their website URLs when possible. At the end of your response, provide a clean bullet list of just the business names you mentioned (no ratings, reviews, hours, or other details).";
+
+function buildWebSearchTool(location?: string): Record<string, any> {
+  const tool: Record<string, any> = { type: "web_search" };
+  if (location && location !== "nationwide") {
+    const parts = location.split(',').map(p => p.trim());
+    tool.user_location = {
+      type: "approximate",
+      country: "US",
+      city: parts[0] || undefined,
+      region: parts[1] || undefined
+    };
+  }
+  return tool;
+}
+
+async function executeChatGPTCall(prompt: string, businessName: string, url?: string, location?: string, brandAliases?: string[]): Promise<{ found: boolean; response: string; competitors: string[]; citations: ExtractedCitation[] }> {
+  const webSearchTool = buildWebSearchTool(location);
+  
+  const openaiPromise = openai.responses.create({
+    model: CHATGPT_MODEL,
+    tools: [webSearchTool],
+    instructions: CHATGPT_INSTRUCTIONS,
+    input: prompt
+  } as any);
+  const response = await Promise.race([
+    openaiPromise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`ChatGPT API call timed out after ${CHATGPT_API_TIMEOUT_MS / 1000}s`)), CHATGPT_API_TIMEOUT_MS)
+    ),
+  ]);
+
+  const text = (response as any).output_text || "";
+  
+  if (!text) {
+    console.log("[CHATGPT] Empty output_text, response structure:", JSON.stringify(response).slice(0, 500));
+  }
+  
+  const structuredCitations = extractOpenAICitations(response);
+  const textCitations = extractUrlsFromText(text);
+  const citations = mergeCitations(structuredCitations, textCitations);
+  
+  const detection = checkForMentions(text, businessName, url, brandAliases);
+  const competitors = extractCompetitors(text, businessName);
+  
+  const searchTerms = [...generateNameVariations(businessName, brandAliases), ...(url ? extractDomainKeywords(url) : [])];
+  console.log(`[CHATGPT DETECTION] Business: "${businessName}" | URL: "${url}" | Aliases: ${brandAliases?.length || 0} | Search terms: ${JSON.stringify(searchTerms)} | Found: ${detection.found}${detection.matchedTerm ? ` (matched: "${detection.matchedTerm}")` : ''}`);
+  console.log(`[CHATGPT] Extracted ${citations.length} citations`);
+  if (!detection.found) {
+    console.log(`[CHATGPT] Response preview (first 300 chars): ${text.slice(0, 300).replace(/\n/g, ' ')}`);
+  }
+
+  return { found: detection.found, response: text, competitors, citations };
+}
+
+function isTimeoutError(errorMsg: string): boolean {
+  return errorMsg.includes('timed out') || errorMsg.includes('timeout') || errorMsg.includes('ETIMEDOUT') || errorMsg.includes('ESOCKETTIMEDOUT');
+}
+
 async function queryChatGPT(prompt: string, businessName: string, url?: string, location?: string, brandAliases?: string[], options?: QueryOptions): Promise<{ found: boolean; response: string; competitors: string[]; citations: ExtractedCitation[] }> {
   if (openAICircuitBreaker.isOpen()) {
     console.log(`[CHATGPT] Circuit breaker is OPEN, skipping API call for prompt`);
@@ -845,111 +906,29 @@ async function queryChatGPT(prompt: string, businessName: string, url?: string, 
   }
 
   try {
-    // Build web search tool config with location if provided
-    const webSearchTool: Record<string, any> = { type: "web_search" };
-    if (location && location !== "nationwide") {
-      const parts = location.split(',').map(p => p.trim());
-      webSearchTool.user_location = {
-        type: "approximate",
-        country: "US",
-        city: parts[0] || undefined,
-        region: parts[1] || undefined
-      };
-    }
-    
-    // Add rate limit delay unless we're in a batched context (batch handles rate limiting)
     if (!options?.skipRateLimitDelay) {
       await rateLimitDelay();
     }
     
-    // Use Responses API with web_search tool for real-time grounded search results
-    // The Responses API uses 'input' and 'instructions' instead of 'messages'
-    const API_TIMEOUT_MS = 60000;
-    const openaiPromise = openai.responses.create({
-      model: "gpt-5-nano",
-      tools: [webSearchTool],
-      instructions: "You are a helpful assistant that provides factual, detailed answers about local and national businesses. When asked about service providers, list specific company names with their website URLs when possible. At the end of your response, provide a clean bullet list of just the business names you mentioned (no ratings, reviews, hours, or other details).",
-      input: prompt
-    } as any);
-    const response = await Promise.race([
-      openaiPromise,
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('ChatGPT API call timed out after 60s')), API_TIMEOUT_MS)
-      ),
-    ]);
-
-    // Extract text from Responses API response using output_text
-    const text = (response as any).output_text || "";
-    
-    // Debug: log the raw response structure if text is empty
-    if (!text) {
-      console.log("[CHATGPT] Empty output_text, response structure:", JSON.stringify(response).slice(0, 500));
-    }
-    
-    // Extract citations from the structured response and text
-    const structuredCitations = extractOpenAICitations(response);
-    const textCitations = extractUrlsFromText(text);
-    const citations = mergeCitations(structuredCitations, textCitations);
-    
-    const detection = checkForMentions(text, businessName, url, brandAliases);
-    const competitors = extractCompetitors(text, businessName);
-    
-    // Debug logging for detection
-    const searchTerms = [...generateNameVariations(businessName, brandAliases), ...(url ? extractDomainKeywords(url) : [])];
-    console.log(`[CHATGPT DETECTION] Business: "${businessName}" | URL: "${url}" | Aliases: ${brandAliases?.length || 0} | Search terms: ${JSON.stringify(searchTerms)} | Found: ${detection.found}${detection.matchedTerm ? ` (matched: "${detection.matchedTerm}")` : ''}`);
-    console.log(`[CHATGPT] Extracted ${citations.length} citations`);
-    if (!detection.found) {
-      console.log(`[CHATGPT] Response preview (first 300 chars): ${text.slice(0, 300).replace(/\n/g, ' ')}`);
-    }
-
-    // Record success - circuit breaker will close if in half-open state
+    const result = await executeChatGPTCall(prompt, businessName, url, location, brandAliases);
     openAICircuitBreaker.recordSuccess();
-
-    return { found: detection.found, response: text, competitors, citations };
+    return result;
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'unknown';
     console.error("ChatGPT API error:", errorMsg);
     const isRateLimit = isRateLimitError(error);
-    const isTimeout = errorMsg.includes('timed out') || errorMsg.includes('timeout') || errorMsg.includes('ETIMEDOUT') || errorMsg.includes('ESOCKETTIMEDOUT');
     
     openAICircuitBreaker.recordFailure(isRateLimit);
     
-    if (!isRateLimit && !isTimeout) {
+    if (!isRateLimit && !isTimeoutError(errorMsg)) {
       try {
         console.log(`[CHATGPT] Retrying after transient error...`);
         await new Promise(resolve => setTimeout(resolve, 2000));
         
-        const webSearchTool: Record<string, any> = { type: "web_search" };
-        if (location && location !== "nationwide") {
-          const parts = location.split(',').map(p => p.trim());
-          webSearchTool.user_location = {
-            type: "approximate",
-            country: "US",
-            city: parts[0] || undefined,
-            region: parts[1] || undefined
-          };
-        }
-        
-        const retryResponse = await Promise.race([
-          openai.responses.create({
-            model: "gpt-5-nano",
-            tools: [webSearchTool],
-            instructions: "You are a helpful assistant that provides factual, detailed answers about local and national businesses. When asked about service providers, list specific company names with their website URLs when possible. At the end of your response, provide a clean bullet list of just the business names you mentioned (no ratings, reviews, hours, or other details).",
-            input: prompt
-          } as any),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('ChatGPT retry timed out after 60s')), 60000)
-          ),
-        ]);
-        
-        const retryText = (retryResponse as any).output_text || "";
-        const retryCitations = mergeCitations(extractOpenAICitations(retryResponse), extractUrlsFromText(retryText));
-        const retryDetection = checkForMentions(retryText, businessName, url, brandAliases);
-        const retryCompetitors = extractCompetitors(retryText, businessName);
-        
+        const result = await executeChatGPTCall(prompt, businessName, url, location, brandAliases);
         openAICircuitBreaker.recordSuccess();
         console.log(`[CHATGPT] Retry succeeded`);
-        return { found: retryDetection.found, response: retryText, competitors: retryCompetitors, citations: retryCitations };
+        return result;
       } catch (retryError) {
         console.error("ChatGPT retry also failed:", retryError instanceof Error ? retryError.message : retryError);
         openAICircuitBreaker.recordFailure(false);
