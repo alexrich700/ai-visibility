@@ -3,6 +3,7 @@ import { log } from "../index";
 import {
   runPromptCheck,
   synthesizeSentimentNarratives,
+  resetCircuitBreakers,
   type SynthesizedNarratives
 } from "../ai-services";
 import {
@@ -106,6 +107,9 @@ async function detectAndFailStuckJobs(): Promise<void> {
 async function processScanJob(job: ScanJob, alreadyClaimed: boolean = false): Promise<void> {
   const startTime = Date.now();
   log(`[ScanJobProcessor] Starting job ${job.id} for client ${job.clientId}`, "job-processor");
+
+  resetCircuitBreakers();
+  log(`[ScanJobProcessor] Reset circuit breakers for job ${job.id}`, "job-processor");
 
   try {
     // If the job was already claimed by claimQueuedJob(), skip the status update

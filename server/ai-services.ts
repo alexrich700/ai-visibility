@@ -256,6 +256,14 @@ class CircuitBreaker {
     this.lastFailureTime = null;
   }
 
+  reset(): void {
+    console.log(`[CIRCUIT_BREAKER:${this.name}] Reset to CLOSED state (failureCount was ${this.failureCount}, state was ${this.state})`);
+    this.state = 'CLOSED';
+    this.failureCount = 0;
+    this.halfOpenAttempts = 0;
+    this.lastFailureTime = null;
+  }
+
   recordFailure(isRateLimit: boolean = false): void {
     this.failureCount++;
     this.lastFailureTime = Date.now();
@@ -311,6 +319,11 @@ export function getCircuitBreakerStats() {
     openai: openAICircuitBreaker.getStats(),
     gemini: geminiCircuitBreaker.getStats(),
   };
+}
+
+export function resetCircuitBreakers() {
+  openAICircuitBreaker.reset();
+  geminiCircuitBreaker.reset();
 }
 
 // ============================================
@@ -779,7 +792,7 @@ async function queryGemini(prompt: string, businessName: string, url?: string, b
       });
     
     // Enable Google Search grounding for real-time search results
-      const API_TIMEOUT_MS = 60000;
+      const API_TIMEOUT_MS = 180000;
       const geminiPromise = ai.models.generateContent({
         model: "gemini-2.5-flash",
         contents: prompt,
@@ -839,7 +852,7 @@ interface QueryOptions {
 }
 
 const CHATGPT_MODEL = "gpt-5-nano";
-const CHATGPT_API_TIMEOUT_MS = 60000;
+const CHATGPT_API_TIMEOUT_MS = 180000;
 const CHATGPT_INSTRUCTIONS = "You are a helpful assistant that provides factual, detailed answers about local and national businesses. When asked about service providers, list specific company names with their website URLs when possible. At the end of your response, provide a clean bullet list of just the business names you mentioned (no ratings, reviews, hours, or other details).";
 
 function buildWebSearchTool(location?: string): Record<string, any> {
@@ -920,9 +933,9 @@ async function queryChatGPT(prompt: string, businessName: string, url?: string, 
     
     openAICircuitBreaker.recordFailure(isRateLimit);
     
-    if (!isRateLimit && !isTimeoutError(errorMsg)) {
+    if (!isRateLimit) {
       try {
-        console.log(`[CHATGPT] Retrying after transient error...`);
+        console.log(`[CHATGPT] Retrying after ${isTimeoutError(errorMsg) ? 'timeout' : 'transient error'}...`);
         await new Promise(resolve => setTimeout(resolve, 2000));
         
         const result = await executeChatGPTCall(prompt, businessName, url, location, brandAliases);
