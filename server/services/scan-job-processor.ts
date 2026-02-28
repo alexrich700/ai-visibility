@@ -287,6 +287,9 @@ async function processScanJob(job: ScanJob, alreadyClaimed: boolean = false): Pr
     }
 
     for (let i = startIndex; i < promptsWithGroups.length; i += CONCURRENT_PROMPTS) {
+      if (i > startIndex) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
       const batch = promptsWithGroups.slice(i, i + CONCURRENT_PROMPTS);
 
       const results = await Promise.all(

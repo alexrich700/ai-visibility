@@ -292,14 +292,14 @@ class CircuitBreaker {
 }
 
 const openAICircuitBreaker = new CircuitBreaker('OpenAI', {
-  failureThreshold: 5,
-  resetTimeoutMs: 60000,
+  failureThreshold: 10,
+  resetTimeoutMs: 120000,
   halfOpenMaxAttempts: 2,
 });
 
 const geminiCircuitBreaker = new CircuitBreaker('Gemini', {
-  failureThreshold: 5,
-  resetTimeoutMs: 60000,
+  failureThreshold: 10,
+  resetTimeoutMs: 120000,
   halfOpenMaxAttempts: 2,
 });
 
@@ -759,11 +759,9 @@ function extractGroundingMetadata(response: any): GeminiGroundingMetadata | null
 
 // Gemini client using Replit AI Integrations with Google Search grounding
 async function queryGemini(prompt: string, businessName: string, url?: string, brandAliases?: string[]): Promise<{ found: boolean; response: string; competitors: string[]; citations: ExtractedCitation[]; groundingMetadata: GeminiGroundingMetadata | null }> {
-  // Check circuit breaker before making API call
   if (geminiCircuitBreaker.isOpen()) {
     console.log(`[GEMINI] Circuit breaker is OPEN, skipping API call for prompt`);
-    const fallback = simulateResponse(prompt, businessName);
-    return { ...fallback, citations: [], groundingMetadata: null };
+    return { found: false, response: "[Gemini unavailable - circuit breaker open]", competitors: [], citations: [], groundingMetadata: null };
   }
 
   try {
@@ -829,13 +827,9 @@ async function queryGemini(prompt: string, businessName: string, url?: string, b
     }
   } catch (error) {
     console.error("Gemini API error:", error);
-    
-    // Record failure and check if it's a rate limit
     const isRateLimit = isRateLimitError(error);
     geminiCircuitBreaker.recordFailure(isRateLimit);
-    
-    const fallback = simulateResponse(prompt, businessName);
-    return { ...fallback, citations: [], groundingMetadata: null };
+    return { found: false, response: `[Gemini error: ${error instanceof Error ? error.message : 'unknown'}]`, competitors: [], citations: [], groundingMetadata: null };
   }
 }
 
@@ -845,11 +839,9 @@ interface QueryOptions {
 }
 
 async function queryChatGPT(prompt: string, businessName: string, url?: string, location?: string, brandAliases?: string[], options?: QueryOptions): Promise<{ found: boolean; response: string; competitors: string[]; citations: ExtractedCitation[] }> {
-  // Check circuit breaker before making API call
   if (openAICircuitBreaker.isOpen()) {
     console.log(`[CHATGPT] Circuit breaker is OPEN, skipping API call for prompt`);
-    const fallback = simulateResponse(prompt, businessName);
-    return { ...fallback, citations: [] };
+    return { found: false, response: "[ChatGPT unavailable - circuit breaker open]", competitors: [], citations: [] };
   }
 
   try {
@@ -915,14 +907,56 @@ async function queryChatGPT(prompt: string, businessName: string, url?: string, 
 
     return { found: detection.found, response: text, competitors, citations };
   } catch (error) {
-    console.error("ChatGPT API error:", error);
-    
-    // Record failure and check if it's a rate limit
+    const errorMsg = error instanceof Error ? error.message : 'unknown';
+    console.error("ChatGPT API error:", errorMsg);
     const isRateLimit = isRateLimitError(error);
+    const isTimeout = errorMsg.includes('timed out') || errorMsg.includes('timeout') || errorMsg.includes('ETIMEDOUT') || errorMsg.includes('ESOCKETTIMEDOUT');
+    
     openAICircuitBreaker.recordFailure(isRateLimit);
     
-    const fallback = simulateResponse(prompt, businessName);
-    return { ...fallback, citations: [] };
+    if (!isRateLimit && !isTimeout) {
+      try {
+        console.log(`[CHATGPT] Retrying after transient error...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        const webSearchTool: Record<string, any> = { type: "web_search" };
+        if (location && location !== "nationwide") {
+          const parts = location.split(',').map(p => p.trim());
+          webSearchTool.user_location = {
+            type: "approximate",
+            country: "US",
+            city: parts[0] || undefined,
+            region: parts[1] || undefined
+          };
+        }
+        
+        const retryResponse = await Promise.race([
+          openai.responses.create({
+            model: "gpt-5-nano",
+            tools: [webSearchTool],
+            instructions: "You are a helpful assistant that provides factual, detailed answers about local and national businesses. When asked about service providers, list specific company names with their website URLs when possible. At the end of your response, provide a clean bullet list of just the business names you mentioned (no ratings, reviews, hours, or other details).",
+            input: prompt
+          } as any),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('ChatGPT retry timed out after 60s')), 60000)
+          ),
+        ]);
+        
+        const retryText = (retryResponse as any).output_text || "";
+        const retryCitations = mergeCitations(extractOpenAICitations(retryResponse), extractUrlsFromText(retryText));
+        const retryDetection = checkForMentions(retryText, businessName, url, brandAliases);
+        const retryCompetitors = extractCompetitors(retryText, businessName);
+        
+        openAICircuitBreaker.recordSuccess();
+        console.log(`[CHATGPT] Retry succeeded`);
+        return { found: retryDetection.found, response: retryText, competitors: retryCompetitors, citations: retryCitations };
+      } catch (retryError) {
+        console.error("ChatGPT retry also failed:", retryError instanceof Error ? retryError.message : retryError);
+        openAICircuitBreaker.recordFailure(false);
+      }
+    }
+    
+    return { found: false, response: `[ChatGPT error: ${errorMsg}]`, competitors: [], citations: [] };
   }
 }
 
