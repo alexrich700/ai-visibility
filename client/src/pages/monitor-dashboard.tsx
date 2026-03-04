@@ -280,6 +280,9 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
   // AbortController for in-flight poll requests
   const pollAbortRef = useRef<AbortController | null>(null);
 
+  // Ref to hold latest startJobPolling so effects always call the current version
+  const startJobPollingRef = useRef<(jobId: number) => void>(() => {});
+
   // Pause polling when tab is hidden, resume when visible
   useEffect(() => {
     const handleVisibility = () => {
@@ -293,12 +296,12 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
         pollAbortRef.current?.abort();
       } else if (isMountedRef.current && activeJobId) {
         // Tab became visible again — restart polling for the active job
-        startJobPolling(activeJobId);
+        startJobPollingRef.current(activeJobId);
       }
     };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [activeJobId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeJobId]);
 
   // Cleanup polling on unmount
   useEffect(() => {
@@ -336,7 +339,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
               setScanSubStatus(`Scanning: ${data.job.targetCity}`);
             }
             // Start polling for updates
-            startJobPolling(data.job.id);
+            startJobPollingRef.current(data.job.id);
           }
         }
       } catch (error) {
@@ -472,7 +475,9 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
     pollJob();
     pollIntervalRef.current = setInterval(pollJob, 3000);
   };
-  
+  // Keep ref in sync so effects and callbacks always call the latest version
+  startJobPollingRef.current = startJobPolling;
+
   // Generate and copy client share link (admin only)
   const copyClientShareLink = async () => {
     if (!clientId) return;
