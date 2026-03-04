@@ -123,6 +123,25 @@ interface DashboardData {
   trendData: TrendDataPoint[];
 }
 
+interface GroupTrendItem {
+  groupId: number;
+  groupName: string;
+  data: { date: string | null; visibilityScore: number; foundCount: number; totalPrompts: number }[];
+}
+
+interface GroupTrendsResponse {
+  groupTrends: GroupTrendItem[];
+}
+
+interface CompetitorTrendItem {
+  competitorName: string;
+  data: { date: string | null; visibilityPercent: number; mentionCount: number }[];
+}
+
+interface CompetitorTrendsResponse {
+  competitorTrends: CompetitorTrendItem[];
+}
+
 const COLORS = {
   primary: "#5599f9",
   accent: "#ffb41c",
