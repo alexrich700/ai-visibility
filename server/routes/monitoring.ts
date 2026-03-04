@@ -29,48 +29,65 @@ import { createLogger } from "../utils/logger";
 
 const monitoringLogger = createLogger("monitoring-routes");
 
+// Track in-progress scans per client to prevent concurrent scans corrupting data
+const activeClientScans = new Map<number, { startedAt: number; scanCity: string | null }>();
+
+/** Clear all active scan guards (called during graceful shutdown) */
+export function clearActiveScans(): void {
+  const count = activeClientScans.size;
+  if (count > 0) {
+    monitoringLogger.info(`Clearing ${count} active scan guard(s) for shutdown`);
+    activeClientScans.clear();
+  }
+}
+
 export function registerMonitoringRoutes(app: Express): void {
   
   // Generate service groups using AI
   // Supports both single-category (legacy) and multi-category requests
   app.post("/api/monitoring/generate-groups", async (req, res) => {
     try {
-      const { businessName, industry, scope, city, primaryCategories } = req.body;
-      
+      const { businessName, industry, scope, city, primaryCategories, domain } = req.body;
+
       if (!businessName) {
         return res.status(400).json({ error: "Business name is required" });
       }
-      
+
       // Determine categories to use - either explicit primaryCategories array or legacy industry field
-      const categories: string[] = primaryCategories && primaryCategories.length > 0 
-        ? primaryCategories 
+      const categories: string[] = primaryCategories && primaryCategories.length > 0
+        ? primaryCategories
         : industry ? [industry] : [];
-      
+
       if (categories.length === 0) {
         return res.status(400).json({ error: "At least one category (industry or primaryCategories) is required" });
       }
 
+      // Normalize domain to a full URL for website scraping
+      const websiteUrl = domain
+        ? (domain.startsWith('http') ? domain : `https://${domain}`)
+        : undefined;
+
       // Use multi-category function if multiple categories, otherwise single category
       if (categories.length > 1) {
-        const result = await generateServiceGroupsMultiCategory(businessName, categories, scope, city);
-        
+        const result = await generateServiceGroupsMultiCategory(businessName, categories, scope, city, websiteUrl);
+
         // Return high-level categories as initial groups, followed by specific groups
         const allGroups = [
-          ...result.highLevelCategories.map(cat => ({ 
-            name: cat.name, 
+          ...result.highLevelCategories.map(cat => ({
+            name: cat.name,
             description: cat.description,
-            isHighLevelCategory: true 
+            isHighLevelCategory: true
           })),
           ...result.groups.map(g => ({ ...g, isHighLevelCategory: false }))
         ];
-        
-        res.json({ 
+
+        res.json({
           groups: allGroups,
           highLevelCategories: result.highLevelCategories,
           isMultiCategory: true
         });
       } else {
-        const result = await generateServiceGroups(businessName, categories[0], scope, city);
+        const result = await generateServiceGroups(businessName, categories[0], scope, city, websiteUrl);
         
         // Return high-level category as the first group, followed by specific groups
         const allGroups = [
@@ -353,6 +370,7 @@ export function registerMonitoringRoutes(app: Express): void {
     // Track if client disconnected to cancel remaining work
     let isClientConnected = true;
     let activeSessionId: number | null = null; // Track session for pause on disconnect
+    let trackedClientId: number | null = null; // Track client ID for concurrent scan guard cleanup
     
     res.on("close", async () => {
       isClientConnected = false;
@@ -362,10 +380,15 @@ export function registerMonitoringRoutes(app: Express): void {
     // Helper to send SSE events - single atomic write + explicit flush
     const sendEvent = (type: string, data: Record<string, unknown>) => {
       if (!isClientConnected) return;
-      const payload = `data: ${JSON.stringify({ type, ...data })}\n\n`;
-      res.write(payload);
-      if (typeof (res as any).flush === 'function') {
-        (res as any).flush();
+      try {
+        const payload = `data: ${JSON.stringify({ type, ...data })}\n\n`;
+        res.write(payload);
+        if (typeof (res as any).flush === 'function') {
+          (res as any).flush();
+        }
+      } catch {
+        // Client disconnected between the check and the write — safe to ignore
+        isClientConnected = false;
       }
     };
 
@@ -431,6 +454,20 @@ export function registerMonitoringRoutes(app: Express): void {
         sendEvent("status", { message: "Setting up service groups...", progress: 8 });
       }
       
+      // Guard: prevent concurrent scans for the same client
+      if (client && activeClientScans.has(client.id)) {
+        const existing = activeClientScans.get(client.id)!;
+        const runningFor = Math.round((Date.now() - existing.startedAt) / 1000);
+        monitoringLogger.warn("Concurrent scan rejected", { clientId: client.id, runningForSeconds: runningFor, existingCity: existing.scanCity });
+        sendEvent("error", { message: `A scan is already running for this client (started ${runningFor}s ago). Please wait for it to finish.` });
+        res.end();
+        return;
+      }
+      if (client) {
+        trackedClientId = client.id;
+        activeClientScans.set(client.id, { startedAt: Date.now(), scanCity: scanCity || null });
+      }
+
       // Set up groups and prompts - either reuse existing or create new
       const groupIdMap: Record<string, number> = {};
       const groupNames: string[] = [];
@@ -1017,12 +1054,12 @@ export function registerMonitoringRoutes(app: Express): void {
         googleAIScore,
         progress: 100,
       });
-      
+
       res.end();
     } catch (error) {
       logError(`SCAN STREAM ERROR (prepareId=${prepareId})`, error);
       if (heartbeatInterval) clearInterval(heartbeatInterval);
-      
+
       // Mark session as failed with error details (safe for internal storage)
       const internalErrorMessage = error instanceof Error ? error.message : "Unknown error occurred";
       if (activeSessionId) {
@@ -1035,12 +1072,15 @@ export function registerMonitoringRoutes(app: Express): void {
           monitoringLogger.error("Failed to mark session as failed", { error: updateErr instanceof Error ? updateErr.message : String(updateErr) });
         }
       }
-      
+
       // Send sanitized error to client - no stack traces or internal details
-      sendEvent("error", { 
+      sendEvent("error", {
         message: "An error occurred during the scan. Please try again.",
       });
       res.end();
+    } finally {
+      // Always release the concurrent scan guard for this client
+      if (trackedClientId) activeClientScans.delete(trackedClientId);
     }
   });
 
@@ -1324,10 +1364,15 @@ export function registerMonitoringRoutes(app: Express): void {
     // Helper to send SSE events - single atomic write + explicit flush
     const sendEvent = (type: string, data: Record<string, unknown>) => {
       if (!isClientConnected) return;
-      const payload = `data: ${JSON.stringify({ type, ...data })}\n\n`;
-      res.write(payload);
-      if (typeof (res as any).flush === 'function') {
-        (res as any).flush();
+      try {
+        const payload = `data: ${JSON.stringify({ type, ...data })}\n\n`;
+        res.write(payload);
+        if (typeof (res as any).flush === 'function') {
+          (res as any).flush();
+        }
+      } catch {
+        // Client disconnected between the check and the write — safe to ignore
+        isClientConnected = false;
       }
     };
 
@@ -1880,10 +1925,15 @@ export function registerMonitoringRoutes(app: Express): void {
     // Helper to send SSE events - single atomic write + explicit flush
     const sendEvent = (type: string, data: Record<string, unknown>) => {
       if (!isClientConnected) return;
-      const payload = `data: ${JSON.stringify({ type, ...data })}\n\n`;
-      res.write(payload);
-      if (typeof (res as any).flush === 'function') {
-        (res as any).flush();
+      try {
+        const payload = `data: ${JSON.stringify({ type, ...data })}\n\n`;
+        res.write(payload);
+        if (typeof (res as any).flush === 'function') {
+          (res as any).flush();
+        }
+      } catch {
+        // Client disconnected between the check and the write — safe to ignore
+        isClientConnected = false;
       }
     };
 
@@ -2266,12 +2316,11 @@ export function registerMonitoringRoutes(app: Express): void {
           }
         }
         
-        // Fetch results from all latest city sessions
+        // Fetch results from all latest city sessions in a single batch query
         const latestCitySessions = Array.from(latestSessionPerCity.values());
-        for (const session of latestCitySessions) {
-          const sessionResults = await storage.getCheckResultsBySessionId(session.id);
-          latestResults.push(...sessionResults);
-        }
+        latestResults = await storage.getCheckResultsBySessionIds(
+          latestCitySessions.map(s => s.id)
+        );
       }
       
       // Group results by group (include promptCategory for filtering brand sentiment)
@@ -2285,9 +2334,12 @@ export function registerMonitoringRoutes(app: Express): void {
       // Extract latest session analytics (if available)
       const latestSession = sessions[0] || null;
       
-      // Synthesize clean sentiment narratives from raw statements (now with prompt context)
+      // Read cached sentiment narratives (computed at scan time)
+      // Falls back to on-the-fly synthesis for sessions that pre-date the cache column
       let sentimentNarratives: SynthesizedNarratives = { strengths: [], improvements: [] };
-      if (latestSession?.sentimentStatements) {
+      if (latestSession?.sentimentNarratives) {
+        sentimentNarratives = latestSession.sentimentNarratives as unknown as SynthesizedNarratives;
+      } else if (latestSession?.sentimentStatements) {
         const rawStatements = {
           positive: (latestSession.sentimentStatements as any).positive?.map((s: any) => ({
             text: s.text,
@@ -2303,6 +2355,8 @@ export function registerMonitoringRoutes(app: Express): void {
         if (rawStatements.positive.length > 0 || rawStatements.negative.length > 0) {
           try {
             sentimentNarratives = await synthesizeSentimentNarratives(rawStatements, client.businessName);
+            // Cache for future requests (fire-and-forget)
+            storage.updateCheckSession(latestSession.id, { sentimentNarratives } as any).catch(() => {});
           } catch (narrativeError) {
             monitoringLogger.error('Error synthesizing narratives for dashboard', { error: narrativeError instanceof Error ? narrativeError.message : String(narrativeError) });
           }
@@ -2349,6 +2403,36 @@ export function registerMonitoringRoutes(app: Express): void {
     } catch (error) {
       logError("GET DASHBOARD ERROR", error);
       res.status(500).json(getSafeErrorResponse("Failed to get dashboard data"));
+    }
+  });
+
+  // Lightweight settings data endpoint (avoids expensive dashboard computation)
+  app.get("/api/monitoring/settings/:id", requireAdminOrClientAuth("id"), async (req, res) => {
+    try {
+      const clientId = parseInt(req.params.id);
+      const client = await storage.getMonitoringClientById(clientId);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+
+      const groups = await storage.getGroupsByClientId(clientId);
+
+      // Batch-fetch all prompts for this client in one query (uses JOIN internally)
+      const allPrompts = await storage.getPromptsByClientId(clientId);
+
+      // Assemble groups with their prompts
+      const groupsWithPrompts = groups.map(g => ({
+        ...g,
+        prompts: allPrompts.filter(p => p.groupId === g.id),
+      }));
+
+      // Only fetch sessions (lightweight - no results, no analytics)
+      const sessions = await storage.getCheckSessionsByClientId(clientId);
+
+      res.json({ client, groups: groupsWithPrompts, sessions });
+    } catch (error) {
+      logError("GET SETTINGS ERROR", error);
+      res.status(500).json(getSafeErrorResponse("Failed to get settings data"));
     }
   });
 
@@ -2487,25 +2571,26 @@ export function registerMonitoringRoutes(app: Express): void {
   app.get("/api/monitoring/clients-with-stats", requireAdminAuth, async (req, res) => {
     try {
       const clients = await storage.getMonitoringClients();
-      
-      // Enhance each client with latest session and stats
-      const clientsWithStats = await Promise.all(clients.map(async (client) => {
-        // Get all sessions for this client
-        const sessions = await storage.getCheckSessionsByClientId(client.id);
-        
-        // Filter for completed sessions only
+      const clientIds = clients.map(c => c.id);
+
+      // Three batch queries instead of 3N individual queries
+      const [sessionsMap, groupCounts, promptCounts] = await Promise.all([
+        storage.getCheckSessionsByClientIds(clientIds),
+        storage.getGroupCountsByClientIds(clientIds),
+        storage.getPromptCountsByClientIds(clientIds),
+      ]);
+
+      const clientsWithStats = clients.map(client => {
+        const sessions = sessionsMap.get(client.id) || [];
         const completedSessions = sessions.filter(s => s.status === 'complete');
-        
-        // For multi-city clients, aggregate the latest complete session per city
-        // This matches how the dashboard calculates the "All cities" aggregate
+
         let aggregatedScore = 0;
         let aggregatedChatgptScore = 0;
         let aggregatedGoogleAIScore = 0;
         let latestCreatedAt: Date | null = null;
         let latestSessionId: number | null = null;
-        
+
         if (completedSessions.length > 0) {
-          // Get the latest complete session per city
           const latestPerCity = new Map<string | null, typeof completedSessions[0]>();
           for (const session of completedSessions) {
             const city = session.city;
@@ -2513,11 +2598,10 @@ export function registerMonitoringRoutes(app: Express): void {
               latestPerCity.set(city, session);
             }
           }
-          
+
           const citySessions = Array.from(latestPerCity.values());
-          
+
           if (citySessions.length > 0) {
-            // Average the scores across all cities (matching dashboard behavior)
             aggregatedScore = Math.round(
               citySessions.reduce((sum, s) => sum + (s.overallScore || 0), 0) / citySessions.length
             );
@@ -2527,20 +2611,15 @@ export function registerMonitoringRoutes(app: Express): void {
             aggregatedGoogleAIScore = Math.round(
               citySessions.reduce((sum, s) => sum + (s.googleAIScore || 0), 0) / citySessions.length
             );
-            
-            // Use the most recent session's date and ID for display
-            const mostRecent = citySessions.reduce((latest, s) => 
+
+            const mostRecent = citySessions.reduce((latest, s) =>
               !latest || (s.createdAt && s.createdAt > latest.createdAt!) ? s : latest
             , citySessions[0]);
             latestCreatedAt = mostRecent.createdAt;
             latestSessionId = mostRecent.id;
           }
         }
-        
-        // Get groups and prompts count
-        const groups = await storage.getGroupsByClientId(client.id);
-        const prompts = await storage.getPromptsByClientId(client.id);
-        
+
         return {
           ...client,
           latestSession: latestSessionId ? {
@@ -2550,11 +2629,11 @@ export function registerMonitoringRoutes(app: Express): void {
             googleAIScore: aggregatedGoogleAIScore,
             createdAt: latestCreatedAt,
           } : undefined,
-          groupCount: groups.length,
-          promptCount: prompts.length,
+          groupCount: groupCounts.get(client.id) || 0,
+          promptCount: promptCounts.get(client.id) || 0,
         };
-      }));
-      
+      });
+
       res.json(clientsWithStats);
     } catch (error) {
       logError("GET CLIENTS WITH STATS ERROR", error);

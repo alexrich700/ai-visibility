@@ -266,7 +266,9 @@ export const monitoringGroups = pgTable("monitoring_groups", {
   promptCategory: text("prompt_category").notNull().default('service'), // 'service' or 'brand_sentiment'
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  clientIdIdx: index("monitoring_groups_client_id_idx").on(table.clientId),
+}));
 
 export const insertMonitoringGroupSchema = createInsertSchema(monitoringGroups).omit({
   id: true,
@@ -286,7 +288,9 @@ export const monitoringPrompts = pgTable("monitoring_prompts", {
   promptText: text("prompt_text").notNull(),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  groupIdIdx: index("monitoring_prompts_group_id_idx").on(table.groupId),
+}));
 
 export const insertMonitoringPromptSchema = createInsertSchema(monitoringPrompts).omit({
   id: true,
@@ -331,6 +335,7 @@ export const checkSessions = pgTable("check_sessions", {
   sentimentScore: integer("sentiment_score"), // 0-100 overall sentiment score
   competitorVisibility: jsonb("competitor_visibility"), // [{name, visibilityPercent, mentionCount}]
   sentimentStatements: jsonb("sentiment_statements"), // {positive: [{text, platform}], negative: [{text, platform}]}
+  sentimentNarratives: jsonb("sentiment_narratives"), // Cached AI-synthesized narratives {strengths: [...], improvements: [...]}
   // Checkpoint/Resume fields for resilient long-running scans
   status: text("status").notNull().default('pending'), // pending, running, paused, complete, failed
   prepareId: text("prepare_id"), // Unique ID linking to prepared scan data (for resume)
@@ -338,7 +343,9 @@ export const checkSessions = pgTable("check_sessions", {
   totalPromptsToScan: integer("total_prompts_to_scan"), // Total prompts in this scan
   errorMessage: text("error_message"), // Error details if failed
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  clientIdIdx: index("check_sessions_client_id_idx").on(table.clientId),
+}));
 
 export const insertCheckSessionSchema = createInsertSchema(checkSessions).omit({
   id: true,
@@ -380,7 +387,10 @@ export const checkResults = pgTable("check_results", {
   // Gemini grounding metadata for geo-optimization analysis
   googleAIGroundingMetadata: jsonb("google_ai_grounding_metadata"), // {webSearchQueries: string[], groundingSupports: [...]}
   checkedAt: timestamp("checked_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  sessionIdIdx: index("check_results_session_id_idx").on(table.sessionId),
+  clientIdIdx: index("check_results_client_id_idx").on(table.clientId),
+}));
 
 export const insertCheckResultSchema = createInsertSchema(checkResults).omit({
   id: true,
@@ -407,7 +417,10 @@ export const checkGroupMetrics = pgTable("check_group_metrics", {
   chatgptFoundCount: integer("chatgpt_found_count").notNull(),
   googleAIFoundCount: integer("google_ai_found_count").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  clientIdIdx: index("check_group_metrics_client_id_idx").on(table.clientId),
+  sessionIdIdx: index("check_group_metrics_session_id_idx").on(table.sessionId),
+}));
 
 export const insertCheckGroupMetricSchema = createInsertSchema(checkGroupMetrics).omit({
   id: true,
@@ -431,7 +444,10 @@ export const checkCompetitorMetrics = pgTable("check_competitor_metrics", {
   chatgptMentions: integer("chatgpt_mentions").notNull(),
   googleAIMentions: integer("google_ai_mentions").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  clientIdIdx: index("check_competitor_metrics_client_id_idx").on(table.clientId),
+  sessionIdIdx: index("check_competitor_metrics_session_id_idx").on(table.sessionId),
+}));
 
 export const insertCheckCompetitorMetricSchema = createInsertSchema(checkCompetitorMetrics).omit({
   id: true,
@@ -493,7 +509,10 @@ export const scanJobs = pgTable("scan_jobs", {
   lastProgressAt: timestamp("last_progress_at"), // When progress was last updated (for stuck job detection)
   completedAt: timestamp("completed_at"), // When job finished (success or failure)
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  clientIdIdx: index("scan_jobs_client_id_idx").on(table.clientId),
+  statusIdx: index("scan_jobs_status_idx").on(table.status),
+}));
 
 export const insertScanJobSchema = createInsertSchema(scanJobs).omit({
   id: true,
