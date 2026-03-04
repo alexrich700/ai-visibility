@@ -249,6 +249,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
   const [selectedExportDate, setSelectedExportDate] = useState<string>("");
   const [isExporting, setIsExporting] = useState(false);
   const [promptSearch, setPromptSearch] = useState("");
+  const [debouncedPromptSearch, setDebouncedPromptSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 20;
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -282,6 +283,15 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
 
   // Ref to hold latest startJobPolling so effects always call the current version
   const startJobPollingRef = useRef<(jobId: number) => void>(() => {});
+
+  // Debounce prompt search to avoid re-filtering on every keystroke
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedPromptSearch(promptSearch);
+      setCurrentPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [promptSearch]);
 
   // Pause polling when tab is hidden, resume when visible
   useEffect(() => {
@@ -764,8 +774,8 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
   const filteredResults = useMemo(
     () => {
       let results = filterResultsByGroup(serviceResultsOnly, selectedGroup);
-      if (promptSearch.trim()) {
-        const search = promptSearch.toLowerCase();
+      if (debouncedPromptSearch.trim()) {
+        const search = debouncedPromptSearch.toLowerCase();
         results = results.filter(r => r.promptText.toLowerCase().includes(search));
       }
       if (statusFilter !== "all") {
@@ -830,7 +840,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
       }
       return sorted;
     },
-    [serviceResultsOnly, selectedGroup, promptSearch, statusFilter, sortColumn, sortDirection, serviceResultsByGroup],
+    [serviceResultsOnly, selectedGroup, debouncedPromptSearch, statusFilter, sortColumn, sortDirection, serviceResultsByGroup],
   );
 
   const totalPages = Math.max(1, Math.ceil(filteredResults.length / ITEMS_PER_PAGE));
@@ -1677,7 +1687,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
                   <Input
                     placeholder="Search prompts..."
                     value={promptSearch}
-                    onChange={(e) => { setPromptSearch(e.target.value); setCurrentPage(1); }}
+                    onChange={(e) => setPromptSearch(e.target.value)}
                     className="pl-9 w-56 h-9 text-sm"
                     data-testid="input-prompt-search"
                   />
@@ -1761,7 +1771,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
             <div className="divide-y divide-gray-100">
               {paginatedResults.length === 0 ? (
                 <div className="px-6 py-12 text-center text-gray-500 text-sm">
-                  {promptSearch || statusFilter !== "all" ? "No prompts match your filters" : "No prompt results available"}
+                  {debouncedPromptSearch || statusFilter !== "all" ? "No prompts match your filters" : "No prompt results available"}
                 </div>
               ) : (
                 paginatedResults.map((result, idx) => {

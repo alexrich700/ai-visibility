@@ -81,13 +81,9 @@ export function registerExportRoutes(app: Express): void {
         return res.status(404).json({ error: "No data found for the selected scan date" });
       }
       
-      // Get all results from sessions for this date
-      const results: any[] = [];
-      for (const session of sessions) {
-        const sessionResults = await storage.getCheckResultsBySessionId(session.id);
-        results.push(...sessionResults);
-      }
-      
+      // Get all results from sessions for this date (single batch query)
+      const results = await storage.getCheckResultsBySessionIds(sessions.map(s => s.id));
+
       // Check export size to prevent memory issues (Excel exports buffer in memory)
       const MAX_EXPORT_RESULTS = 50000;
       if (results.length > MAX_EXPORT_RESULTS) {
@@ -144,12 +140,9 @@ export function registerExportRoutes(app: Express): void {
       }
       
       // Get all results from sessions in range
-      const results: any[] = [];
-      for (const session of sessions) {
-        const sessionResults = await storage.getCheckResultsBySessionId(session.id);
-        results.push(...sessionResults);
-      }
-      
+      // Get all results from sessions in range (single batch query)
+      const results = await storage.getCheckResultsBySessionIds(sessions.map(s => s.id));
+
       // Check export size to prevent memory issues (exports buffer data in memory)
       const MAX_EXPORT_RESULTS = 50000;
       if (results.length > MAX_EXPORT_RESULTS) {

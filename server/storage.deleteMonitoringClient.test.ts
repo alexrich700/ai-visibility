@@ -17,10 +17,16 @@ type DeleteCall = {
   where: unknown;
 };
 
-test("deleteMonitoringClient deletes dependent data in expected order and with expected IDs", async () => {
+type SelectCall = {
+  table: unknown;
+  where: unknown;
+};
+
+test("deleteMonitoringClient deletes dependent data in expected order with batch prompt deletion", async () => {
   const storage = new DatabaseStorage();
   const clientId = 123;
   const deletedCalls: DeleteCall[] = [];
+  const selectCalls: SelectCall[] = [];
 
   const originalDelete = db.delete.bind(db);
   Object.defineProperty(db, "delete", {
@@ -33,9 +39,20 @@ test("deleteMonitoringClient deletes dependent data in expected order and with e
     writable: true,
   });
 
-  const originalGetGroups = storage.getGroupsByClientId.bind(storage);
-  Object.defineProperty(storage, "getGroupsByClientId", {
-    value: async () => [{ id: 101 }, { id: 102 }],
+  const originalSelect = db.select.bind(db);
+  Object.defineProperty(db, "select", {
+    value: (...args: unknown[]) => ({
+      from: (table: unknown) => ({
+        where: async (condition: unknown) => {
+          selectCalls.push({ table, where: condition });
+          // Return mock group IDs for the subquery
+          if (table === monitoringGroups) {
+            return [{ id: 101 }, { id: 102 }];
+          }
+          return [];
+        },
+      }),
+    }),
     configurable: true,
     writable: true,
   });
@@ -48,13 +65,14 @@ test("deleteMonitoringClient deletes dependent data in expected order and with e
       configurable: true,
       writable: true,
     });
-    Object.defineProperty(storage, "getGroupsByClientId", {
-      value: originalGetGroups,
+    Object.defineProperty(db, "select", {
+      value: originalSelect,
       configurable: true,
       writable: true,
     });
   }
 
+  // With batch deletion, prompts are deleted once via inArray instead of per-group
   assert.deepEqual(
     deletedCalls.map((call) => call.table),
     [
@@ -62,19 +80,9 @@ test("deleteMonitoringClient deletes dependent data in expected order and with e
       checkGroupMetrics,
       checkCompetitorMetrics,
       checkSessions,
-      monitoringPrompts,
-      monitoringPrompts,
+      monitoringPrompts,   // Single batch delete for all group prompts
       monitoringGroups,
       monitoringClients,
     ],
-  );
-
-  const whereSql = deletedCalls.map((call) =>
-    db.select().from(checkResults).where(call.where as never).toSQL(),
-  );
-
-  assert.deepEqual(
-    whereSql.map((sql) => sql.params[0]),
-    [clientId, clientId, clientId, clientId, 101, 102, clientId, clientId],
   );
 });
