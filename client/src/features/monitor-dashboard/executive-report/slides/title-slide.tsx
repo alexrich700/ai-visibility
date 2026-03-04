@@ -1,0 +1,31 @@
+import logoFull from "@assets/RMG-Logo-Black-1920w_(1)_1765741951083.webp";
+
+interface TitleSlideProps {
+  businessName: string;
+  scanDate: string | null;
+  city: string | null;
+}
+
+export function TitleSlide({ businessName, scanDate, city }: TitleSlideProps) {
+  return (
+    <div className="h-full flex flex-col items-center justify-center text-center">
+      <img src={logoFull} alt="Logo" className="h-12 mb-10 object-contain" />
+
+      <div className="h-1 w-32 bg-gradient-to-r from-[#5599f9] to-[#ffb41c] rounded-full mb-10" />
+
+      <h1 className="text-5xl font-bold text-gray-900 tracking-tight mb-4">
+        {businessName}
+      </h1>
+
+      <p className="text-2xl text-[#5599f9] font-medium mb-8">
+        AI Visibility Report
+      </p>
+
+      <div className="flex items-center gap-4 text-gray-500">
+        {scanDate && <span className="text-lg">{scanDate}</span>}
+        {scanDate && city && <span className="text-gray-300">|</span>}
+        {city && <span className="text-lg">{city}</span>}
+      </div>
+    </div>
+  );
+}

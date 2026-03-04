@@ -31,7 +31,7 @@ import {
   TrendingUp, TrendingDown, Eye, Target, Calendar, Clock, Settings,
   ArrowLeft, RefreshCw, Loader2, CheckCircle2, XCircle, Minus, Building2,
   Users, Link2, Award, ThumbsUp, ThumbsDown, Meh, ExternalLink, Download, HelpCircle, AlertTriangle,
-  Share2, Copy, Check, Search, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Filter
+  Share2, Copy, Check, Search, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Filter, Presentation
 } from "lucide-react";
 import {
   Tooltip as InfoTooltip,
@@ -44,6 +44,8 @@ import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import logoIcon from "@assets/images_1765741951084.png";
 import type { MonitoringClient, MonitoringGroup, CheckSession, CheckResult } from "@shared/schema";
+import { ExecutiveReportOverlay } from "@/features/monitor-dashboard/executive-report/executive-report-overlay";
+import type { ReportData } from "@/features/monitor-dashboard/executive-report/types";
 import {
   buildCompetitorTrendChartData,
   buildGroupBarData,
@@ -258,6 +260,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
   
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [presentationMode, setPresentationMode] = useState(false);
   
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
@@ -1017,6 +1020,18 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
                   <Share2 className="w-4 h-4" />
                 )}
                 {linkCopied ? "Copied!" : "Share Link"}
+              </Button>
+            )}
+            {isAdmin && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPresentationMode(true)}
+                className="flex items-center gap-2"
+                data-testid="button-present-report"
+              >
+                <Presentation className="w-4 h-4" />
+                Present Report
               </Button>
             )}
           </div>
@@ -2327,6 +2342,28 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Executive Report Presentation Overlay */}
+      {presentationMode && (
+        <ExecutiveReportOverlay
+          data={{
+            businessName: client.businessName,
+            scanDate: latestSession ? format(new Date(latestSession.createdAt), "MMMM d, yyyy") : null,
+            city: selectedViewCity !== "all" ? selectedViewCity : null,
+            visibilityMetrics,
+            avgRank,
+            firstPlaceCount,
+            sentimentScore: analytics?.sentimentScore ?? null,
+            sessionChartData,
+            shareOfVoice: computedShareOfVoice,
+            competitorVisibility: computedCompetitorVisibility,
+            topCitations: computedTopCitations,
+            sentimentNarratives: analytics?.sentimentNarratives ?? null,
+            groupBarData: buildGroupBarData(serviceResultsByGroup),
+          } satisfies ReportData}
+          onClose={() => setPresentationMode(false)}
+        />
+      )}
     </div>
   );
 }
