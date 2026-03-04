@@ -2316,12 +2316,11 @@ export function registerMonitoringRoutes(app: Express): void {
           }
         }
         
-        // Fetch results from all latest city sessions
+        // Fetch results from all latest city sessions in a single batch query
         const latestCitySessions = Array.from(latestSessionPerCity.values());
-        for (const session of latestCitySessions) {
-          const sessionResults = await storage.getCheckResultsBySessionId(session.id);
-          latestResults.push(...sessionResults);
-        }
+        latestResults = await storage.getCheckResultsBySessionIds(
+          latestCitySessions.map(s => s.id)
+        );
       }
       
       // Group results by group (include promptCategory for filtering brand sentiment)
@@ -2335,9 +2334,12 @@ export function registerMonitoringRoutes(app: Express): void {
       // Extract latest session analytics (if available)
       const latestSession = sessions[0] || null;
       
-      // Synthesize clean sentiment narratives from raw statements (now with prompt context)
+      // Read cached sentiment narratives (computed at scan time)
+      // Falls back to on-the-fly synthesis for sessions that pre-date the cache column
       let sentimentNarratives: SynthesizedNarratives = { strengths: [], improvements: [] };
-      if (latestSession?.sentimentStatements) {
+      if (latestSession?.sentimentNarratives) {
+        sentimentNarratives = latestSession.sentimentNarratives as unknown as SynthesizedNarratives;
+      } else if (latestSession?.sentimentStatements) {
         const rawStatements = {
           positive: (latestSession.sentimentStatements as any).positive?.map((s: any) => ({
             text: s.text,
@@ -2353,6 +2355,8 @@ export function registerMonitoringRoutes(app: Express): void {
         if (rawStatements.positive.length > 0 || rawStatements.negative.length > 0) {
           try {
             sentimentNarratives = await synthesizeSentimentNarratives(rawStatements, client.businessName);
+            // Cache for future requests (fire-and-forget)
+            storage.updateCheckSession(latestSession.id, { sentimentNarratives } as any).catch(() => {});
           } catch (narrativeError) {
             monitoringLogger.error('Error synthesizing narratives for dashboard', { error: narrativeError instanceof Error ? narrativeError.message : String(narrativeError) });
           }
@@ -2399,6 +2403,36 @@ export function registerMonitoringRoutes(app: Express): void {
     } catch (error) {
       logError("GET DASHBOARD ERROR", error);
       res.status(500).json(getSafeErrorResponse("Failed to get dashboard data"));
+    }
+  });
+
+  // Lightweight settings data endpoint (avoids expensive dashboard computation)
+  app.get("/api/monitoring/settings/:id", requireAdminOrClientAuth("id"), async (req, res) => {
+    try {
+      const clientId = parseInt(req.params.id);
+      const client = await storage.getMonitoringClientById(clientId);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+
+      const groups = await storage.getGroupsByClientId(clientId);
+
+      // Batch-fetch all prompts for this client in one query (uses JOIN internally)
+      const allPrompts = await storage.getPromptsByClientId(clientId);
+
+      // Assemble groups with their prompts
+      const groupsWithPrompts = groups.map(g => ({
+        ...g,
+        prompts: allPrompts.filter(p => p.groupId === g.id),
+      }));
+
+      // Only fetch sessions (lightweight - no results, no analytics)
+      const sessions = await storage.getCheckSessionsByClientId(clientId);
+
+      res.json({ client, groups: groupsWithPrompts, sessions });
+    } catch (error) {
+      logError("GET SETTINGS ERROR", error);
+      res.status(500).json(getSafeErrorResponse("Failed to get settings data"));
     }
   });
 
@@ -2537,25 +2571,26 @@ export function registerMonitoringRoutes(app: Express): void {
   app.get("/api/monitoring/clients-with-stats", requireAdminAuth, async (req, res) => {
     try {
       const clients = await storage.getMonitoringClients();
-      
-      // Enhance each client with latest session and stats
-      const clientsWithStats = await Promise.all(clients.map(async (client) => {
-        // Get all sessions for this client
-        const sessions = await storage.getCheckSessionsByClientId(client.id);
-        
-        // Filter for completed sessions only
+      const clientIds = clients.map(c => c.id);
+
+      // Three batch queries instead of 3N individual queries
+      const [sessionsMap, groupCounts, promptCounts] = await Promise.all([
+        storage.getCheckSessionsByClientIds(clientIds),
+        storage.getGroupCountsByClientIds(clientIds),
+        storage.getPromptCountsByClientIds(clientIds),
+      ]);
+
+      const clientsWithStats = clients.map(client => {
+        const sessions = sessionsMap.get(client.id) || [];
         const completedSessions = sessions.filter(s => s.status === 'complete');
-        
-        // For multi-city clients, aggregate the latest complete session per city
-        // This matches how the dashboard calculates the "All cities" aggregate
+
         let aggregatedScore = 0;
         let aggregatedChatgptScore = 0;
         let aggregatedGoogleAIScore = 0;
         let latestCreatedAt: Date | null = null;
         let latestSessionId: number | null = null;
-        
+
         if (completedSessions.length > 0) {
-          // Get the latest complete session per city
           const latestPerCity = new Map<string | null, typeof completedSessions[0]>();
           for (const session of completedSessions) {
             const city = session.city;
@@ -2563,11 +2598,10 @@ export function registerMonitoringRoutes(app: Express): void {
               latestPerCity.set(city, session);
             }
           }
-          
+
           const citySessions = Array.from(latestPerCity.values());
-          
+
           if (citySessions.length > 0) {
-            // Average the scores across all cities (matching dashboard behavior)
             aggregatedScore = Math.round(
               citySessions.reduce((sum, s) => sum + (s.overallScore || 0), 0) / citySessions.length
             );
@@ -2577,20 +2611,15 @@ export function registerMonitoringRoutes(app: Express): void {
             aggregatedGoogleAIScore = Math.round(
               citySessions.reduce((sum, s) => sum + (s.googleAIScore || 0), 0) / citySessions.length
             );
-            
-            // Use the most recent session's date and ID for display
-            const mostRecent = citySessions.reduce((latest, s) => 
+
+            const mostRecent = citySessions.reduce((latest, s) =>
               !latest || (s.createdAt && s.createdAt > latest.createdAt!) ? s : latest
             , citySessions[0]);
             latestCreatedAt = mostRecent.createdAt;
             latestSessionId = mostRecent.id;
           }
         }
-        
-        // Get groups and prompts count
-        const groups = await storage.getGroupsByClientId(client.id);
-        const prompts = await storage.getPromptsByClientId(client.id);
-        
+
         return {
           ...client,
           latestSession: latestSessionId ? {
@@ -2600,11 +2629,11 @@ export function registerMonitoringRoutes(app: Express): void {
             googleAIScore: aggregatedGoogleAIScore,
             createdAt: latestCreatedAt,
           } : undefined,
-          groupCount: groups.length,
-          promptCount: prompts.length,
+          groupCount: groupCounts.get(client.id) || 0,
+          promptCount: promptCounts.get(client.id) || 0,
         };
-      }));
-      
+      });
+
       res.json(clientsWithStats);
     } catch (error) {
       logError("GET CLIENTS WITH STATS ERROR", error);

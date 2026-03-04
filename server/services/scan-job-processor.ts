@@ -529,6 +529,26 @@ async function processScanJob(job: ScanJob, alreadyClaimed: boolean = false): Pr
       client.businessName
     );
 
+    // Synthesize sentiment narratives at scan time so dashboard reads are instant
+    let sentimentNarratives: SynthesizedNarratives | null = null;
+    if (sentimentStatements.positive.length > 0 || sentimentStatements.negative.length > 0) {
+      try {
+        sentimentNarratives = await synthesizeSentimentNarratives(
+          {
+            positive: sentimentStatements.positive.map(s => ({
+              text: s.text, promptText: s.promptText, platform: s.platform
+            })),
+            negative: sentimentStatements.negative.map(s => ({
+              text: s.text, promptText: s.promptText, platform: s.platform
+            })),
+          },
+          client.businessName
+        );
+      } catch (e) {
+        log(`[ScanJobProcessor] Failed to synthesize narratives: ${e instanceof Error ? e.message : String(e)}`, "job-processor");
+      }
+    }
+
     await storage.updateCheckSession(session.id, {
       overallScore,
       chatgptScore,
@@ -544,6 +564,7 @@ async function processScanJob(job: ScanJob, alreadyClaimed: boolean = false): Pr
       sentimentScore,
       competitorVisibility,
       sentimentStatements,
+      sentimentNarratives,
       status: 'complete',
       lastCompletedPromptIndex: totalPrompts,
     } as any);

@@ -92,6 +92,12 @@ export interface IStorage {
   getCompetitorMetricsByClientId(clientId: number): Promise<CheckCompetitorMetric[]>;
   getCompetitorMetricsBySessionId(sessionId: number): Promise<CheckCompetitorMetric[]>;
   
+  // Batch query operations (for avoiding N+1 patterns)
+  getCheckSessionsByClientIds(clientIds: number[]): Promise<Map<number, CheckSession[]>>;
+  getCheckResultsBySessionIds(sessionIds: number[]): Promise<CheckResult[]>;
+  getGroupCountsByClientIds(clientIds: number[]): Promise<Map<number, number>>;
+  getPromptCountsByClientIds(clientIds: number[]): Promise<Map<number, number>>;
+
   // Scheduled check operations
   getClientsDueForCheck(): Promise<MonitoringClient[]>;
   
@@ -360,11 +366,14 @@ export class DatabaseStorage implements IStorage {
         await tx.delete(checkCompetitorMetrics).where(eq(checkCompetitorMetrics.clientId, id));
         // 4. Delete check sessions
         await tx.delete(checkSessions).where(eq(checkSessions.clientId, id));
-        // 5. Delete prompts (get groups first, then delete prompts by group)
-        const groups = await tx.select().from(monitoringGroups)
+        // 5. Delete prompts in batch using subquery (avoids N+1 per group)
+        const groupIds = await tx.select({ id: monitoringGroups.id })
+          .from(monitoringGroups)
           .where(eq(monitoringGroups.clientId, id));
-        for (const group of groups) {
-          await tx.delete(monitoringPrompts).where(eq(monitoringPrompts.groupId, group.id));
+        if (groupIds.length > 0) {
+          await tx.delete(monitoringPrompts).where(
+            inArray(monitoringPrompts.groupId, groupIds.map(g => g.id))
+          );
         }
         // 6. Delete groups
         await tx.delete(monitoringGroups).where(eq(monitoringGroups.clientId, id));
@@ -547,11 +556,23 @@ export class DatabaseStorage implements IStorage {
       .from(checkSessions)
       .where(and(...conditions));
 
-    for (const session of sessions) {
-      await this.deleteCheckSession(session.id);
+    const sessionIds = sessions.map(s => s.id);
+    if (sessionIds.length > 0) {
+      await db.transaction(async (tx) => {
+        await tx.update(scanJobs).set({ sessionId: null })
+          .where(inArray(scanJobs.sessionId, sessionIds));
+        await tx.delete(checkResults)
+          .where(inArray(checkResults.sessionId, sessionIds));
+        await tx.delete(checkGroupMetrics)
+          .where(inArray(checkGroupMetrics.sessionId, sessionIds));
+        await tx.delete(checkCompetitorMetrics)
+          .where(inArray(checkCompetitorMetrics.sessionId, sessionIds));
+        await tx.delete(checkSessions)
+          .where(inArray(checkSessions.id, sessionIds));
+      });
     }
 
-    return sessions.length;
+    return sessionIds.length;
   }
 
   // Group metrics operations
@@ -588,6 +609,48 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(checkCompetitorMetrics)
       .where(eq(checkCompetitorMetrics.sessionId, sessionId))
       .orderBy(desc(checkCompetitorMetrics.mentionCount));
+  }
+
+  // Batch query operations (for avoiding N+1 patterns)
+  async getCheckSessionsByClientIds(clientIds: number[]): Promise<Map<number, CheckSession[]>> {
+    if (clientIds.length === 0) return new Map();
+    const sessions = await db.select().from(checkSessions)
+      .where(inArray(checkSessions.clientId, clientIds))
+      .orderBy(desc(checkSessions.createdAt));
+    const map = new Map<number, CheckSession[]>();
+    for (const s of sessions) {
+      if (!map.has(s.clientId)) map.set(s.clientId, []);
+      map.get(s.clientId)!.push(s);
+    }
+    return map;
+  }
+
+  async getCheckResultsBySessionIds(sessionIds: number[]): Promise<CheckResult[]> {
+    if (sessionIds.length === 0) return [];
+    return await db.select().from(checkResults)
+      .where(inArray(checkResults.sessionId, sessionIds))
+      .orderBy(desc(checkResults.checkedAt));
+  }
+
+  async getGroupCountsByClientIds(clientIds: number[]): Promise<Map<number, number>> {
+    if (clientIds.length === 0) return new Map();
+    const rows = await db
+      .select({ clientId: monitoringGroups.clientId, count: sql<number>`count(*)::int` })
+      .from(monitoringGroups)
+      .where(inArray(monitoringGroups.clientId, clientIds))
+      .groupBy(monitoringGroups.clientId);
+    return new Map(rows.map(r => [r.clientId, r.count]));
+  }
+
+  async getPromptCountsByClientIds(clientIds: number[]): Promise<Map<number, number>> {
+    if (clientIds.length === 0) return new Map();
+    const rows = await db
+      .select({ clientId: monitoringGroups.clientId, count: sql<number>`count(*)::int` })
+      .from(monitoringPrompts)
+      .innerJoin(monitoringGroups, eq(monitoringPrompts.groupId, monitoringGroups.id))
+      .where(inArray(monitoringGroups.clientId, clientIds))
+      .groupBy(monitoringGroups.clientId);
+    return new Map(rows.map(r => [r.clientId, r.count]));
   }
 
   // Scheduled check operations - get active clients whose nextCheckAt is in the past or null

@@ -114,32 +114,14 @@ export default function MonitorSettings() {
     queryKey: ["/api/monitoring/settings", clientId],
     queryFn: async () => {
       if (!clientId) throw new Error("No client ID");
-      
+
       const token = getAdminToken();
       const headers: Record<string, string> = {};
       if (token) headers["Authorization"] = `Bearer ${token}`;
-      
-      const clientRes = await fetch(`/api/monitoring/dashboard/${clientId}`, { headers });
-      if (!clientRes.ok) throw new Error("Failed to fetch client");
-      const dashboardData = await clientRes.json();
-      
-      const groupsRes = await fetch(`/api/monitoring/clients/${clientId}/groups`, { headers });
-      if (!groupsRes.ok) throw new Error("Failed to fetch groups");
-      const groups: MonitoringGroup[] = await groupsRes.json();
-      
-      const groupsWithPrompts: GroupWithPrompts[] = await Promise.all(
-        groups.map(async (group) => {
-          const promptsRes = await fetch(`/api/monitoring/groups/${group.id}/prompts`, { headers });
-          const prompts: MonitoringPrompt[] = promptsRes.ok ? await promptsRes.json() : [];
-          return { ...group, prompts };
-        })
-      );
-      
-      return {
-        client: dashboardData.client,
-        groups: groupsWithPrompts,
-        sessions: dashboardData.sessions || [],
-      };
+
+      const res = await fetch(`/api/monitoring/settings/${clientId}`, { headers });
+      if (!res.ok) throw new Error("Failed to fetch settings");
+      return res.json();
     },
     enabled: !!clientId,
   });
