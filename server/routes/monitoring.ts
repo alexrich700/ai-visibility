@@ -35,42 +35,47 @@ export function registerMonitoringRoutes(app: Express): void {
   // Supports both single-category (legacy) and multi-category requests
   app.post("/api/monitoring/generate-groups", async (req, res) => {
     try {
-      const { businessName, industry, scope, city, primaryCategories } = req.body;
-      
+      const { businessName, industry, scope, city, primaryCategories, domain } = req.body;
+
       if (!businessName) {
         return res.status(400).json({ error: "Business name is required" });
       }
-      
+
       // Determine categories to use - either explicit primaryCategories array or legacy industry field
-      const categories: string[] = primaryCategories && primaryCategories.length > 0 
-        ? primaryCategories 
+      const categories: string[] = primaryCategories && primaryCategories.length > 0
+        ? primaryCategories
         : industry ? [industry] : [];
-      
+
       if (categories.length === 0) {
         return res.status(400).json({ error: "At least one category (industry or primaryCategories) is required" });
       }
 
+      // Normalize domain to a full URL for website scraping
+      const websiteUrl = domain
+        ? (domain.startsWith('http') ? domain : `https://${domain}`)
+        : undefined;
+
       // Use multi-category function if multiple categories, otherwise single category
       if (categories.length > 1) {
-        const result = await generateServiceGroupsMultiCategory(businessName, categories, scope, city);
-        
+        const result = await generateServiceGroupsMultiCategory(businessName, categories, scope, city, websiteUrl);
+
         // Return high-level categories as initial groups, followed by specific groups
         const allGroups = [
-          ...result.highLevelCategories.map(cat => ({ 
-            name: cat.name, 
+          ...result.highLevelCategories.map(cat => ({
+            name: cat.name,
             description: cat.description,
-            isHighLevelCategory: true 
+            isHighLevelCategory: true
           })),
           ...result.groups.map(g => ({ ...g, isHighLevelCategory: false }))
         ];
-        
-        res.json({ 
+
+        res.json({
           groups: allGroups,
           highLevelCategories: result.highLevelCategories,
           isMultiCategory: true
         });
       } else {
-        const result = await generateServiceGroups(businessName, categories[0], scope, city);
+        const result = await generateServiceGroups(businessName, categories[0], scope, city, websiteUrl);
         
         // Return high-level category as the first group, followed by specific groups
         const allGroups = [

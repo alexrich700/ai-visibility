@@ -1,10 +1,11 @@
 import OpenAI from "openai";
-import { 
-  ExtractedCitation, 
-  extractOpenAICitations, 
-  extractGeminiCitations, 
-  extractUrlsFromText, 
-  mergeCitations 
+import Anthropic from "@anthropic-ai/sdk";
+import {
+  ExtractedCitation,
+  extractOpenAICitations,
+  extractGeminiCitations,
+  extractUrlsFromText,
+  mergeCitations
 } from "./services/citation-extractor";
 import { db } from "./db";
 import { promptFallbackLogs } from "@shared/schema";
@@ -536,6 +537,63 @@ export function generateBrandSentimentPrompts(
 const openai = new OpenAI({
   apiKey: process.env.MY_OPENAI_API_KEY,
 });
+
+// Anthropic client for Claude Haiku
+const anthropic = process.env.ANTHROPIC_API_KEY
+  ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  : null;
+
+// Circuit breaker for Claude API
+const claudeCircuitBreaker = new CircuitBreaker('claude');
+
+// Concurrency limiter for Claude API calls
+const claudeConcurrencyLimiter = new Semaphore(3);
+
+/**
+ * Query Claude Haiku for text generation (used for service groups and prompt generation).
+ * Returns the text response from Claude.
+ */
+async function queryClaudeText(
+  systemPrompt: string,
+  userPrompt: string,
+  maxTokens: number = 4096,
+  expectJson: boolean = false
+): Promise<string> {
+  if (!anthropic) {
+    throw new Error("Anthropic API key not configured");
+  }
+  if (claudeCircuitBreaker.isOpen()) {
+    throw new Error("Claude circuit breaker is open");
+  }
+
+  const releaseSlot = await claudeConcurrencyLimiter.acquire();
+  try {
+    const finalSystemPrompt = expectJson
+      ? `${systemPrompt}\n\nIMPORTANT: Return ONLY valid JSON with no markdown formatting, no code blocks, no explanations.`
+      : systemPrompt;
+
+    const response = await anthropic.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: maxTokens,
+      system: finalSystemPrompt,
+      messages: [{ role: "user", content: userPrompt }],
+    });
+
+    const text = response.content
+      .filter((block): block is Anthropic.TextBlock => block.type === "text")
+      .map((block) => block.text)
+      .join("");
+
+    claudeCircuitBreaker.recordSuccess();
+    return text;
+  } catch (error) {
+    const isRateLimit = isRateLimitError(error);
+    claudeCircuitBreaker.recordFailure(isRateLimit);
+    throw error;
+  } finally {
+    releaseSlot();
+  }
+}
 
 // Extract root domain from URL for detection (e.g., "buildingbrandsmarketing" from "buildingbrandsmarketing.com")
 function extractDomainKeywords(url: string): string[] {
@@ -1477,84 +1535,116 @@ export async function generateResearchPrompts(
   const targetService = serviceCategory || keyword;
   const industryContext = serviceCategory ? `${keyword} industry, specifically ${serviceCategory}` : keyword;
   
-  // Try to scrape homepage for context about services (only for general prompts, not group-specific)
+  // Scrape homepage for context about services (for both general and group-specific prompts)
   let homepageContent: string | null = null;
-  if (url && !serviceCategory) {
-    console.log(`Scraping website: ${url}`);
+  if (url) {
+    console.log(`[PROMPT_GEN] Scraping website for prompt context: ${url}`);
     homepageContent = await scrapeWebsite(url);
     if (homepageContent) {
-      console.log(`Got ${homepageContent.length} chars of homepage content`);
+      console.log(`[PROMPT_GEN] Got ${homepageContent.length} chars of homepage content for "${targetService}"`);
     }
   }
-  
-  // Build prompt for OpenAI - explicitly exclude brand name but request specific business names in responses
-  const systemPrompt = `You are a marketing expert specializing in AI search optimization. Generate exactly ${promptCount} unique research-based search queries that potential customers would type into AI assistants (like ChatGPT or Google AI) when actively looking for ${targetService} services${locationStr}.
+
+  // Build website context section for the prompt
+  const websiteContextSection = homepageContent
+    ? `\n\nBUSINESS CONTEXT FROM WEBSITE:
+The following is content from the actual business website. Use this to understand what specific ${targetService} services/products this business offers, so you can generate prompts that match how their real customers would search:
+${homepageContent}`
+    : '';
+
+  // Build prompt - explicitly exclude brand name but request specific business names in responses
+  const systemPrompt = `You are a marketing expert specializing in AI search optimization. Generate exactly ${promptCount} unique research-based search queries that potential customers would type into AI assistants (like ChatGPT, Google AI, or Claude) when actively looking for ${targetService} services${locationStr}.
+${websiteContextSection}
 
 CRITICAL REQUIREMENTS:
 1. These must be GENERIC research queries that do NOT include any specific business or brand names
 2. Each query MUST explicitly ask for SPECIFIC BUSINESS NAMES to be listed - avoid vague queries that result in generic advice
 3. Use long-tail, specific queries that will trigger AI to list actual company names
-4. ALL prompts must be focused on "${targetService}" - this is the specific service category we're testing visibility for
+4. ALL prompts must be focused on "${targetService}" as it relates to the ${industryContext} — do NOT generate prompts for unrelated industries
 5. Each query must be UNIQUE and different from the others - vary the phrasing, intent, and focus
+6. Prompts should target bottom-of-funnel searches where someone is READY TO BUY, not just researching
 
 PROMPT VARIETY - include different intent types:
 - Transactional: "Who can I hire for ${targetService}${locationStr}?"
 - Comparison: "Compare the top ${targetService} companies${locationStr}"
 - Specific needs: "Best ${targetService} for [specific use case]${locationStr}"
-- Emergency: "Emergency ${targetService} services available now${locationStr}"
-- Cost-focused: "Affordable ${targetService} services${locationStr}"
+- Cost-focused: "Affordable ${targetService} services${locationStr} with good reviews"
 - Quality-focused: "Highest rated ${targetService} providers${locationStr}"
 - Recommendation: "Which ${targetService} companies do you recommend${locationStr}?"
+- Ready-to-buy: "I need ${targetService}${locationStr} — what companies should I contact?"
 
 DO NOT generate prompts that will result in generic advice like:
 - "What to look for in ${targetService}" (educational, not transactional)
 - "Pros and cons of ${targetService}" (informational, won't list businesses)
 - Generic prompts without asking for specific business names
+- Prompts about a DIFFERENT industry than ${industryContext} (e.g., don't generate retail photo printing prompts for a custom framing business)
 
 Return ONLY a valid JSON array of exactly ${promptCount} strings. No explanations, no markdown, just the JSON array.`;
-  
+
   let userPrompt = `Generate ${promptCount} unique, specific, long-tail AI search queries for ${targetService} services${locationStr}.
-${serviceCategory ? `\nThis is for the "${serviceCategory}" service category within the ${keyword} industry.` : ''}
+${serviceCategory ? `\nThis is for the "${serviceCategory}" service category within the ${keyword} industry. Make sure ALL prompts are relevant to this specific industry — not to other industries that might share similar terminology.` : ''}
 
 IMPORTANT:
 - Each query must be UNIQUE - do not repeat similar phrasing
 - Each query should explicitly request a LIST of specific business names
-- ALL queries must be focused on ${targetService} - do not mix in other service types
+- ALL queries must be focused on ${targetService} within the ${industryContext} context - do not mix in other service types or industries
 - NO brand names in the queries themselves, but queries should request brand names in the response
-- Include variety: transactional, comparison, emergency, cost-focused, quality-focused queries`;
-  
-  if (homepageContent) {
-    userPrompt += `
-
-Here is homepage content for context about typical services in this industry (but DO NOT use the company name):
-${homepageContent}`;
-  }
+- Include variety: transactional, comparison, cost-focused, quality-focused, ready-to-buy queries
+- These are BOTTOM OF FUNNEL queries from people ready to hire/buy, not informational queries`;
   
   // Track this call for diagnostics
   fallbackStats.totalCalls++;
-  
-  // Primary: Try Gemini 2.5 Flash (faster, free via Replit AI Integrations)
+
+  // Helper to parse and validate prompt array from AI response
+  function parsePromptArray(text: string): string[] | null {
+    const cleanText = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const parsed = JSON.parse(cleanText);
+    if (Array.isArray(parsed)) {
+      const validPrompts = parsed
+        .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+        .map(s => s.trim())
+        .slice(0, promptCount);
+      if (validPrompts.length >= 3) {
+        const fallbackPad = getFallbackResearchPrompts(keyword, location, serviceCategory);
+        return [...validPrompts, ...fallbackPad].slice(0, promptCount);
+      }
+    }
+    return null;
+  }
+
+  // Primary: Try Claude Haiku (best at following structured instructions precisely)
+  const claudeAvailable = !!anthropic && !claudeCircuitBreaker.isOpen();
+
+  if (claudeAvailable) {
+    try {
+      console.log(`[PROMPT_GEN] Generating ${promptCount} research prompts with Claude Haiku for "${targetService}"...`);
+      const claudeText = await queryClaudeText(systemPrompt, userPrompt, 4096, true);
+      const result = parsePromptArray(claudeText);
+      if (result) {
+        console.log(`[PROMPT_GEN] Claude Haiku generated ${result.length} research prompts for "${targetService}"`);
+        return result;
+      }
+    } catch (claudeError) {
+      console.error(`[PROMPT_GEN] Claude Haiku primary failed for research prompts:`, claudeError);
+    }
+  } else {
+    console.log(`[PROMPT_GEN] Claude Haiku unavailable, trying Gemini...`);
+  }
+
+  // Fallback 1: Try Gemini 2.5 Flash
   const geminiAvailable = !!process.env.AI_INTEGRATIONS_GEMINI_API_KEY && !geminiCircuitBreaker.isOpen();
-  
+
   if (geminiAvailable) {
     try {
       console.log(`[PROMPT_GEN] Generating ${promptCount} research prompts with Gemini 2.5 Flash for "${targetService}"...`);
       const geminiText = await queryGeminiText(systemPrompt, userPrompt, 4096, true);
-      const cleanText = geminiText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      const parsed = JSON.parse(cleanText);
-      if (Array.isArray(parsed)) {
-        const validPrompts = parsed
-          .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
-          .map(s => s.trim())
-          .slice(0, promptCount);
-        if (validPrompts.length >= 3) {
-          console.log(`[PROMPT_GEN] Gemini generated ${validPrompts.length} research prompts for "${targetService}"`);
-          const fallbackPad = getFallbackResearchPrompts(keyword, location, serviceCategory);
-          return [...validPrompts, ...fallbackPad].slice(0, promptCount);
-        }
+      const result = parsePromptArray(geminiText);
+      if (result) {
+        console.log(`[PROMPT_GEN] Gemini generated ${result.length} research prompts for "${targetService}"`);
+        return result;
       }
     } catch (geminiError) {
-      console.error(`[PROMPT_GEN] Gemini primary failed for research prompts:`, geminiError);
+      console.error(`[PROMPT_GEN] Gemini fallback failed for research prompts:`, geminiError);
     }
   } else {
     console.log(`[PROMPT_GEN] Gemini unavailable, skipping to OpenAI fallback...`);
@@ -1567,7 +1657,7 @@ ${homepageContent}`;
     console.log(`[PROMPT_GEN] OpenAI also unavailable, using hardcoded fallback prompts`);
     const diagnostics: PromptGenerationDiagnostics = {
       reason: !process.env.MY_OPENAI_API_KEY ? 'API_KEY_MISSING' : 'API_RATE_LIMIT',
-      message: 'Both Gemini and OpenAI unavailable for prompt generation',
+      message: 'All AI providers (Claude, Gemini, OpenAI) unavailable for prompt generation',
       timestamp: new Date().toISOString(),
       details: { targetService, location }
     };
@@ -1666,21 +1756,14 @@ ${homepageContent}`;
     diagnostics.details = { ...diagnostics.details, targetService, location };
     await recordFallback(diagnostics, { industry: keyword, promptCount });
     
-    console.log(`[PROMPT_GEN] OpenAI failed for research prompts, trying Gemini fallback...`);
+    console.log(`[PROMPT_GEN] OpenAI failed for research prompts, trying remaining fallbacks...`);
+    // Try Gemini as last resort
     try {
       const geminiText = await queryGeminiText(systemPrompt, userPrompt, 4096, true);
-      const cleanText = geminiText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      const parsed = JSON.parse(cleanText);
-      if (Array.isArray(parsed)) {
-        const validPrompts = parsed
-          .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
-          .map(s => s.trim())
-          .slice(0, promptCount);
-        if (validPrompts.length >= 3) {
-          console.log(`[PROMPT_GEN] Gemini fallback generated ${validPrompts.length} research prompts for "${targetService}"`);
-          const fallbackPad = getFallbackResearchPrompts(keyword, location, serviceCategory);
-          return [...validPrompts, ...fallbackPad].slice(0, promptCount);
-        }
+      const result = parsePromptArray(geminiText);
+      if (result) {
+        console.log(`[PROMPT_GEN] Gemini fallback generated ${result.length} research prompts for "${targetService}"`);
+        return result;
       }
     } catch (geminiError) {
       console.error(`[PROMPT_GEN] Gemini fallback also failed:`, geminiError);
@@ -2131,13 +2214,33 @@ export async function generateServiceGroups(
   businessName: string,
   industry: string,
   scope: string,
-  city?: string
+  city?: string,
+  websiteUrl?: string
 ): Promise<ServiceGroupsResult> {
   const locationContext = scope === "local" && city ? ` in ${city}` : "";
-  
+
+  // Scrape the business website to understand their actual offerings
+  let websiteContext = "";
+  if (websiteUrl) {
+    console.log(`[SERVICE_GROUPS] Scraping website for context: ${websiteUrl}`);
+    const homepageContent = await scrapeWebsite(websiteUrl);
+    if (homepageContent) {
+      console.log(`[SERVICE_GROUPS] Got ${homepageContent.length} chars of website content for "${businessName}"`);
+      websiteContext = `
+
+# BUSINESS WEBSITE CONTENT
+The following is scraped content from the business's actual website (${websiteUrl}). Use this to understand what products/services they ACTUALLY offer. Only generate categories that match their real business — do NOT invent categories for services they don't provide:
+
+${homepageContent}`;
+    } else {
+      console.log(`[SERVICE_GROUPS] Could not scrape website for "${businessName}" - proceeding without website context`);
+    }
+  }
+
   const systemPrompt = `You are an expert marketing strategist specializing in service/product categorization for AI visibility tracking. Your task is to:
 1. Identify ONE high-level category (umbrella term) that best describes the PRIMARY business type
 2. Generate exactly 10 distinct service/product groups that represent specific offerings
+${websiteContext}
 
 # CRITICAL: SINGLE-FOCUS CATEGORIES ONLY
 - The high-level category must be ONE SPECIFIC service type - NEVER combine multiple services
@@ -2248,12 +2351,13 @@ For a personal injury law firm:
 }`;
 
   const userPrompt = `Generate the high-level category and exactly 10 service/product groups for "${businessName}", a ${industry} business${locationContext}.
-
+${websiteContext ? `\nThis business's website is ${websiteUrl}. Use the website content provided in the system prompt to ensure ALL categories are relevant to what this business ACTUALLY sells/offers. Do NOT generate categories for services they don't provide.` : ''}
 CRITICAL REQUIREMENTS:
 1. The high-level category must be ONE SINGLE service type (e.g., "Plumber" or "HVAC Contractor") - NEVER combine services like "HVAC & Plumbing"
 2. If multiple services are listed in the industry, pick the FIRST/PRIMARY one only
 3. Each group name must be a SPECIFIC, SEARCHABLE service that real customers would type into an AI assistant
-4. Do NOT use generic terms like "Core Services" or "Specialty Services" - use actual service names like "Drain Cleaning", "AC Repair", "Roof Leak Repair", etc.`;
+4. Do NOT use generic terms like "Core Services" or "Specialty Services" - use actual service names like "Drain Cleaning", "AC Repair", "Roof Leak Repair", etc.
+5. ONLY generate groups for services/products the business actually offers - do NOT guess or invent services`;
 
   async function attemptGenerationGemini(isRetry: boolean = false): Promise<ServiceGroupsResult> {
     const prompt = isRetry 
@@ -2303,23 +2407,52 @@ CRITICAL REQUIREMENTS:
     return { highLevelCategory, groups };
   }
 
-  // Primary: Gemini, Fallback: OpenAI
+  async function attemptGenerationClaude(isRetry: boolean = false): Promise<ServiceGroupsResult> {
+    const prompt = isRetry
+      ? userPrompt + "\n\nYour previous response contained generic terms. Please provide SPECIFIC service names only."
+      : userPrompt;
+    const claudeText = await queryClaudeText(systemPrompt, prompt, 4096, true);
+    const cleanText = claudeText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const parsed = JSON.parse(cleanText);
+
+    const highLevelCategory = parsed.highLevelCategory || {
+      name: industry,
+      description: `${industry} services and products`
+    };
+
+    const groups = Array.isArray(parsed.groups) ? parsed.groups : (parsed.categories || []);
+    return { highLevelCategory, groups };
+  }
+
+  // Primary: Claude Haiku, Fallback: Gemini, then OpenAI
   async function attemptGeneration(isRetry: boolean = false): Promise<ServiceGroupsResult> {
+    // Primary: Claude Haiku (best at following structured instructions)
+    if (!claudeCircuitBreaker.isOpen() && anthropic) {
+      try {
+        console.log(`[SERVICE_GROUPS] ${isRetry ? 'Retrying' : 'Generating'} service groups with Claude Haiku...`);
+        return await attemptGenerationClaude(isRetry);
+      } catch (claudeError) {
+        console.error("[SERVICE_GROUPS] Claude Haiku primary failed:", claudeError);
+      }
+    }
+
+    // Fallback 1: Gemini
     if (!geminiCircuitBreaker.isOpen() && process.env.AI_INTEGRATIONS_GEMINI_API_KEY) {
       try {
         console.log(`[SERVICE_GROUPS] ${isRetry ? 'Retrying' : 'Generating'} service groups with Gemini 2.5 Flash...`);
         return await attemptGenerationGemini(isRetry);
       } catch (geminiError) {
-        console.error("[SERVICE_GROUPS] Gemini primary failed:", geminiError);
+        console.error("[SERVICE_GROUPS] Gemini fallback failed:", geminiError);
       }
     }
-    
+
+    // Fallback 2: OpenAI
     if (!openAICircuitBreaker.isOpen() && process.env.MY_OPENAI_API_KEY) {
       console.log(`[SERVICE_GROUPS] Falling back to GPT-5-Mini...`);
       return await attemptGenerationOpenAI(isRetry);
     }
-    
-    throw new Error("Both Gemini and OpenAI unavailable for service group generation");
+
+    throw new Error("All AI providers (Claude, Gemini, OpenAI) unavailable for service group generation");
   }
 
   try {
@@ -2397,22 +2530,42 @@ export async function generateServiceGroupsMultiCategory(
   businessName: string,
   primaryCategories: string[],
   scope: string,
-  city?: string
+  city?: string,
+  websiteUrl?: string
 ): Promise<MultiCategoryServiceGroupsResult> {
   const locationContext = scope === "local" && city ? ` in ${city}` : "";
-  
+
   // If only one category, delegate to the single-category function
   if (primaryCategories.length === 1) {
-    const result = await generateServiceGroups(businessName, primaryCategories[0], scope, city);
+    const result = await generateServiceGroups(businessName, primaryCategories[0], scope, city, websiteUrl);
     return {
       highLevelCategories: [result.highLevelCategory],
       groups: result.groups
     };
   }
-  
+
+  // Scrape the business website to understand their actual offerings
+  let websiteContext = "";
+  if (websiteUrl) {
+    console.log(`[MULTI_CATEGORY] Scraping website for context: ${websiteUrl}`);
+    const homepageContent = await scrapeWebsite(websiteUrl);
+    if (homepageContent) {
+      console.log(`[MULTI_CATEGORY] Got ${homepageContent.length} chars of website content for "${businessName}"`);
+      websiteContext = `
+
+# BUSINESS WEBSITE CONTENT
+The following is scraped content from the business's actual website (${websiteUrl}). Use this to understand what products/services they ACTUALLY offer. Only generate categories that match their real business — do NOT invent categories for services they don't provide:
+
+${homepageContent}`;
+    } else {
+      console.log(`[MULTI_CATEGORY] Could not scrape website for "${businessName}" - proceeding without website context`);
+    }
+  }
+
   const categoriesList = primaryCategories.join(", ");
-  
+
   const systemPrompt = `You are an expert marketing strategist specializing in multi-service business categorization for AI visibility tracking.
+${websiteContext}
 
 # YOUR TASK
 A business offers MULTIPLE primary service types. You must:
@@ -2475,13 +2628,14 @@ Return a JSON object with:
   const userPrompt = `Generate high-level categories and 12-15 deduplicated service groups for "${businessName}"${locationContext}.
 
 Primary service categories: ${categoriesList}
-
+${websiteContext ? `\nThis business's website is ${websiteUrl}. Use the website content provided in the system prompt to ensure ALL service groups are relevant to what this business ACTUALLY sells/offers. Do NOT generate groups for services they don't provide.` : ''}
 CRITICAL REQUIREMENTS:
 1. Create ONE high-level category per primary service type (${primaryCategories.length} total)
 2. Generate 12-15 TOTAL service groups covering ALL categories (not 10 per category!)
 3. Identify overlapping services and include them ONLY ONCE
 4. Each group name must be specific and searchable (e.g., "Drain Cleaning", "AC Repair")
-5. Do NOT use generic terms like "Core Services" or "Specialty Services"`;
+5. Do NOT use generic terms like "Core Services" or "Specialty Services"
+6. ONLY generate groups for services/products the business actually offers - do NOT guess or invent services`;
 
   async function parseMultiCategoryResponse(content: string): Promise<MultiCategoryServiceGroupsResult | null> {
     const parsed = JSON.parse(content);
@@ -2501,10 +2655,27 @@ CRITICAL REQUIREMENTS:
   }
 
   try {
-    // Primary: Try Gemini 2.5 Flash
+    // Primary: Try Claude Haiku (best at following structured instructions)
+    if (!claudeCircuitBreaker.isOpen() && anthropic) {
+      try {
+        console.log(`[MULTI_CATEGORY] Generating with Claude Haiku...`);
+        const claudeText = await queryClaudeText(systemPrompt, userPrompt, 4096, true);
+        const cleanText = claudeText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        const result = await parseMultiCategoryResponse(cleanText);
+        if (result) {
+          console.log(`Generated ${result.groups.length} deduplicated service groups for ${primaryCategories.length} categories via Claude Haiku`);
+          return result;
+        }
+        console.log("Claude Haiku multi-category generation produced insufficient groups");
+      } catch (claudeError) {
+        console.error("[MULTI_CATEGORY] Claude Haiku primary failed:", claudeError);
+      }
+    }
+
+    // Fallback 1: Try Gemini 2.5 Flash
     if (!geminiCircuitBreaker.isOpen() && process.env.AI_INTEGRATIONS_GEMINI_API_KEY) {
       try {
-        console.log(`[MULTI_CATEGORY] Generating with Gemini 2.5 Flash...`);
+        console.log(`[MULTI_CATEGORY] Falling back to Gemini 2.5 Flash...`);
         const geminiText = await queryGeminiText(systemPrompt, userPrompt, 4096, true);
         const cleanText = geminiText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
         const result = await parseMultiCategoryResponse(cleanText);
@@ -2514,16 +2685,16 @@ CRITICAL REQUIREMENTS:
         }
         console.log("Gemini multi-category generation produced insufficient groups");
       } catch (geminiError) {
-        console.error("[MULTI_CATEGORY] Gemini primary failed:", geminiError);
+        console.error("[MULTI_CATEGORY] Gemini fallback failed:", geminiError);
       }
     }
 
-    // Fallback: Try OpenAI gpt-5-mini
+    // Fallback 2: Try OpenAI gpt-5-mini
     if (!openAICircuitBreaker.isOpen() && process.env.MY_OPENAI_API_KEY) {
       try {
         console.log(`[MULTI_CATEGORY] Falling back to GPT-5-Mini...`);
         await rateLimitDelay();
-        
+
         const response = await retryWithBackoff(() =>
           openai.chat.completions.create({
             model: "gpt-5-mini",
@@ -2548,11 +2719,11 @@ CRITICAL REQUIREMENTS:
     }
 
     console.log("Multi-category generation produced insufficient groups, falling back to category-by-category generation...");
-    return await generateServiceGroupsFallback(businessName, primaryCategories, scope, city);
+    return await generateServiceGroupsFallback(businessName, primaryCategories, scope, city, websiteUrl);
     
   } catch (error) {
     console.error("Error generating multi-category service groups:", error);
-    return await generateServiceGroupsFallback(businessName, primaryCategories, scope, city);
+    return await generateServiceGroupsFallback(businessName, primaryCategories, scope, city, websiteUrl);
   }
 }
 
@@ -2563,15 +2734,16 @@ async function generateServiceGroupsFallback(
   businessName: string,
   primaryCategories: string[],
   scope: string,
-  city?: string
+  city?: string,
+  websiteUrl?: string
 ): Promise<MultiCategoryServiceGroupsResult> {
   const highLevelCategories: { name: string; description: string }[] = [];
   const allGroups: { name: string; description: string; normalized: string }[] = [];
-  
+
   // Generate groups for each category
   for (const category of primaryCategories) {
     try {
-      const result = await generateServiceGroups(businessName, category, scope, city);
+      const result = await generateServiceGroups(businessName, category, scope, city, websiteUrl);
       highLevelCategories.push(result.highLevelCategory);
       
       // Add groups with normalized names for deduplication
@@ -2653,7 +2825,7 @@ export async function generatePromptsForGroups(
         industry,
         scope as "local" | "national",
         city,
-        undefined,
+        domain || undefined,
         group.name
       );
       

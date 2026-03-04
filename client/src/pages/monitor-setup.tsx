@@ -255,11 +255,12 @@ export default function MonitorSetup() {
     mutationFn: async () => {
       // Use primaryCategories if available, otherwise fall back to industry
       const categoriesToUse = primaryCategories.length > 0 ? primaryCategories : (industry ? [industry] : []);
-      const response = await apiRequest("POST", "/api/monitoring/generate-groups", { 
-        businessName, 
+      const response = await apiRequest("POST", "/api/monitoring/generate-groups", {
+        businessName,
+        domain,
         industry: categoriesToUse[0] || industry, // Legacy support
         primaryCategories: categoriesToUse.length > 1 ? categoriesToUse : undefined,
-        scope, 
+        scope,
         city: cities.length > 0 ? cities[0] : city // Use first city for group generation
       });
       return await response.json() as { 
