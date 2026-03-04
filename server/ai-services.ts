@@ -517,19 +517,19 @@ export function generateBrandSentimentPrompts(
   city?: string
 ): string[] {
   const locationContext = city ? ` in ${city}` : '';
-  
+
   return [
     // 1. Overall perception / reputation
     `What do you know about ${businessName}${locationContext}? Is it a reputable ${industry} business?`,
-    
+
     // 2. Customer experience and reviews
-    `What are customers saying about ${businessName}? What are common complaints or praise points for this ${industry} company?`,
-    
-    // 3. Trust and credibility 
+    `What are customers saying about ${businessName}${locationContext}? What are common complaints or praise points for this ${industry} company?`,
+
+    // 3. Trust and credibility
     `Would you recommend ${businessName}${locationContext} for ${industry} services? What are the pros and cons?`,
-    
+
     // 4. Specific pain points / issues
-    `What should someone know before hiring ${businessName}? Are there any red flags or issues with this ${industry} business?`,
+    `What should someone know before hiring ${businessName}${locationContext}? Are there any red flags or issues with this ${industry} business?`,
   ];
 }
 
@@ -1481,10 +1481,10 @@ function getFallbackSentimentPrompts(businessName: string, keyword: string, loca
   const loc = location !== "nationwide" ? ` in ${location}` : "";
   return [
     `Would you recommend ${businessName}${loc}?`,
-    `Is ${businessName} a reliable ${keyword}?`,
-    `What do customers say about ${businessName}?`,
-    `${businessName} reviews - are they worth it?`,
-    `Should I hire ${businessName} for ${keyword}?`,
+    `Is ${businessName}${loc} a reliable ${keyword} company?`,
+    `What do customers say about ${businessName}${loc}?`,
+    `${businessName}${loc} reviews - are they worth hiring?`,
+    `Should I hire ${businessName}${loc} for ${keyword} services?`,
   ];
 }
 
@@ -1512,8 +1512,8 @@ export function getFastSentimentPrompts(businessName: string, keyword: string, l
   const loc = location !== "nationwide" ? ` in ${location}` : "";
   return [
     `Would you recommend ${businessName}${loc}?`,
-    `What do customers say about ${businessName}?`,
-    `Is ${businessName} a good ${keyword}?`,
+    `What do customers say about ${businessName}${loc}?`,
+    `Is ${businessName}${loc} a good ${keyword} company?`,
   ];
 }
 
@@ -1782,24 +1782,34 @@ export async function generateSentimentPrompts(
 ): Promise<string[]> {
   const location = scope === "local" && city ? city : "nationwide";
   
-  const systemPrompt = `You are a marketing expert. Generate exactly 5 brand-specific search queries that someone would type into AI assistants to learn about the reputation and quality of a specific business.
+  const locationStr = location !== "nationwide" ? ` in ${location}` : "";
+
+  const systemPrompt = `You are a marketing expert. Generate exactly ${SENTIMENT_PROMPT_COUNT} brand-specific search queries that someone would type into AI assistants (like ChatGPT, Google AI, or Claude) to learn about the reputation and quality of a specific business.
 
 These queries should:
 - Directly mention the business name: "${businessName}"
-- Ask about reviews, recommendations, reliability, quality
-- Be natural questions a potential customer would ask
+- Ask about reviews, recommendations, reliability, quality, or comparisons
+- Be natural questions a potential customer would ask before hiring or buying
+- EVERY query must include the location context "${location}"${locationStr ? ` — include "${location}" in each prompt` : ''}
+- Focus on queries that would trigger the AI to give a definitive opinion about the business
 
 Return ONLY a valid JSON array of exactly ${SENTIMENT_PROMPT_COUNT} strings. No explanations, no markdown, just the JSON array.`;
-  
+
   const userPrompt = `Generate ${SENTIMENT_PROMPT_COUNT} brand-specific queries for:
 Business Name: ${businessName}
 Industry: ${keyword}
 Location: ${location !== "nationwide" ? location : "National"}
 
+CRITICAL: ${locationStr ? `Every query MUST include "${location}" so the AI gives location-specific answers.` : 'These are for a national business.'}
+
 Example formats:
-- "Would you recommend [business name]?"
-- "Is [business name] a good [service]?"
-- "What do customers say about [business name]?"`;
+- "Would you recommend ${businessName}${locationStr} for ${keyword}?"
+- "Is ${businessName}${locationStr} a good ${keyword} company?"
+- "What do customers say about ${businessName}${locationStr}?"
+- "How does ${businessName} compare to other ${keyword} companies${locationStr}?"
+- "Is ${businessName}${locationStr} trustworthy and reliable?"
+
+Each query must be UNIQUE and include the business name and location.`;
   
   const parseSentimentResponse = (text: string): string[] | null => {
     const cleanText = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
@@ -1818,7 +1828,24 @@ Example formats:
     return null;
   };
 
-  // Primary: Try Gemini 2.5 Flash (faster, free via Replit AI Integrations)
+  // Primary: Try Claude Haiku (best at following structured instructions)
+  if (!claudeCircuitBreaker.isOpen() && anthropic) {
+    try {
+      console.log("[PROMPT_GEN] Generating sentiment prompts with Claude Haiku...");
+      const claudeText = await queryClaudeText(systemPrompt, userPrompt, 512, true);
+      const result = parseSentimentResponse(claudeText);
+      if (result) {
+        console.log(`[PROMPT_GEN] Claude Haiku generated ${SENTIMENT_PROMPT_COUNT} valid sentiment prompts`);
+        return result;
+      }
+    } catch (claudeError) {
+      console.error("[PROMPT_GEN] Claude Haiku primary failed for sentiment prompts:", claudeError);
+    }
+  } else {
+    console.log(`[PROMPT_GEN] Claude Haiku unavailable for sentiment prompts, trying Gemini...`);
+  }
+
+  // Fallback 1: Try Gemini 2.5 Flash
   if (!geminiCircuitBreaker.isOpen() && process.env.AI_INTEGRATIONS_GEMINI_API_KEY) {
     try {
       console.log("[PROMPT_GEN] Generating sentiment prompts with Gemini 2.5 Flash...");
@@ -1829,18 +1856,18 @@ Example formats:
         return result;
       }
     } catch (geminiError) {
-      console.error("[PROMPT_GEN] Gemini primary failed for sentiment prompts:", geminiError);
+      console.error("[PROMPT_GEN] Gemini fallback failed for sentiment prompts:", geminiError);
     }
   } else {
     console.log(`[PROMPT_GEN] Gemini unavailable for sentiment prompts, skipping to OpenAI fallback...`);
   }
 
-  // Fallback: Try OpenAI gpt-5-mini
+  // Fallback 2: Try OpenAI gpt-5-mini
   if (!openAICircuitBreaker.isOpen() && process.env.MY_OPENAI_API_KEY) {
     try {
       console.log("[PROMPT_GEN] Falling back to GPT-5-Mini for sentiment prompts...");
       await rateLimitDelay();
-      
+
       const response = await retryWithBackoff(() =>
         openai.chat.completions.create({
           model: "gpt-5-mini",
@@ -1851,10 +1878,10 @@ Example formats:
           max_completion_tokens: 512,
         })
       );
-      
+
       const text = response.choices[0]?.message?.content || "";
       console.log("GPT sentiment prompts response:", text.slice(0, 200));
-      
+
       const result = parseSentimentResponse(text);
       if (result) {
         console.log(`Generated ${SENTIMENT_PROMPT_COUNT} valid sentiment prompts via OpenAI fallback`);
