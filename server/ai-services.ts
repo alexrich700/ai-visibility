@@ -3128,15 +3128,101 @@ Return ONLY valid JSON:
       return result;
     }
     
-    // Extract JSON from response (handle potential markdown code blocks)
-    let jsonStr = content;
-    if (content.includes("```json")) {
-      jsonStr = content.replace(/```json\s*/g, "").replace(/```\s*/g, "");
-    } else if (content.includes("```")) {
-      jsonStr = content.replace(/```\s*/g, "");
+    const extractJson = (raw: string): string => {
+      let s = raw;
+      if (s.includes("```json")) {
+        s = s.replace(/```json\s*/g, "").replace(/```\s*/g, "");
+      } else if (s.includes("```")) {
+        s = s.replace(/```\s*/g, "");
+      }
+      return s.trim();
+    };
+
+    const repairJson = (raw: string): string => {
+      let s = raw.trim();
+
+      const lastCompleteObject = s.lastIndexOf('},');
+      const lastCompleteArrayItem = s.lastIndexOf('],');
+      const lastComplete = Math.max(lastCompleteObject, lastCompleteArrayItem);
+
+      if (lastComplete > s.length * 0.4) {
+        const truncated = s.substring(0, lastComplete + 1);
+        const openBrackets = (truncated.match(/\[/g) || []).length;
+        const closeBrackets = (truncated.match(/\]/g) || []).length;
+        const openBraces = (truncated.match(/\{/g) || []).length;
+        const closeBraces = (truncated.match(/\}/g) || []).length;
+        let repaired = truncated;
+        for (let i = 0; i < openBrackets - closeBrackets; i++) repaired += ']';
+        for (let i = 0; i < openBraces - closeBraces; i++) repaired += '}';
+        try {
+          JSON.parse(repaired);
+          return repaired;
+        } catch (_) {}
+      }
+
+      const quotes = (s.match(/(?<!\\)"/g) || []).length;
+      if (quotes % 2 !== 0) {
+        s += '"';
+      }
+      s = s.replace(/,\s*$/, '');
+      const openBraces = (s.match(/\{/g) || []).length;
+      const closeBraces = (s.match(/\}/g) || []).length;
+      const openBrackets = (s.match(/\[/g) || []).length;
+      const closeBrackets = (s.match(/\]/g) || []).length;
+      for (let i = 0; i < openBrackets - closeBrackets; i++) s += ']';
+      for (let i = 0; i < openBraces - closeBraces; i++) s += '}';
+      return s;
+    };
+
+    const safeParse = (raw: string): any => {
+      const jsonStr = extractJson(raw);
+      try {
+        return JSON.parse(jsonStr);
+      } catch (_e) {
+        console.warn(`[SENTIMENT_NARRATIVES] Initial JSON.parse failed (length=${jsonStr.length}), attempting repair...`);
+        const repaired = repairJson(jsonStr);
+        return JSON.parse(repaired);
+      }
+    };
+
+    let parsed: any;
+    try {
+      parsed = safeParse(content);
+    } catch (parseErr: any) {
+      console.warn(`[SENTIMENT_NARRATIVES] JSON repair failed: ${parseErr?.message}. Retrying with Gemini...`);
+      content = "";
+      if (geminiAvail) {
+        try {
+          content = await queryGeminiText(sentimentSystemPrompt, prompt, 2000, true);
+        } catch (_retryErr) {}
+      }
+      if (!content && !openAICircuitBreaker.isOpen() && process.env.MY_OPENAI_API_KEY) {
+        console.log("[SENTIMENT_NARRATIVES] Retry falling back to GPT-5-Mini...");
+        await rateLimitDelay();
+        const response = await retryWithBackoff(() =>
+          openai.chat.completions.create({
+            model: "gpt-5-mini",
+            messages: [
+              { role: "system", content: sentimentSystemPrompt },
+              { role: "user", content: prompt }
+            ],
+            temperature: 0.3,
+            max_completion_tokens: 2000,
+          })
+        );
+        content = response.choices[0]?.message?.content?.trim() || "";
+      }
+      if (!content) {
+        console.error("[SENTIMENT_NARRATIVES] Retry produced no content, returning empty");
+        return result;
+      }
+      try {
+        parsed = safeParse(content);
+      } catch (retryParseErr: any) {
+        console.error(`[SENTIMENT_NARRATIVES] Retry JSON parse also failed: ${retryParseErr?.message}. Content preview: ${content.substring(0, 200)}...`);
+        return result;
+      }
     }
-    
-    const parsed = JSON.parse(jsonStr);
     
     if (Array.isArray(parsed.strengths)) {
       result.strengths = parsed.strengths

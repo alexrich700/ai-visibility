@@ -549,11 +549,11 @@ async function processScanJob(job: ScanJob, alreadyClaimed: boolean = false): Pr
       }
     }
 
-    await storage.updateCheckSession(session.id, {
+    const sessionUpdateData: any = {
       overallScore,
       chatgptScore,
       googleAIScore,
-      foundCount: dbFoundCount, // Use distinct prompt-level found count
+      foundCount: dbFoundCount,
       citedCount: dbCitedCount,
       shareOfVoice,
       topCitations,
@@ -567,7 +567,21 @@ async function processScanJob(job: ScanJob, alreadyClaimed: boolean = false): Pr
       sentimentNarratives,
       status: 'complete',
       lastCompletedPromptIndex: totalPrompts,
-    } as any);
+    };
+
+    try {
+      await storage.updateCheckSession(session.id, sessionUpdateData);
+    } catch (updateErr: any) {
+      const isColumnMissing = updateErr?.code === '42703' || 
+        (updateErr?.message && /column.*sentiment_narratives.*does not exist/i.test(updateErr.message));
+      if (isColumnMissing) {
+        log(`[ScanJobProcessor] sentiment_narratives column missing, saving without it`, "job-processor");
+        delete sessionUpdateData.sentimentNarratives;
+        await storage.updateCheckSession(session.id, sessionUpdateData);
+      } else {
+        throw updateErr;
+      }
+    }
 
     // Compute group metrics from DB results (excluding brand sentiment groups)
     const dbGroupMetrics: Record<string, {
