@@ -122,6 +122,7 @@ export default function MonitorSetup() {
   const activeSessionIdRef = useRef<number | null>(null);
   const activeClientIdRef = useRef<number | null>(null);
   const reconnectAttemptsRef = useRef<number>(0);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const MAX_RECONNECT_ATTEMPTS = 3;
   const isReconnectingRef = useRef<boolean>(false);
   const isMountedRef = useRef<boolean>(true); // Cancellation flag to prevent actions after unmount
@@ -134,6 +135,11 @@ export default function MonitorSetup() {
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
         eventSourceRef.current = null;
+      }
+      // Clear any pending reconnect timers
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
       }
       // Reset reconnect state
       activeSessionIdRef.current = null;
@@ -166,7 +172,12 @@ export default function MonitorSetup() {
     
     // Wait a bit before reconnecting (1-3 seconds with some randomness)
     const delay = 1000 + Math.random() * 2000;
-    await new Promise(resolve => setTimeout(resolve, delay));
+    await new Promise<void>(resolve => {
+      reconnectTimerRef.current = setTimeout(() => {
+        reconnectTimerRef.current = null;
+        resolve();
+      }, delay);
+    });
     
     // Check if component was unmounted during delay
     if (!isMountedRef.current) {
@@ -412,14 +423,26 @@ export default function MonitorSetup() {
 
     const { jobId } = queueData;
 
-    while (true) {
-      await new Promise(resolve => setTimeout(resolve, 2000));
+    // Poll for scan completion, respecting unmount and tab visibility
+    while (isMountedRef.current) {
+      await new Promise<void>(resolve => {
+        const timer = setTimeout(resolve, 2000);
+        // If the component unmounts while waiting, clean up the timer
+        if (!isMountedRef.current) { clearTimeout(timer); resolve(); }
+      });
+      if (!isMountedRef.current) break;
+
+      // Skip polling if tab is hidden — will catch up when visible
+      if (document.hidden) continue;
+
       const statusResponse = await fetch(`/api/monitoring/scan-job/${jobId}`, { headers });
       if (!statusResponse.ok) {
         throw new Error("Lost connection to scan status endpoint");
       }
 
       const job = await statusResponse.json();
+      if (!isMountedRef.current) break;
+
       const cityProgress = job.progress || 0;
       const overallProgress = Math.round(((cityIndex - 1) / totalCities) * 100 + (cityProgress / totalCities));
       setScanProgress(overallProgress);
@@ -439,6 +462,9 @@ export default function MonitorSetup() {
         throw new Error(job.errorMessage || "Scan job failed");
       }
     }
+
+    // Component unmounted during polling — return gracefully
+    return { clientId, overallScore: 0 };
   };
 
   // Run scan for all cities with streaming progress updates

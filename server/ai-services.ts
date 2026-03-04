@@ -1411,24 +1411,34 @@ Describe what this means for AI visibility. Be professional.`;
 
 // Scrape website homepage content
 async function scrapeWebsite(url: string): Promise<string | null> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
   try {
     const normalizedUrl = url.startsWith('http') ? url : `https://${url}`;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
-    
-    const response = await fetch(normalizedUrl, { 
-      headers: { 
+
+    const response = await fetch(normalizedUrl, {
+      headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
       },
       signal: controller.signal
     });
     clearTimeout(timeoutId);
-    
+
     if (!response.ok) return null;
+
+    // Limit how much HTML we read to prevent event-loop blocking on huge pages
+    const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
+    if (contentLength > 2_000_000) {
+      console.log(`[SCRAPE] Skipping ${url} - content-length ${contentLength} exceeds 2MB limit`);
+      return null;
+    }
+
     const html = await response.text();
-    
+    // Truncate before regex processing to protect against huge responses without content-length
+    const safeHtml = html.slice(0, 500_000);
+
     // Strip HTML tags and get text only
-    const text = html
+    const text = safeHtml
       .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
       .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
       .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
@@ -1437,9 +1447,10 @@ async function scrapeWebsite(url: string): Promise<string | null> {
       .replace(/\s+/g, ' ')
       .trim()
       .slice(0, 3000);
-    
+
     return text.length > 100 ? text : null;
   } catch (error) {
+    clearTimeout(timeoutId);
     console.error("Website scrape error:", error);
     return null;
   }

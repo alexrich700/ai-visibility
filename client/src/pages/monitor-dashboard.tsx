@@ -258,6 +258,29 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
 
   const isAdmin = isAdminUser;
   
+  // AbortController for in-flight poll requests
+  const pollAbortRef = useRef<AbortController | null>(null);
+
+  // Pause polling when tab is hidden, resume when visible
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.hidden) {
+        // Tab is hidden — pause polling to avoid stale/queued requests
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
+        // Abort any in-flight poll request
+        pollAbortRef.current?.abort();
+      } else if (isMountedRef.current && activeJobId) {
+        // Tab became visible again — restart polling for the active job
+        startJobPolling(activeJobId);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [activeJobId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Cleanup polling on unmount
   useEffect(() => {
     isMountedRef.current = true;
@@ -267,6 +290,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
         clearInterval(pollIntervalRef.current);
         pollIntervalRef.current = null;
       }
+      pollAbortRef.current?.abort();
     };
   }, []);
 
@@ -311,14 +335,19 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
     }
     
     const pollJob = async () => {
-      if (!isMountedRef.current) return;
-      
+      if (!isMountedRef.current || document.hidden) return;
+
+      // Abort previous in-flight request before starting a new one
+      pollAbortRef.current?.abort();
+      const controller = new AbortController();
+      pollAbortRef.current = controller;
+
       try {
         const token = getAdminToken();
         const headers: Record<string, string> = {};
         if (token) headers["Authorization"] = `Bearer ${token}`;
-        
-        const response = await fetch(`/api/monitoring/scan-job/${jobId}`, { headers });
+
+        const response = await fetch(`/api/monitoring/scan-job/${jobId}`, { headers, signal: controller.signal });
         if (!response.ok) {
           throw new Error('Failed to get job status');
         }
@@ -416,10 +445,11 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
         }
         
       } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
         console.error('Error polling job status:', error);
       }
     };
-    
+
     pollJob();
     pollIntervalRef.current = setInterval(pollJob, 3000);
   };

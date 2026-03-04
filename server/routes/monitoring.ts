@@ -29,6 +29,18 @@ import { createLogger } from "../utils/logger";
 
 const monitoringLogger = createLogger("monitoring-routes");
 
+// Track in-progress scans per client to prevent concurrent scans corrupting data
+const activeClientScans = new Map<number, { startedAt: number; scanCity: string | null }>();
+
+/** Clear all active scan guards (called during graceful shutdown) */
+export function clearActiveScans(): void {
+  const count = activeClientScans.size;
+  if (count > 0) {
+    monitoringLogger.info(`Clearing ${count} active scan guard(s) for shutdown`);
+    activeClientScans.clear();
+  }
+}
+
 export function registerMonitoringRoutes(app: Express): void {
   
   // Generate service groups using AI
@@ -358,6 +370,7 @@ export function registerMonitoringRoutes(app: Express): void {
     // Track if client disconnected to cancel remaining work
     let isClientConnected = true;
     let activeSessionId: number | null = null; // Track session for pause on disconnect
+    let trackedClientId: number | null = null; // Track client ID for concurrent scan guard cleanup
     
     res.on("close", async () => {
       isClientConnected = false;
@@ -367,10 +380,15 @@ export function registerMonitoringRoutes(app: Express): void {
     // Helper to send SSE events - single atomic write + explicit flush
     const sendEvent = (type: string, data: Record<string, unknown>) => {
       if (!isClientConnected) return;
-      const payload = `data: ${JSON.stringify({ type, ...data })}\n\n`;
-      res.write(payload);
-      if (typeof (res as any).flush === 'function') {
-        (res as any).flush();
+      try {
+        const payload = `data: ${JSON.stringify({ type, ...data })}\n\n`;
+        res.write(payload);
+        if (typeof (res as any).flush === 'function') {
+          (res as any).flush();
+        }
+      } catch {
+        // Client disconnected between the check and the write — safe to ignore
+        isClientConnected = false;
       }
     };
 
@@ -436,6 +454,20 @@ export function registerMonitoringRoutes(app: Express): void {
         sendEvent("status", { message: "Setting up service groups...", progress: 8 });
       }
       
+      // Guard: prevent concurrent scans for the same client
+      if (client && activeClientScans.has(client.id)) {
+        const existing = activeClientScans.get(client.id)!;
+        const runningFor = Math.round((Date.now() - existing.startedAt) / 1000);
+        monitoringLogger.warn("Concurrent scan rejected", { clientId: client.id, runningForSeconds: runningFor, existingCity: existing.scanCity });
+        sendEvent("error", { message: `A scan is already running for this client (started ${runningFor}s ago). Please wait for it to finish.` });
+        res.end();
+        return;
+      }
+      if (client) {
+        trackedClientId = client.id;
+        activeClientScans.set(client.id, { startedAt: Date.now(), scanCity: scanCity || null });
+      }
+
       // Set up groups and prompts - either reuse existing or create new
       const groupIdMap: Record<string, number> = {};
       const groupNames: string[] = [];
@@ -1022,12 +1054,12 @@ export function registerMonitoringRoutes(app: Express): void {
         googleAIScore,
         progress: 100,
       });
-      
+
       res.end();
     } catch (error) {
       logError(`SCAN STREAM ERROR (prepareId=${prepareId})`, error);
       if (heartbeatInterval) clearInterval(heartbeatInterval);
-      
+
       // Mark session as failed with error details (safe for internal storage)
       const internalErrorMessage = error instanceof Error ? error.message : "Unknown error occurred";
       if (activeSessionId) {
@@ -1040,12 +1072,15 @@ export function registerMonitoringRoutes(app: Express): void {
           monitoringLogger.error("Failed to mark session as failed", { error: updateErr instanceof Error ? updateErr.message : String(updateErr) });
         }
       }
-      
+
       // Send sanitized error to client - no stack traces or internal details
-      sendEvent("error", { 
+      sendEvent("error", {
         message: "An error occurred during the scan. Please try again.",
       });
       res.end();
+    } finally {
+      // Always release the concurrent scan guard for this client
+      if (trackedClientId) activeClientScans.delete(trackedClientId);
     }
   });
 
@@ -1329,10 +1364,15 @@ export function registerMonitoringRoutes(app: Express): void {
     // Helper to send SSE events - single atomic write + explicit flush
     const sendEvent = (type: string, data: Record<string, unknown>) => {
       if (!isClientConnected) return;
-      const payload = `data: ${JSON.stringify({ type, ...data })}\n\n`;
-      res.write(payload);
-      if (typeof (res as any).flush === 'function') {
-        (res as any).flush();
+      try {
+        const payload = `data: ${JSON.stringify({ type, ...data })}\n\n`;
+        res.write(payload);
+        if (typeof (res as any).flush === 'function') {
+          (res as any).flush();
+        }
+      } catch {
+        // Client disconnected between the check and the write — safe to ignore
+        isClientConnected = false;
       }
     };
 
@@ -1885,10 +1925,15 @@ export function registerMonitoringRoutes(app: Express): void {
     // Helper to send SSE events - single atomic write + explicit flush
     const sendEvent = (type: string, data: Record<string, unknown>) => {
       if (!isClientConnected) return;
-      const payload = `data: ${JSON.stringify({ type, ...data })}\n\n`;
-      res.write(payload);
-      if (typeof (res as any).flush === 'function') {
-        (res as any).flush();
+      try {
+        const payload = `data: ${JSON.stringify({ type, ...data })}\n\n`;
+        res.write(payload);
+        if (typeof (res as any).flush === 'function') {
+          (res as any).flush();
+        }
+      } catch {
+        // Client disconnected between the check and the write — safe to ignore
+        isClientConnected = false;
       }
     };
 
