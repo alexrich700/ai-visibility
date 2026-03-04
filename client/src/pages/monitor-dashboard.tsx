@@ -123,6 +123,25 @@ interface DashboardData {
   trendData: TrendDataPoint[];
 }
 
+interface GroupTrendItem {
+  groupId: number;
+  groupName: string;
+  data: { date: string | null; visibilityScore: number; foundCount: number; totalPrompts: number }[];
+}
+
+interface GroupTrendsResponse {
+  groupTrends: GroupTrendItem[];
+}
+
+interface CompetitorTrendItem {
+  competitorName: string;
+  data: { date: string | null; visibilityPercent: number; mentionCount: number }[];
+}
+
+interface CompetitorTrendsResponse {
+  competitorTrends: CompetitorTrendItem[];
+}
+
 const COLORS = {
   primary: "#5599f9",
   accent: "#ffb41c",
@@ -258,6 +277,32 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
 
   const isAdmin = isAdminUser;
   
+  // AbortController for in-flight poll requests
+  const pollAbortRef = useRef<AbortController | null>(null);
+
+  // Ref to hold latest startJobPolling so effects always call the current version
+  const startJobPollingRef = useRef<(jobId: number) => void>(() => {});
+
+  // Pause polling when tab is hidden, resume when visible
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.hidden) {
+        // Tab is hidden — pause polling to avoid stale/queued requests
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
+        // Abort any in-flight poll request
+        pollAbortRef.current?.abort();
+      } else if (isMountedRef.current && activeJobId) {
+        // Tab became visible again — restart polling for the active job
+        startJobPollingRef.current(activeJobId);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [activeJobId]);
+
   // Cleanup polling on unmount
   useEffect(() => {
     isMountedRef.current = true;
@@ -267,6 +312,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
         clearInterval(pollIntervalRef.current);
         pollIntervalRef.current = null;
       }
+      pollAbortRef.current?.abort();
     };
   }, []);
 
@@ -293,7 +339,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
               setScanSubStatus(`Scanning: ${data.job.targetCity}`);
             }
             // Start polling for updates
-            startJobPolling(data.job.id);
+            startJobPollingRef.current(data.job.id);
           }
         }
       } catch (error) {
@@ -311,14 +357,19 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
     }
     
     const pollJob = async () => {
-      if (!isMountedRef.current) return;
-      
+      if (!isMountedRef.current || document.hidden) return;
+
+      // Abort previous in-flight request before starting a new one
+      pollAbortRef.current?.abort();
+      const controller = new AbortController();
+      pollAbortRef.current = controller;
+
       try {
         const token = getAdminToken();
         const headers: Record<string, string> = {};
         if (token) headers["Authorization"] = `Bearer ${token}`;
-        
-        const response = await fetch(`/api/monitoring/scan-job/${jobId}`, { headers });
+
+        const response = await fetch(`/api/monitoring/scan-job/${jobId}`, { headers, signal: controller.signal });
         if (!response.ok) {
           throw new Error('Failed to get job status');
         }
@@ -416,14 +467,17 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
         }
         
       } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
         console.error('Error polling job status:', error);
       }
     };
-    
+
     pollJob();
     pollIntervalRef.current = setInterval(pollJob, 3000);
   };
-  
+  // Keep ref in sync so effects and callbacks always call the latest version
+  startJobPollingRef.current = startJobPolling;
+
   // Generate and copy client share link (admin only)
   const copyClientShareLink = async () => {
     if (!clientId) return;

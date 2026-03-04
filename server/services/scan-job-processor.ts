@@ -6,6 +6,7 @@ import {
   resetCircuitBreakers,
   type SynthesizedNarratives
 } from "../ai-services";
+import { clearActiveScans } from "../routes/monitoring";
 import {
   analyzeResponse,
   aggregateCitations,
@@ -802,6 +803,9 @@ export async function gracefulShutdown(): Promise<void> {
   
   isShuttingDown = true;
   log("[ScanJobProcessor] Graceful shutdown initiated - marking running jobs as interrupted", "job-processor");
+
+  // Clear SSE scan guards so they don't block rescans after restart
+  clearActiveScans();
   
   try {
     const runningJobs = await storage.getRunningScanJobs();

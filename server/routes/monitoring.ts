@@ -29,48 +29,65 @@ import { createLogger } from "../utils/logger";
 
 const monitoringLogger = createLogger("monitoring-routes");
 
+// Track in-progress scans per client to prevent concurrent scans corrupting data
+const activeClientScans = new Map<number, { startedAt: number; scanCity: string | null }>();
+
+/** Clear all active scan guards (called during graceful shutdown) */
+export function clearActiveScans(): void {
+  const count = activeClientScans.size;
+  if (count > 0) {
+    monitoringLogger.info(`Clearing ${count} active scan guard(s) for shutdown`);
+    activeClientScans.clear();
+  }
+}
+
 export function registerMonitoringRoutes(app: Express): void {
   
   // Generate service groups using AI
   // Supports both single-category (legacy) and multi-category requests
   app.post("/api/monitoring/generate-groups", async (req, res) => {
     try {
-      const { businessName, industry, scope, city, primaryCategories } = req.body;
-      
+      const { businessName, industry, scope, city, primaryCategories, domain } = req.body;
+
       if (!businessName) {
         return res.status(400).json({ error: "Business name is required" });
       }
-      
+
       // Determine categories to use - either explicit primaryCategories array or legacy industry field
-      const categories: string[] = primaryCategories && primaryCategories.length > 0 
-        ? primaryCategories 
+      const categories: string[] = primaryCategories && primaryCategories.length > 0
+        ? primaryCategories
         : industry ? [industry] : [];
-      
+
       if (categories.length === 0) {
         return res.status(400).json({ error: "At least one category (industry or primaryCategories) is required" });
       }
 
+      // Normalize domain to a full URL for website scraping
+      const websiteUrl = domain
+        ? (domain.startsWith('http') ? domain : `https://${domain}`)
+        : undefined;
+
       // Use multi-category function if multiple categories, otherwise single category
       if (categories.length > 1) {
-        const result = await generateServiceGroupsMultiCategory(businessName, categories, scope, city);
-        
+        const result = await generateServiceGroupsMultiCategory(businessName, categories, scope, city, websiteUrl);
+
         // Return high-level categories as initial groups, followed by specific groups
         const allGroups = [
-          ...result.highLevelCategories.map(cat => ({ 
-            name: cat.name, 
+          ...result.highLevelCategories.map(cat => ({
+            name: cat.name,
             description: cat.description,
-            isHighLevelCategory: true 
+            isHighLevelCategory: true
           })),
           ...result.groups.map(g => ({ ...g, isHighLevelCategory: false }))
         ];
-        
-        res.json({ 
+
+        res.json({
           groups: allGroups,
           highLevelCategories: result.highLevelCategories,
           isMultiCategory: true
         });
       } else {
-        const result = await generateServiceGroups(businessName, categories[0], scope, city);
+        const result = await generateServiceGroups(businessName, categories[0], scope, city, websiteUrl);
         
         // Return high-level category as the first group, followed by specific groups
         const allGroups = [
@@ -353,6 +370,7 @@ export function registerMonitoringRoutes(app: Express): void {
     // Track if client disconnected to cancel remaining work
     let isClientConnected = true;
     let activeSessionId: number | null = null; // Track session for pause on disconnect
+    let trackedClientId: number | null = null; // Track client ID for concurrent scan guard cleanup
     
     res.on("close", async () => {
       isClientConnected = false;
@@ -362,10 +380,15 @@ export function registerMonitoringRoutes(app: Express): void {
     // Helper to send SSE events - single atomic write + explicit flush
     const sendEvent = (type: string, data: Record<string, unknown>) => {
       if (!isClientConnected) return;
-      const payload = `data: ${JSON.stringify({ type, ...data })}\n\n`;
-      res.write(payload);
-      if (typeof (res as any).flush === 'function') {
-        (res as any).flush();
+      try {
+        const payload = `data: ${JSON.stringify({ type, ...data })}\n\n`;
+        res.write(payload);
+        if (typeof (res as any).flush === 'function') {
+          (res as any).flush();
+        }
+      } catch {
+        // Client disconnected between the check and the write — safe to ignore
+        isClientConnected = false;
       }
     };
 
@@ -431,6 +454,20 @@ export function registerMonitoringRoutes(app: Express): void {
         sendEvent("status", { message: "Setting up service groups...", progress: 8 });
       }
       
+      // Guard: prevent concurrent scans for the same client
+      if (client && activeClientScans.has(client.id)) {
+        const existing = activeClientScans.get(client.id)!;
+        const runningFor = Math.round((Date.now() - existing.startedAt) / 1000);
+        monitoringLogger.warn("Concurrent scan rejected", { clientId: client.id, runningForSeconds: runningFor, existingCity: existing.scanCity });
+        sendEvent("error", { message: `A scan is already running for this client (started ${runningFor}s ago). Please wait for it to finish.` });
+        res.end();
+        return;
+      }
+      if (client) {
+        trackedClientId = client.id;
+        activeClientScans.set(client.id, { startedAt: Date.now(), scanCity: scanCity || null });
+      }
+
       // Set up groups and prompts - either reuse existing or create new
       const groupIdMap: Record<string, number> = {};
       const groupNames: string[] = [];
@@ -1017,12 +1054,12 @@ export function registerMonitoringRoutes(app: Express): void {
         googleAIScore,
         progress: 100,
       });
-      
+
       res.end();
     } catch (error) {
       logError(`SCAN STREAM ERROR (prepareId=${prepareId})`, error);
       if (heartbeatInterval) clearInterval(heartbeatInterval);
-      
+
       // Mark session as failed with error details (safe for internal storage)
       const internalErrorMessage = error instanceof Error ? error.message : "Unknown error occurred";
       if (activeSessionId) {
@@ -1035,12 +1072,15 @@ export function registerMonitoringRoutes(app: Express): void {
           monitoringLogger.error("Failed to mark session as failed", { error: updateErr instanceof Error ? updateErr.message : String(updateErr) });
         }
       }
-      
+
       // Send sanitized error to client - no stack traces or internal details
-      sendEvent("error", { 
+      sendEvent("error", {
         message: "An error occurred during the scan. Please try again.",
       });
       res.end();
+    } finally {
+      // Always release the concurrent scan guard for this client
+      if (trackedClientId) activeClientScans.delete(trackedClientId);
     }
   });
 
@@ -1324,10 +1364,15 @@ export function registerMonitoringRoutes(app: Express): void {
     // Helper to send SSE events - single atomic write + explicit flush
     const sendEvent = (type: string, data: Record<string, unknown>) => {
       if (!isClientConnected) return;
-      const payload = `data: ${JSON.stringify({ type, ...data })}\n\n`;
-      res.write(payload);
-      if (typeof (res as any).flush === 'function') {
-        (res as any).flush();
+      try {
+        const payload = `data: ${JSON.stringify({ type, ...data })}\n\n`;
+        res.write(payload);
+        if (typeof (res as any).flush === 'function') {
+          (res as any).flush();
+        }
+      } catch {
+        // Client disconnected between the check and the write — safe to ignore
+        isClientConnected = false;
       }
     };
 
@@ -1880,10 +1925,15 @@ export function registerMonitoringRoutes(app: Express): void {
     // Helper to send SSE events - single atomic write + explicit flush
     const sendEvent = (type: string, data: Record<string, unknown>) => {
       if (!isClientConnected) return;
-      const payload = `data: ${JSON.stringify({ type, ...data })}\n\n`;
-      res.write(payload);
-      if (typeof (res as any).flush === 'function') {
-        (res as any).flush();
+      try {
+        const payload = `data: ${JSON.stringify({ type, ...data })}\n\n`;
+        res.write(payload);
+        if (typeof (res as any).flush === 'function') {
+          (res as any).flush();
+        }
+      } catch {
+        // Client disconnected between the check and the write — safe to ignore
+        isClientConnected = false;
       }
     };
 
