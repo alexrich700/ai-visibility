@@ -13,9 +13,9 @@ interface VisibilityTrendSlideProps {
 export function VisibilityTrendSlide({ sessionChartData, slideNumber, totalSlides }: VisibilityTrendSlideProps) {
   return (
     <SlideLayout title="Visibility Trend" subtitle="AI visibility scores over time" slideNumber={slideNumber} totalSlides={totalSlides}>
-      <div className="h-full flex items-center justify-center">
+      <div className="flex-1 min-h-0 flex flex-col">
         {sessionChartData.length > 1 ? (
-          <div className="w-full" style={{ height: 420 }}>
+          <div className="w-full flex-1 min-h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={sessionChartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                 <defs>

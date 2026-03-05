@@ -30,6 +30,11 @@ export interface PromptPerformanceItem {
   googleAICited: boolean | null;
   avgRank: number | null;
   score: number;
+  chatgptResponse?: string | null;
+  googleAIResponse?: string | null;
+  chatgptCitations?: unknown;
+  googleAICitations?: unknown;
+  competitors?: string | null;
 }
 
 export interface ReportData {

@@ -794,6 +794,11 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
         googleAICited: r.googleAICited,
         avgRank: ranks.length ? Math.round(avg * 10) / 10 : null,
         score,
+        chatgptResponse: r.chatgptResponse,
+        googleAIResponse: r.googleAIResponse,
+        chatgptCitations: r.chatgptCitations,
+        googleAICitations: r.googleAICitations,
+        competitors: r.competitors,
       };
     });
     const sorted = [...scored].sort((a, b) => b.score - a.score || (a.avgRank ?? 999) - (b.avgRank ?? 999));
