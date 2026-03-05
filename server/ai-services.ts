@@ -1536,7 +1536,8 @@ export async function generateResearchPrompts(
   scope: "local" | "national",
   city?: string,
   url?: string,
-  serviceCategory?: string
+  serviceCategory?: string,
+  groupDescription?: string
 ): Promise<string[]> {
   const location = scope === "local" && city ? city : "nationwide";
   const locationStr = location !== "nationwide" ? ` in ${location}` : "";
@@ -1556,16 +1557,24 @@ export async function generateResearchPrompts(
     }
   }
 
-  // Build website context section for the prompt
+  // Build category clarification section - helps AI understand what this service category
+  // means within the industry WITHOUT leaking business-specific USPs into prompts
+  const categorySection = groupDescription
+    ? `\n\nSERVICE CATEGORY CONTEXT:
+"${targetService}" in the ${industryContext} means: ${groupDescription}
+Use this ONLY to understand what type of work/service this category covers so prompts are relevant. For example, "canvas prints" in a custom framing business means customers wanting photos/art printed on canvas — NOT a generic photo printing service.`
+    : '';
+
+  // Build website context section - strictly for understanding service scope, NOT for extracting USPs
   const websiteContextSection = homepageContent
-    ? `\n\nBUSINESS CONTEXT FROM WEBSITE:
-The following is content from the actual business website. Use this to understand what specific ${targetService} services/products this business offers, so you can generate prompts that match how their real customers would search:
-${homepageContent}`
+    ? `\n\nBUSINESS INDUSTRY CONTEXT (for category understanding only):
+The following is from a real business website in this industry. Use this ONLY to understand the general SERVICE CATEGORIES and TYPES OF WORK this industry handles. DO NOT extract specific USPs, guarantees, certifications, pricing details, or unique selling points from this content and embed them into prompts — real customers do not search by vendor-specific differentiators.
+${homepageContent.slice(0, 1500)}`
     : '';
 
   // Build prompt - explicitly exclude brand name but request specific business names in responses
   const systemPrompt = `You are a marketing expert specializing in AI search optimization. Generate exactly ${promptCount} unique research-based search queries that potential customers would type into AI assistants (like ChatGPT, Google AI, or Claude) when actively looking for ${targetService} services${locationStr}.
-${websiteContextSection}
+${categorySection}${websiteContextSection}
 
 CRITICAL REQUIREMENTS:
 1. These must be GENERIC research queries that do NOT include any specific business or brand names
@@ -1574,47 +1583,89 @@ CRITICAL REQUIREMENTS:
 4. ALL prompts must be focused on "${targetService}" as it relates to the ${industryContext} — do NOT generate prompts for unrelated industries
 5. Each query must be UNIQUE and different from the others - vary the phrasing, intent, and focus
 6. Prompts should target bottom-of-funnel searches where someone is READY TO BUY, not just researching
+7. DO NOT embed business-specific USPs, guarantees, certifications, employee types, pricing models, or unique selling points into prompts. Prompts like "which companies offer a one-year labor guarantee and send W-2 employees" are TOO SPECIFIC — no real person searches this way. Focus on the GENERAL SERVICE NEED and COMMON CUSTOMER CONCERNS (cost, speed, quality, reviews, scope of work)
+8. Keep prompts under 120 characters when possible — real users type concise queries, not paragraphs
 
-PROMPT VARIETY - include different intent types:
-- Transactional: "Who can I hire for ${targetService}${locationStr}?"
-- Comparison: "Compare the top ${targetService} companies${locationStr}"
-- Specific needs: "Best ${targetService} for [specific use case]${locationStr}"
-- Cost-focused: "Affordable ${targetService} services${locationStr} with good reviews"
-- Quality-focused: "Highest rated ${targetService} providers${locationStr}"
-- Recommendation: "Which ${targetService} companies do you recommend${locationStr}?"
-- Ready-to-buy: "I need ${targetService}${locationStr} — what companies should I contact?"
+PROMPT VARIETY - model these after how REAL people search AI assistants:
+- Simple lookup: "best ${targetService} companies${locationStr}"
+- Need-based: "I need [common problem/situation], who does ${targetService}${locationStr}?"
+- Comparison: "compare the top ${targetService} companies${locationStr}"
+- Budget: "affordable ${targetService}${locationStr} with good reviews"
+- Urgency: "who can do ${targetService}${locationStr} this week?"
+- Reviews: "${targetService} companies${locationStr} with the best reviews"
+- Scope-specific: "best ${targetService} for [common project type]${locationStr}"
+- Recommendation: "can you recommend a good ${targetService} company${locationStr}?"
 
-DO NOT generate prompts that will result in generic advice like:
-- "What to look for in ${targetService}" (educational, not transactional)
-- "Pros and cons of ${targetService}" (informational, won't list businesses)
-- Generic prompts without asking for specific business names
-- Prompts about a DIFFERENT industry than ${industryContext} (e.g., don't generate retail photo printing prompts for a custom framing business)
+DO NOT generate prompts that:
+- Contain vendor-specific differentiators (guarantees, warranties, certifications, employee types, specific technologies)
+- Read like a job posting or RFP rather than a customer search query
+- Are longer than a natural question someone would type or speak to an AI assistant
+- Will result in generic advice like "What to look for in ${targetService}" (educational, not transactional)
+- Are informational like "Pros and cons of ${targetService}" (won't list businesses)
+- Don't ask for specific business names
+- Are about a DIFFERENT industry than ${industryContext}
 
 Return ONLY a valid JSON array of exactly ${promptCount} strings. No explanations, no markdown, just the JSON array.`;
 
-  let userPrompt = `Generate ${promptCount} unique, specific, long-tail AI search queries for ${targetService} services${locationStr}.
+  let userPrompt = `Generate ${promptCount} unique, realistic AI search queries for ${targetService} services${locationStr}.
 ${serviceCategory ? `\nThis is for the "${serviceCategory}" service category within the ${keyword} industry. Make sure ALL prompts are relevant to this specific industry — not to other industries that might share similar terminology.` : ''}
+${groupDescription ? `\nCategory context: "${serviceCategory}" covers: ${groupDescription}` : ''}
 
 IMPORTANT:
+- Write queries the way a REAL CUSTOMER would type them into ChatGPT or Gemini — natural, concise, conversational
 - Each query must be UNIQUE - do not repeat similar phrasing
 - Each query should explicitly request a LIST of specific business names
 - ALL queries must be focused on ${targetService} within the ${industryContext} context - do not mix in other service types or industries
 - NO brand names in the queries themselves, but queries should request brand names in the response
 - Include variety: transactional, comparison, cost-focused, quality-focused, ready-to-buy queries
-- These are BOTTOM OF FUNNEL queries from people ready to hire/buy, not informational queries`;
+- These are BOTTOM OF FUNNEL queries from people ready to hire/buy, not informational queries
+- DO NOT include business-specific USPs, guarantees, or differentiators in the queries — those are things the AI should surface in its ANSWER, not things customers search for`;
   
   // Track this call for diagnostics
   fallbackStats.totalCalls++;
+
+  // USP blocklist - words/phrases that indicate vendor-specific differentiators
+  // that real customers would never search for
+  const USP_BLOCKLIST = [
+    'w-2', 'w2 employee', '1099', 'labor guarantee', 'labour guarantee',
+    'workmanship guarantee', 'satisfaction guarantee', 'money-back',
+    'year guarantee', 'year warranty', 'lifetime warranty', 'lifetime guarantee',
+    'bonded and insured', 'fully licensed', 'fully insured', 'fully bonded',
+    'background check', 'drug test', 'drug-free', 'e-verify',
+    'family-owned', 'family owned', 'veteran-owned', 'veteran owned',
+    'woman-owned', 'minority-owned', 'bbb accredited', 'a+ rating',
+    'iso certified', 'iso 9001',
+  ];
+
+  // Filter out prompts that contain USP-specific language or are unnaturally long
+  function filterUSPPrompts(prompts: string[]): string[] {
+    return prompts.filter(prompt => {
+      const lower = prompt.toLowerCase();
+      // Reject prompts over 150 chars (real users don't type essays)
+      if (prompt.length > 150) {
+        console.log(`[PROMPT_FILTER] Rejected (too long, ${prompt.length} chars): "${prompt.slice(0, 80)}..."`);
+        return false;
+      }
+      // Reject prompts containing USP blocklist terms
+      const matchedTerm = USP_BLOCKLIST.find(term => lower.includes(term));
+      if (matchedTerm) {
+        console.log(`[PROMPT_FILTER] Rejected (USP term "${matchedTerm}"): "${prompt.slice(0, 80)}..."`);
+        return false;
+      }
+      return true;
+    });
+  }
 
   // Helper to parse and validate prompt array from AI response
   function parsePromptArray(text: string): string[] | null {
     const cleanText = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const parsed = JSON.parse(cleanText);
     if (Array.isArray(parsed)) {
-      const validPrompts = parsed
+      const rawPrompts = parsed
         .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
-        .map(s => s.trim())
-        .slice(0, promptCount);
+        .map(s => s.trim());
+      // Apply USP filter before slicing
+      const validPrompts = filterUSPPrompts(rawPrompts).slice(0, promptCount);
       if (validPrompts.length >= 3) {
         const fallbackPad = getFallbackResearchPrompts(keyword, location, serviceCategory);
         return [...validPrompts, ...fallbackPad].slice(0, promptCount);
@@ -1729,18 +1780,19 @@ IMPORTANT:
     }
     
     if (Array.isArray(parsed)) {
-      const validPrompts = parsed
+      const rawPrompts = parsed
         .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
-        .map(s => s.trim())
-        .slice(0, promptCount);
-      
+        .map(s => s.trim());
+      // Apply USP filter before counting
+      const validPrompts = filterUSPPrompts(rawPrompts).slice(0, promptCount);
+
       // Accept if we got at least the required number of prompts (more flexible than exact match)
       if (validPrompts.length >= promptCount) {
         console.log(`[SUCCESS] Generated ${validPrompts.length} valid research prompts for "${targetService}"`);
         return validPrompts.slice(0, promptCount);
       } else if (validPrompts.length >= 3) {
         // Accept fewer prompts if we got at least 3 (pad with fallback if needed)
-        console.log(`[PARTIAL] OpenAI returned ${validPrompts.length} prompts, padding with fallback for "${targetService}"`);
+        console.log(`[PARTIAL] OpenAI returned ${validPrompts.length} prompts (after USP filter), padding with fallback for "${targetService}"`);
         const fallbackPrompts = getFallbackResearchPrompts(keyword, location, serviceCategory);
         const combined = [...validPrompts, ...fallbackPrompts.slice(0, promptCount - validPrompts.length)];
         return combined.slice(0, promptCount);
@@ -2864,7 +2916,8 @@ export async function generatePromptsForGroups(
         scope as "local" | "national",
         city,
         domain || undefined,
-        group.name
+        group.name,
+        group.description
       );
       
       if (prompts.length > promptLimit) {
