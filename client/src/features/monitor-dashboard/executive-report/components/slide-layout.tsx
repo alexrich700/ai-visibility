@@ -24,8 +24,8 @@ export function SlideLayout({ title, subtitle, slideNumber, totalSlides, childre
         {/* Centered title block — the "action title" */}
         {title && (
           <div className="flex-shrink-0 text-center px-16 pt-3 pb-5">
-            <h2 className="text-2xl font-bold text-gray-900 tracking-tight">{title}</h2>
-            {subtitle && <p className="text-base text-gray-500 mt-1">{subtitle}</p>}
+            <h2 className="text-3xl font-bold text-gray-900 tracking-tight">{title}</h2>
+            {subtitle && <p className="text-lg text-gray-500 mt-1">{subtitle}</p>}
           </div>
         )}
 
