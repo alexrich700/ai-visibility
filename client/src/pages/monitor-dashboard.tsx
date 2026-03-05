@@ -924,6 +924,50 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
     if (currentPage > totalPages) setCurrentPage(Math.max(1, totalPages));
   }, [totalPages, currentPage]);
 
+  const previousPeriodData = useMemo(() => {
+    if (!previousSession) return null;
+    const prevTotal = previousSession.totalPrompts || 1;
+    const prevFound = previousSession.foundCount ?? 0;
+    const prevCited = previousSession.citedCount ?? 0;
+    const prevVisRate = Math.round((prevFound / (prevTotal * 2)) * 100);
+    const prevCitRate = Math.round((prevCited / (prevTotal * 2)) * 100);
+    const prevAvgRank = previousSession.avgChatgptRank != null && previousSession.avgGoogleAIRank != null
+      ? Math.round(((previousSession.avgChatgptRank + previousSession.avgGoogleAIRank) / 2) * 10) / 10
+      : previousSession.avgChatgptRank ?? previousSession.avgGoogleAIRank ?? null;
+    return {
+      visibilityRate: prevVisRate,
+      citationRate: prevCitRate,
+      avgRank: prevAvgRank,
+      sentimentScore: previousSession.sentimentScore ?? null,
+      scanDate: format(new Date(previousSession.createdAt), "MMMM d, yyyy"),
+    };
+  }, [previousSession]);
+
+  const reportData: ReportData = useMemo(() => ({
+    businessName: data?.client?.businessName ?? "",
+    scanDate: latestSession ? format(new Date(latestSession.createdAt), "MMMM d, yyyy") : null,
+    city: selectedViewCity !== "all" ? selectedViewCity : null,
+    visibilityMetrics,
+    avgRank,
+    firstPlaceCount,
+    sentimentScore: analytics?.sentimentScore ?? null,
+    sessionChartData,
+    shareOfVoice: computedShareOfVoice,
+    competitorVisibility: computedCompetitorVisibility,
+    topCitations: computedTopCitations,
+    sentimentNarratives: analytics?.sentimentNarratives ?? null,
+    groupBarData: buildGroupBarData(serviceResultsByGroup),
+    cityMetrics,
+    topPrompts,
+    bottomPrompts,
+    previousPeriod: previousPeriodData,
+  }), [
+    data?.client?.businessName, latestSession, selectedViewCity, visibilityMetrics,
+    avgRank, firstPlaceCount, analytics, sessionChartData, computedShareOfVoice,
+    computedCompetitorVisibility, computedTopCitations, serviceResultsByGroup,
+    cityMetrics, topPrompts, bottomPrompts, previousPeriodData,
+  ]);
+
   if (!clientId) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -982,51 +1026,6 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
   }
 
   const client = data.client;
-
-  const previousPeriodData = useMemo(() => {
-    if (!previousSession) return null;
-    const prevTotal = previousSession.totalPrompts || 1;
-    const prevFound = previousSession.foundCount ?? 0;
-    const prevCited = previousSession.citedCount ?? 0;
-    const prevVisRate = Math.round((prevFound / (prevTotal * 2)) * 100);
-    const prevCitRate = Math.round((prevCited / (prevTotal * 2)) * 100);
-    const prevAvgRank = previousSession.avgChatgptRank != null && previousSession.avgGoogleAIRank != null
-      ? Math.round(((previousSession.avgChatgptRank + previousSession.avgGoogleAIRank) / 2) * 10) / 10
-      : previousSession.avgChatgptRank ?? previousSession.avgGoogleAIRank ?? null;
-    return {
-      visibilityRate: prevVisRate,
-      citationRate: prevCitRate,
-      avgRank: prevAvgRank,
-      sentimentScore: previousSession.sentimentScore ?? null,
-      scanDate: format(new Date(previousSession.createdAt), "MMMM d, yyyy"),
-    };
-  }, [previousSession]);
-
-  const reportData: ReportData = useMemo(() => ({
-    businessName: client.businessName,
-    scanDate: latestSession ? format(new Date(latestSession.createdAt), "MMMM d, yyyy") : null,
-    city: selectedViewCity !== "all" ? selectedViewCity : null,
-    visibilityMetrics,
-    avgRank,
-    firstPlaceCount,
-    sentimentScore: analytics?.sentimentScore ?? null,
-    sessionChartData,
-    shareOfVoice: computedShareOfVoice,
-    competitorVisibility: computedCompetitorVisibility,
-    topCitations: computedTopCitations,
-    sentimentNarratives: analytics?.sentimentNarratives ?? null,
-    groupBarData: buildGroupBarData(serviceResultsByGroup),
-    cityMetrics,
-    topPrompts,
-    bottomPrompts,
-    previousPeriod: previousPeriodData,
-  }), [
-    client.businessName, latestSession, selectedViewCity, visibilityMetrics,
-    avgRank, firstPlaceCount, analytics, sessionChartData, computedShareOfVoice,
-    computedCompetitorVisibility, computedTopCitations, serviceResultsByGroup,
-    cityMetrics, topPrompts, bottomPrompts, previousPeriodData,
-  ]);
-
 
   // Colors for group/competitor lines
   const trendLineColors = [
