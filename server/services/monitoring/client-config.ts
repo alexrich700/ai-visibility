@@ -126,9 +126,10 @@ export async function saveMonitoringClientConfig(
   );
   const promptByKey = new Map(existingPrompts.map((prompt) => [`${prompt.groupId}::${prompt.promptText || ""}`, prompt]));
 
-  // Keep parity with the legacy setup flow: when brand aliases are configured,
-  // ensure a brand sentiment group and prompts exist for ongoing scans.
-  if ((clientData.brandAliases?.length || 0) > 0) {
+  // Ensure a brand sentiment group and prompts always exist so that every
+  // client gets sentiment analysis on their dashboard, regardless of how
+  // they were originally set up or whether brand aliases are configured.
+  {
     const brandSentimentGroupName = "Brand Sentiment";
     let brandSentimentGroup = existingGroups.find(
       (group) => group.promptCategory === "brand_sentiment" || group.name === brandSentimentGroupName,

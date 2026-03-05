@@ -54,11 +54,12 @@ test("saveMonitoringClientConfig creates a new client and seeds groups/prompts w
   const createPromptCalls: Array<{ groupId: number; text: string }> = [];
   let groupsLookupCount = 0;
   let promptsLookupCount = 0;
+  let nextGroupId = 201;
 
   const storage = createStorageMock({
     async createGroup(data) {
       createGroupCalls.push(data.name as string);
-      return { id: data.name === "Repair" ? 201 : 202 };
+      return { id: nextGroupId++ };
     },
     async createPrompt(data) {
       createPromptCalls.push({ groupId: data.groupId as number, text: data.promptText as string });
@@ -71,6 +72,7 @@ test("saveMonitoringClientConfig creates a new client and seeds groups/prompts w
       return [
         { id: 201, name: "Repair", isActive: true },
         { id: 202, name: "Install", isActive: true },
+        { id: 203, name: "Brand Sentiment", promptCategory: "brand_sentiment", isActive: true },
       ];
     },
     async getPromptsByClientId() {
@@ -81,6 +83,10 @@ test("saveMonitoringClientConfig creates a new client and seeds groups/prompts w
         { id: 1, groupId: 201, isActive: true },
         { id: 2, groupId: 202, isActive: true },
         { id: 3, groupId: 202, isActive: false },
+        { id: 4, groupId: 203, isActive: true },
+        { id: 5, groupId: 203, isActive: true },
+        { id: 6, groupId: 203, isActive: true },
+        { id: 7, groupId: 203, isActive: true },
       ];
     },
   });
@@ -99,12 +105,13 @@ test("saveMonitoringClientConfig creates a new client and seeds groups/prompts w
   );
 
   assert.equal(result.clientId, 1);
-  assert.equal(result.totalPrompts, 2);
-  assert.deepEqual(createGroupCalls, ["Repair", "Install"]);
-  assert.deepEqual(createPromptCalls, [
-    { groupId: 201, text: "best repair company" },
-    { groupId: 202, text: "new hvac install near me" },
-  ]);
+  // 2 service prompts + 4 brand sentiment prompts = 6 active
+  assert.equal(result.totalPrompts, 6);
+  assert.deepEqual(createGroupCalls, ["Repair", "Install", "Brand Sentiment"]);
+  // Should include service prompts and 4 brand sentiment prompts
+  assert.equal(createPromptCalls.filter(p => p.groupId === 201).length, 1);
+  assert.equal(createPromptCalls.filter(p => p.groupId === 202).length, 1);
+  assert.equal(createPromptCalls.filter(p => p.groupId === 203).length, 4);
 });
 
 test("saveMonitoringClientConfig updates an existing client and does not overwrite existing groups/prompts", async () => {
@@ -112,6 +119,14 @@ test("saveMonitoringClientConfig updates an existing client and does not overwri
   const createPromptCalls: Array<{ groupId: number; text: string }> = [];
   let groupsLookupCount = 0;
   let promptsLookupCount = 0;
+
+  // Existing brand sentiment prompts (already seeded)
+  const existingBrandPrompts = [
+    { id: 50, groupId: 13, promptText: `What do you know about Acme in Austin? Is it a reputable HVAC business?`, isActive: true },
+    { id: 51, groupId: 13, promptText: `What are customers saying about Acme? What are common complaints or praise points for this HVAC company?`, isActive: true },
+    { id: 52, groupId: 13, promptText: `Would you recommend Acme in Austin for HVAC services? What are the pros and cons?`, isActive: true },
+    { id: 53, groupId: 13, promptText: `What should someone know before hiring Acme? Are there any red flags or issues with this HVAC business?`, isActive: true },
+  ];
 
   const storage = createStorageMock({
     async getMonitoringClientByBusinessNameAndDomain() {
@@ -123,21 +138,29 @@ test("saveMonitoringClientConfig updates an existing client and does not overwri
     async getGroupsByClientId() {
       groupsLookupCount += 1;
       if (groupsLookupCount === 1) {
-        return [{ id: 11, name: "Existing Group", isActive: true }];
+        return [
+          { id: 11, name: "Existing Group", isActive: true },
+          { id: 13, name: "Brand Sentiment", promptCategory: "brand_sentiment", isActive: true },
+        ];
       }
       return [
         { id: 11, name: "Existing Group", isActive: true },
         { id: 12, name: "New Group", isActive: true },
+        { id: 13, name: "Brand Sentiment", promptCategory: "brand_sentiment", isActive: true },
       ];
     },
     async getPromptsByClientId() {
       promptsLookupCount += 1;
       if (promptsLookupCount === 1) {
-        return [{ id: 11, groupId: 11, promptText: "existing prompt", isActive: true }];
+        return [
+          { id: 11, groupId: 11, promptText: "existing prompt", isActive: true },
+          ...existingBrandPrompts,
+        ];
       }
       return [
         { id: 11, groupId: 11, promptText: "existing prompt", isActive: true },
         { id: 12, groupId: 12, promptText: "new prompt", isActive: true },
+        ...existingBrandPrompts,
       ];
     },
     async createGroup(data) {
@@ -164,9 +187,9 @@ test("saveMonitoringClientConfig updates an existing client and does not overwri
   );
 
   assert.equal(result.clientId, 42);
-  assert.equal(result.totalPrompts, 2);
-  assert.deepEqual(createGroupCalls, ["New Group"]);
-  assert.deepEqual(createPromptCalls, [{ groupId: 12, text: "new prompt" }]);
+  assert.equal(result.totalPrompts, 6); // 2 service + 4 brand sentiment
+  assert.deepEqual(createGroupCalls, ["New Group"]); // Brand Sentiment already exists
+  assert.deepEqual(createPromptCalls, [{ groupId: 12, text: "new prompt" }]); // Brand prompts already exist
 });
 
 test("saveMonitoringClientConfig adds only missing config on partial overlap input", async () => {
@@ -174,6 +197,13 @@ test("saveMonitoringClientConfig adds only missing config on partial overlap inp
   const createPromptCalls: Array<{ groupId: number; text: string }> = [];
   let groupsLookupCount = 0;
   let promptsLookupCount = 0;
+
+  const existingBrandPrompts = [
+    { id: 50, groupId: 13, promptText: `What do you know about Acme in Austin? Is it a reputable HVAC business?`, isActive: true },
+    { id: 51, groupId: 13, promptText: `What are customers saying about Acme? What are common complaints or praise points for this HVAC company?`, isActive: true },
+    { id: 52, groupId: 13, promptText: `Would you recommend Acme in Austin for HVAC services? What are the pros and cons?`, isActive: true },
+    { id: 53, groupId: 13, promptText: `What should someone know before hiring Acme? Are there any red flags or issues with this HVAC business?`, isActive: true },
+  ];
 
   const storage = createStorageMock({
     async getMonitoringClientByBusinessNameAndDomain() {
@@ -185,21 +215,29 @@ test("saveMonitoringClientConfig adds only missing config on partial overlap inp
     async getGroupsByClientId() {
       groupsLookupCount += 1;
       if (groupsLookupCount === 1) {
-        return [{ id: 11, name: "Existing Group", isActive: true }];
+        return [
+          { id: 11, name: "Existing Group", isActive: true },
+          { id: 13, name: "Brand Sentiment", promptCategory: "brand_sentiment", isActive: true },
+        ];
       }
       return [
         { id: 11, name: "Existing Group", isActive: true },
         { id: 12, name: "New Group", isActive: true },
+        { id: 13, name: "Brand Sentiment", promptCategory: "brand_sentiment", isActive: true },
       ];
     },
     async getPromptsByClientId() {
       promptsLookupCount += 1;
       if (promptsLookupCount === 1) {
-        return [{ id: 11, groupId: 11, promptText: "existing prompt", isActive: true }];
+        return [
+          { id: 11, groupId: 11, promptText: "existing prompt", isActive: true },
+          ...existingBrandPrompts,
+        ];
       }
       return [
         { id: 11, groupId: 11, promptText: "existing prompt", isActive: true },
         { id: 12, groupId: 12, promptText: "new prompt", isActive: true },
+        ...existingBrandPrompts,
       ];
     },
     async createGroup(data) {
@@ -225,14 +263,21 @@ test("saveMonitoringClientConfig adds only missing config on partial overlap inp
     ],
   );
 
-  assert.deepEqual(createGroupCalls, ["New Group"]);
-  assert.deepEqual(createPromptCalls, [{ groupId: 12, text: "new prompt" }]);
+  assert.deepEqual(createGroupCalls, ["New Group"]); // Brand Sentiment already exists
+  assert.deepEqual(createPromptCalls, [{ groupId: 12, text: "new prompt" }]); // Brand prompts already exist
 });
 
 test("saveMonitoringClientConfig ignores prompts that reference unknown groups", async () => {
   const createPromptCalls: Array<{ groupId: number; text: string }> = [];
   let groupsLookupCount = 0;
   let promptsLookupCount = 0;
+
+  const existingBrandPrompts = [
+    { id: 60, groupId: 57, promptText: `What do you know about Acme in Austin? Is it a reputable HVAC business?`, isActive: true },
+    { id: 61, groupId: 57, promptText: `What are customers saying about Acme? What are common complaints or praise points for this HVAC company?`, isActive: true },
+    { id: 62, groupId: 57, promptText: `Would you recommend Acme in Austin for HVAC services? What are the pros and cons?`, isActive: true },
+    { id: 63, groupId: 57, promptText: `What should someone know before hiring Acme? Are there any red flags or issues with this HVAC business?`, isActive: true },
+  ];
 
   const storage = createStorageMock({
     async createGroup(data) {
@@ -244,13 +289,25 @@ test("saveMonitoringClientConfig ignores prompts that reference unknown groups",
     },
     async getGroupsByClientId() {
       groupsLookupCount += 1;
-      if (groupsLookupCount === 1) return [];
-      return [{ id: 55, name: "Known", isActive: true }];
+      if (groupsLookupCount === 1) {
+        return [
+          { id: 57, name: "Brand Sentiment", promptCategory: "brand_sentiment", isActive: true },
+        ];
+      }
+      return [
+        { id: 55, name: "Known", isActive: true },
+        { id: 57, name: "Brand Sentiment", promptCategory: "brand_sentiment", isActive: true },
+      ];
     },
     async getPromptsByClientId() {
       promptsLookupCount += 1;
-      if (promptsLookupCount === 1) return [];
-      return [{ id: 55, groupId: 55, isActive: true }];
+      if (promptsLookupCount === 1) {
+        return [...existingBrandPrompts];
+      }
+      return [
+        { id: 55, groupId: 55, isActive: true },
+        ...existingBrandPrompts,
+      ];
     },
   });
 
@@ -272,6 +329,13 @@ test("saveMonitoringClientConfig ignores prompts that reference unknown groups",
 test("saveMonitoringClientConfig reactivates an existing inactive group with matching name", async () => {
   const updateGroupCalls: number[] = [];
 
+  const existingBrandPrompts = [
+    { id: 50, groupId: 22, promptText: `What do you know about Acme in Austin? Is it a reputable HVAC business?`, isActive: true },
+    { id: 51, groupId: 22, promptText: `What are customers saying about Acme? What are common complaints or praise points for this HVAC company?`, isActive: true },
+    { id: 52, groupId: 22, promptText: `Would you recommend Acme in Austin for HVAC services? What are the pros and cons?`, isActive: true },
+    { id: 53, groupId: 22, promptText: `What should someone know before hiring Acme? Are there any red flags or issues with this HVAC business?`, isActive: true },
+  ];
+
   const storage = createStorageMock({
     async getMonitoringClientByBusinessNameAndDomain() {
       return { id: 88 };
@@ -280,10 +344,13 @@ test("saveMonitoringClientConfig reactivates an existing inactive group with mat
       return { id: 88 };
     },
     async getGroupsByClientId() {
-      return [{ id: 21, name: "Dormant Group", isActive: false }];
+      return [
+        { id: 21, name: "Dormant Group", isActive: false },
+        { id: 22, name: "Brand Sentiment", promptCategory: "brand_sentiment", isActive: true },
+      ];
     },
     async getPromptsByClientId() {
-      return [];
+      return [...existingBrandPrompts];
     },
     async updateGroup(id) {
       updateGroupCalls.push(id as number);
@@ -306,6 +373,13 @@ test("saveMonitoringClientConfig reactivates matching inactive prompt instead of
   const createPromptCalls: number[] = [];
   let promptsLookupCount = 0;
 
+  const existingBrandPrompts = [
+    { id: 80, groupId: 32, promptText: `What do you know about Acme in Austin? Is it a reputable HVAC business?`, isActive: true },
+    { id: 81, groupId: 32, promptText: `What are customers saying about Acme? What are common complaints or praise points for this HVAC company?`, isActive: true },
+    { id: 82, groupId: 32, promptText: `Would you recommend Acme in Austin for HVAC services? What are the pros and cons?`, isActive: true },
+    { id: 83, groupId: 32, promptText: `What should someone know before hiring Acme? Are there any red flags or issues with this HVAC business?`, isActive: true },
+  ];
+
   const storage = createStorageMock({
     async getMonitoringClientByBusinessNameAndDomain() {
       return { id: 99 };
@@ -314,14 +388,23 @@ test("saveMonitoringClientConfig reactivates matching inactive prompt instead of
       return { id: 99 };
     },
     async getGroupsByClientId() {
-      return [{ id: 31, name: "Services", isActive: true }];
+      return [
+        { id: 31, name: "Services", isActive: true },
+        { id: 32, name: "Brand Sentiment", promptCategory: "brand_sentiment", isActive: true },
+      ];
     },
     async getPromptsByClientId() {
       promptsLookupCount += 1;
       if (promptsLookupCount === 1) {
-        return [{ id: 71, groupId: 31, promptText: "same prompt", isActive: false }];
+        return [
+          { id: 71, groupId: 31, promptText: "same prompt", isActive: false },
+          ...existingBrandPrompts,
+        ];
       }
-      return [{ id: 71, groupId: 31, promptText: "same prompt", isActive: true }];
+      return [
+        { id: 71, groupId: 31, promptText: "same prompt", isActive: true },
+        ...existingBrandPrompts,
+      ];
     },
     async updatePrompt(id) {
       updatePromptCalls.push(id as number);
@@ -342,10 +425,10 @@ test("saveMonitoringClientConfig reactivates matching inactive prompt instead of
 
   assert.deepEqual(updatePromptCalls, [71]);
   assert.deepEqual(createPromptCalls, []);
-  assert.equal(result.totalPrompts, 1);
+  assert.equal(result.totalPrompts, 5); // 1 service + 4 brand sentiment
 });
 
-test("saveMonitoringClientConfig seeds brand sentiment group/prompts when brand aliases are configured", async () => {
+test("saveMonitoringClientConfig seeds brand sentiment group/prompts even without brand aliases", async () => {
   const createGroupCalls: Array<{ name: string; promptCategory?: string }> = [];
   const createPromptCalls: Array<{ groupId: number; text: string }> = [];
   let groupsLookupCount = 0;
@@ -383,10 +466,7 @@ test("saveMonitoringClientConfig seeds brand sentiment group/prompts when brand 
 
   await saveMonitoringClientConfig(
     storage,
-    {
-      ...validClient,
-      brandAliases: ["Acme Heating"],
-    },
+    validClient,  // brandAliases is null — sentiment should still be created
     [],
     [],
   );

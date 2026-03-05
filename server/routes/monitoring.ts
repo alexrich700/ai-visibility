@@ -206,11 +206,12 @@ export function registerMonitoringRoutes(app: Express): void {
             name: group.name,
             description: group.description || null,
             isHighLevelCategory: group.isHighLevelCategory || false,
+            promptCategory: 'service',
             isActive: true,
           });
           groupIdMap[group.name] = createdGroup.id;
         }
-        
+
         // Create prompts
         for (const prompt of prompts) {
           const groupId = groupIdMap[prompt.groupName];
@@ -222,6 +223,29 @@ export function registerMonitoringRoutes(app: Express): void {
             });
             createdPrompts.push({ id: createdPrompt.id, groupId, text: prompt.text });
           }
+        }
+
+        // Create Brand Sentiment group with brand-specific prompts
+        const brandSentimentGroup = await storage.createGroup({
+          clientId: client.id,
+          name: "Brand Sentiment",
+          description: "Direct brand questions to gather sentiment and feedback",
+          isHighLevelCategory: false,
+          promptCategory: 'brand_sentiment',
+          isActive: true,
+        });
+        const brandSentimentPrompts = generateBrandSentimentPrompts(
+          client.businessName,
+          client.industry,
+          client.city || undefined
+        );
+        for (const promptText of brandSentimentPrompts) {
+          const createdPrompt = await storage.createPrompt({
+            groupId: brandSentimentGroup.id,
+            promptText,
+            isActive: true,
+          });
+          createdPrompts.push({ id: createdPrompt.id, groupId: brandSentimentGroup.id, text: promptText });
         }
       }
       
