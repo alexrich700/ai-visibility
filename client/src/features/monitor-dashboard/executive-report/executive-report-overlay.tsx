@@ -131,7 +131,7 @@ function buildSlideList(data: ReportData): React.ReactNode[] {
 
   // 10. Prompt Performance
   slides.push(
-    <PromptPerformanceSlide key="prompts" topPrompts={data.topPrompts} bottomPrompts={data.bottomPrompts} slideNumber={++n} totalSlides={total} />,
+    <PromptPerformanceSlide key="prompts" topPrompts={data.topPrompts} bottomPrompts={data.bottomPrompts} businessName={data.businessName} slideNumber={++n} totalSlides={total} />,
   );
 
   return slides;

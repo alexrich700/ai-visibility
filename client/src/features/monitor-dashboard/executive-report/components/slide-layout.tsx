@@ -28,7 +28,7 @@ export function SlideLayout({ title, subtitle, slideNumber, totalSlides, childre
       </div>
 
       {/* White card container */}
-      <div className="flex-1 mx-28 mb-16 bg-white rounded-2xl shadow-sm border border-gray-200 p-8 overflow-hidden flex flex-col">
+      <div className="flex-1 min-h-0 mx-28 mb-16 bg-white rounded-2xl shadow-sm border border-gray-200 p-8 overflow-y-auto flex flex-col">
         {children}
       </div>
     </div>

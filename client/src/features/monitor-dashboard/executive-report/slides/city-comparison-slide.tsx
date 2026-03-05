@@ -27,8 +27,8 @@ export function CityComparisonSlide({ cityMetrics, slideNumber, totalSlides }: C
 
   return (
     <SlideLayout title="Visibility by Location" subtitle="AI visibility performance across tracked markets" slideNumber={slideNumber} totalSlides={totalSlides}>
-      <div className="h-full flex items-center justify-center">
-        <div className="w-full" style={{ height: Math.max(280, sorted.length * 52 + 60) }}>
+      <div className="flex-1 min-h-0 flex flex-col">
+        <div className="w-full flex-1 min-h-[280px]">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={sorted} layout="vertical" margin={{ left: 20, right: 40, top: 10, bottom: 10 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
