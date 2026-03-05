@@ -10,12 +10,9 @@ interface SlideLayoutProps {
 
 export function SlideLayout({ title, subtitle, slideNumber, totalSlides, children }: SlideLayoutProps) {
   return (
-    <div className="h-full flex flex-col">
-      {/* Branded header bar */}
-      <div className="flex-shrink-0 h-1.5 bg-gradient-to-r from-[#5599f9] to-[#ffb41c]" />
-
-      {/* Header with logo and title */}
-      <div className="flex-shrink-0 flex items-center justify-between px-12 pt-6 pb-4">
+    <div className="h-full flex flex-col pt-1.5">
+      {/* Header outside the card */}
+      <div className="flex-shrink-0 flex items-center justify-between px-28 pt-6 pb-4">
         <div className="flex items-center gap-3">
           <img src={logoIcon} alt="Logo" className="w-8 h-8" />
           {title && (
@@ -25,13 +22,13 @@ export function SlideLayout({ title, subtitle, slideNumber, totalSlides, childre
             </div>
           )}
         </div>
-        <span className="text-xs text-gray-400 font-medium">
+        <span className="text-sm text-gray-400 font-medium bg-white px-3 py-1 rounded-full border border-gray-200">
           {slideNumber} / {totalSlides}
         </span>
       </div>
 
-      {/* Slide content */}
-      <div className="flex-1 px-12 pb-8 overflow-hidden">
+      {/* White card container */}
+      <div className="flex-1 mx-28 mb-16 bg-white rounded-2xl shadow-sm border border-gray-200 p-8 overflow-hidden flex flex-col">
         {children}
       </div>
     </div>

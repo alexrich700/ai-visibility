@@ -34,20 +34,24 @@ function PlatformBadge({ found, cited, label }: { found: boolean; cited: boolean
   );
 }
 
-function PromptRow({ prompt }: { prompt: PromptPerformanceItem }) {
+function PromptRow({ prompt, variant }: { prompt: PromptPerformanceItem; variant: "top" | "bottom" }) {
   const truncated = prompt.promptText.length > 65
     ? prompt.promptText.slice(0, 62) + "..."
     : prompt.promptText;
 
+  const bgClass = variant === "top"
+    ? "bg-green-50/50 border border-green-100"
+    : "bg-red-50/50 border border-red-100";
+
   return (
-    <div className="flex items-start gap-3 p-3 rounded-lg bg-gray-50">
+    <div className={`flex items-start gap-3 p-4 rounded-xl ${bgClass}`}>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-gray-900 leading-snug">{truncated}</p>
-        <div className="flex items-center gap-2 mt-2">
+        <p className="text-sm font-medium text-gray-800 leading-relaxed">{truncated}</p>
+        <div className="flex items-center gap-2 mt-3">
           <PlatformBadge found={prompt.chatgptFound} cited={prompt.chatgptCited ?? false} label="ChatGPT" />
           <PlatformBadge found={prompt.googleAIFound} cited={prompt.googleAICited ?? false} label="Google" />
           {prompt.avgRank != null && (
-            <span className="text-xs text-gray-500 ml-1">Rank {prompt.avgRank}</span>
+            <span className="text-xs text-gray-500 ml-auto">Rank {prompt.avgRank}</span>
           )}
         </div>
       </div>
@@ -60,14 +64,14 @@ export function PromptPerformanceSlide({ topPrompts, bottomPrompts, slideNumber,
     <SlideLayout title="Prompt Performance" subtitle="Strongest and weakest performing search queries" slideNumber={slideNumber} totalSlides={totalSlides}>
       <div className="grid md:grid-cols-2 gap-8 h-full">
         {/* Top Performers */}
-        <div>
-          <div className="flex items-center gap-2 mb-4">
+        <div className="flex flex-col h-full">
+          <div className="flex items-center gap-2 mb-4 px-2">
             <div className="w-3 h-3 rounded-full bg-green-500" />
-            <h3 className="text-lg font-semibold text-gray-900">Top Performers</h3>
+            <h3 className="text-lg font-bold text-green-700">Top Performers</h3>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-3 overflow-y-auto pr-2 flex-1">
             {topPrompts.length > 0 ? (
-              topPrompts.map((prompt, i) => <PromptRow key={i} prompt={prompt} />)
+              topPrompts.map((prompt, i) => <PromptRow key={i} prompt={prompt} variant="top" />)
             ) : (
               <p className="text-sm text-gray-400">No prompt data available</p>
             )}
@@ -75,14 +79,14 @@ export function PromptPerformanceSlide({ topPrompts, bottomPrompts, slideNumber,
         </div>
 
         {/* Needs Attention */}
-        <div>
-          <div className="flex items-center gap-2 mb-4">
+        <div className="flex flex-col h-full">
+          <div className="flex items-center gap-2 mb-4 px-2">
             <div className="w-3 h-3 rounded-full bg-red-500" />
-            <h3 className="text-lg font-semibold text-gray-900">Needs Attention</h3>
+            <h3 className="text-lg font-bold text-red-700">Needs Attention</h3>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-3 overflow-y-auto pr-2 flex-1">
             {bottomPrompts.length > 0 ? (
-              bottomPrompts.map((prompt, i) => <PromptRow key={i} prompt={prompt} />)
+              bottomPrompts.map((prompt, i) => <PromptRow key={i} prompt={prompt} variant="bottom" />)
             ) : (
               <p className="text-sm text-gray-400">No prompt data available</p>
             )}

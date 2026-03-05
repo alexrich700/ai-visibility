@@ -32,8 +32,15 @@ export function ExecutiveReportOverlay({ data, onClose }: ExecutiveReportOverlay
     setCurrentSlide((prev) => Math.max(prev - 1, 0));
   }, []);
 
+  const goToSlide = useCallback((index: number) => {
+    setCurrentSlide(Math.max(0, Math.min(index, totalSlides - 1)));
+  }, [totalSlides]);
+
   return (
-    <div className="fixed inset-0 z-50 bg-white">
+    <div className="fixed inset-0 z-50 bg-gray-100">
+      {/* Persistent gradient bar */}
+      <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#5599f9] to-[#ffb41c] z-20" />
+
       <AnimatePresence mode="wait">
         <motion.div
           key={currentSlide}
@@ -52,6 +59,7 @@ export function ExecutiveReportOverlay({ data, onClose }: ExecutiveReportOverlay
         totalSlides={totalSlides}
         onPrevious={goPrevious}
         onNext={goNext}
+        onGoToSlide={goToSlide}
         onClose={onClose}
       />
     </div>

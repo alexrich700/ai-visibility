@@ -6,10 +6,11 @@ interface SlideNavigationProps {
   totalSlides: number;
   onPrevious: () => void;
   onNext: () => void;
+  onGoToSlide: (index: number) => void;
   onClose: () => void;
 }
 
-export function SlideNavigation({ currentSlide, totalSlides, onPrevious, onNext, onClose }: SlideNavigationProps) {
+export function SlideNavigation({ currentSlide, totalSlides, onPrevious, onNext, onGoToSlide, onClose }: SlideNavigationProps) {
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === "ArrowLeft") {
@@ -34,40 +35,42 @@ export function SlideNavigation({ currentSlide, totalSlides, onPrevious, onNext,
       {/* Close button */}
       <button
         onClick={onClose}
-        className="absolute top-4 right-4 z-10 p-2 rounded-full bg-white/80 hover:bg-white shadow-lg transition-colors"
+        className="absolute top-4 right-6 z-10 w-10 h-10 flex items-center justify-center rounded-full bg-white hover:bg-gray-50 shadow-md border border-gray-200 transition-colors"
         aria-label="Close presentation"
       >
-        <X className="w-5 h-5 text-gray-600" />
+        <X className="w-5 h-5 text-gray-500" />
       </button>
 
       {/* Navigation arrows */}
       {currentSlide > 0 && (
         <button
           onClick={onPrevious}
-          className="absolute left-4 top-1/2 -translate-y-1/2 z-10 p-3 rounded-full bg-white/80 hover:bg-white shadow-lg transition-colors"
+          className="absolute left-6 top-1/2 -translate-y-1/2 z-10 w-12 h-12 flex items-center justify-center rounded-full bg-white hover:bg-gray-50 shadow-md border border-gray-200 transition-all hover:shadow-lg"
           aria-label="Previous slide"
         >
-          <ChevronLeft className="w-6 h-6 text-gray-700" />
+          <ChevronLeft className="w-6 h-6 text-gray-600" />
         </button>
       )}
       {currentSlide < totalSlides - 1 && (
         <button
           onClick={onNext}
-          className="absolute right-4 top-1/2 -translate-y-1/2 z-10 p-3 rounded-full bg-white/80 hover:bg-white shadow-lg transition-colors"
+          className="absolute right-6 top-1/2 -translate-y-1/2 z-10 w-12 h-12 flex items-center justify-center rounded-full bg-white hover:bg-gray-50 shadow-md border border-gray-200 transition-all hover:shadow-lg"
           aria-label="Next slide"
         >
-          <ChevronRight className="w-6 h-6 text-gray-700" />
+          <ChevronRight className="w-6 h-6 text-gray-600" />
         </button>
       )}
 
       {/* Progress dots */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
         {Array.from({ length: totalSlides }).map((_, i) => (
-          <div
+          <button
             key={i}
-            className={`w-2 h-2 rounded-full transition-all ${
-              i === currentSlide ? "bg-[#5599f9] w-6" : "bg-gray-300"
+            onClick={() => onGoToSlide(i)}
+            className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
+              i === currentSlide ? "bg-[#5599f9] w-6" : "bg-gray-300 w-2 hover:bg-gray-400"
             }`}
+            aria-label={`Go to slide ${i + 1}`}
           />
         ))}
       </div>
