@@ -31,7 +31,7 @@ import {
   TrendingUp, TrendingDown, Eye, Target, Calendar, Clock, Settings,
   ArrowLeft, RefreshCw, Loader2, CheckCircle2, XCircle, Minus, Building2,
   Users, Link2, Award, ThumbsUp, ThumbsDown, Meh, ExternalLink, Download, HelpCircle, AlertTriangle,
-  Share2, Copy, Check, Search, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Filter
+  Share2, Copy, Check, Search, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Filter, Presentation
 } from "lucide-react";
 import {
   Tooltip as InfoTooltip,
@@ -44,6 +44,8 @@ import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import logoIcon from "@assets/images_1765741951084.png";
 import type { MonitoringClient, MonitoringGroup, CheckSession, CheckResult } from "@shared/schema";
+import { ExecutiveReportOverlay } from "@/features/monitor-dashboard/executive-report/executive-report-overlay";
+import type { ReportData } from "@/features/monitor-dashboard/executive-report/types";
 import {
   buildCompetitorTrendChartData,
   buildGroupBarData,
@@ -64,6 +66,7 @@ import {
   type CompetitorVisibility,
   type GroupResults,
   type GroupTrendData,
+  type SessionWithCity,
   type ShareOfVoiceItem,
 } from "@/features/monitor-dashboard/selectors";
 
@@ -258,6 +261,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
   
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [presentationMode, setPresentationMode] = useState(false);
   
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
@@ -757,6 +761,45 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
 
   const groupBarData = useMemo(() => buildGroupBarData(serviceResultsByGroup), [serviceResultsByGroup]);
 
+  // Per-city metrics for executive report city comparison slide
+  const cityMetrics = useMemo(() => {
+    const cities = maybeClient?.cities;
+    if (!cities || cities.length <= 1) return null;
+    return cities.map((cityName: string) => {
+      const citySession = sessions.find(s => (s as SessionWithCity).city === cityName);
+      if (!citySession) return { city: cityName, visibilityRate: 0, avgRank: null };
+      const cityResults = latestResults.filter(r => r.sessionId === citySession.id);
+      const serviceOnly = cityResults.filter(r => !brandSentimentGroupIds.has(r.groupId));
+      const metrics = computeVisibilityMetrics(serviceOnly);
+      const rank = computeAverageRank(serviceOnly);
+      return { city: cityName, visibilityRate: metrics.visibilityRate, avgRank: rank };
+    });
+  }, [maybeClient?.cities, sessions, latestResults, brandSentimentGroupIds]);
+
+  // Top and bottom performing prompts for executive report
+  const { topPrompts, bottomPrompts } = useMemo(() => {
+    const scored = serviceResultsOnly.map(r => {
+      let score = 0;
+      if (r.chatgptFound) score += 1;
+      if (r.googleAIFound) score += 1;
+      if (r.chatgptCited) score += 1;
+      if (r.googleAICited) score += 1;
+      const ranks = [r.chatgptRank, r.googleAIRank].filter((x): x is number => x != null);
+      const avg = ranks.length ? ranks.reduce((a, b) => a + b, 0) / ranks.length : 999;
+      return {
+        promptText: r.promptText,
+        chatgptFound: r.chatgptFound,
+        googleAIFound: r.googleAIFound,
+        chatgptCited: r.chatgptCited,
+        googleAICited: r.googleAICited,
+        avgRank: ranks.length ? Math.round(avg * 10) / 10 : null,
+        score,
+      };
+    });
+    const sorted = [...scored].sort((a, b) => b.score - a.score || (a.avgRank ?? 999) - (b.avgRank ?? 999));
+    return { topPrompts: sorted.slice(0, 5), bottomPrompts: sorted.slice(-5).reverse() };
+  }, [serviceResultsOnly]);
+
   const getVisibilityScore = (r: CheckResult) => {
     const chatgptVisible = r.chatgptCited || r.chatgptFound;
     const googleVisible = r.googleAICited || r.googleAIFound;
@@ -1017,6 +1060,18 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
                   <Share2 className="w-4 h-4" />
                 )}
                 {linkCopied ? "Copied!" : "Share Link"}
+              </Button>
+            )}
+            {isAdmin && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPresentationMode(true)}
+                className="flex items-center gap-2"
+                data-testid="button-present-report"
+              >
+                <Presentation className="w-4 h-4" />
+                Present Report
               </Button>
             )}
           </div>
@@ -2327,6 +2382,31 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Executive Report Presentation Overlay */}
+      {presentationMode && (
+        <ExecutiveReportOverlay
+          data={{
+            businessName: client.businessName,
+            scanDate: latestSession ? format(new Date(latestSession.createdAt), "MMMM d, yyyy") : null,
+            city: selectedViewCity !== "all" ? selectedViewCity : null,
+            visibilityMetrics,
+            avgRank,
+            firstPlaceCount,
+            sentimentScore: analytics?.sentimentScore ?? null,
+            sessionChartData,
+            shareOfVoice: computedShareOfVoice,
+            competitorVisibility: computedCompetitorVisibility,
+            topCitations: computedTopCitations,
+            sentimentNarratives: analytics?.sentimentNarratives ?? null,
+            groupBarData: buildGroupBarData(serviceResultsByGroup),
+            cityMetrics,
+            topPrompts,
+            bottomPrompts,
+          } satisfies ReportData}
+          onClose={() => setPresentationMode(false)}
+        />
+      )}
     </div>
   );
 }
