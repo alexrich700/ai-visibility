@@ -11,18 +11,236 @@ import { CitationsProminenceSlide } from "./slides/citations-prominence-slide";
 import { SentimentSlide } from "./slides/sentiment-slide";
 import { GroupPerformanceSlide } from "./slides/group-performance-slide";
 import { PromptPerformanceSlide } from "./slides/prompt-performance-slide";
-import type { ReportData } from "./types";
+import { WhatIsAiVisibilitySlide } from "./slides/what-is-ai-visibility-slide";
+import { WhyGeoMattersSlide } from "./slides/why-geo-matters-slide";
+import { OpportunityGapSlide } from "./slides/opportunity-gap-slide";
+import { CtaSlide } from "./slides/cta-slide";
+import { ProgressHighlightsSlide } from "./slides/progress-highlights-slide";
+import { RecommendationsSlide } from "./slides/recommendations-slide";
+import type { PresentationMode, ReportData } from "./types";
+
+interface SlideDefinition {
+  id: string;
+  label: string;
+  condition: (data: ReportData) => boolean;
+  render: (data: ReportData, slideNumber: number, totalSlides: number, mode: PresentationMode) => React.ReactNode;
+  defaultModes: PresentationMode[];
+}
+
+const SLIDE_REGISTRY: SlideDefinition[] = [
+  {
+    id: "title",
+    label: "Title",
+    condition: () => true,
+    render: (data, _sn, _ts, mode) => (
+      <TitleSlide key="title" businessName={data.businessName} scanDate={data.scanDate} city={data.city} mode={mode} />
+    ),
+    defaultModes: ["pitch", "progress"],
+  },
+  {
+    id: "what-is-ai-visibility",
+    label: "What is AI Visibility?",
+    condition: () => true,
+    render: (_data, sn, ts) => (
+      <WhatIsAiVisibilitySlide key="what-is-ai" slideNumber={sn} totalSlides={ts} />
+    ),
+    defaultModes: ["pitch"],
+  },
+  {
+    id: "why-geo-matters",
+    label: "Why GEO Matters",
+    condition: () => true,
+    render: (_data, sn, ts) => (
+      <WhyGeoMattersSlide key="why-geo" slideNumber={sn} totalSlides={ts} />
+    ),
+    defaultModes: ["pitch"],
+  },
+  {
+    id: "progress-highlights",
+    label: "Progress Highlights",
+    condition: () => true,
+    render: (data, sn, ts) => (
+      <ProgressHighlightsSlide
+        key="progress"
+        visibilityMetrics={data.visibilityMetrics}
+        avgRank={data.avgRank}
+        sentimentScore={data.sentimentScore}
+        previousPeriod={data.previousPeriod}
+        slideNumber={sn}
+        totalSlides={ts}
+      />
+    ),
+    defaultModes: ["progress"],
+  },
+  {
+    id: "kpi",
+    label: "Executive Summary",
+    condition: () => true,
+    render: (data, sn, ts) => (
+      <KpiScorecardSlide
+        key="kpi"
+        visibilityMetrics={data.visibilityMetrics}
+        avgRank={data.avgRank}
+        firstPlaceCount={data.firstPlaceCount}
+        sentimentScore={data.sentimentScore}
+        slideNumber={sn}
+        totalSlides={ts}
+      />
+    ),
+    defaultModes: ["pitch", "progress"],
+  },
+  {
+    id: "visibility-trend",
+    label: "Visibility Trend",
+    condition: () => true,
+    render: (data, sn, ts) => (
+      <VisibilityTrendSlide key="trend" sessionChartData={data.sessionChartData} slideNumber={sn} totalSlides={ts} />
+    ),
+    defaultModes: ["progress"],
+  },
+  {
+    id: "platform-breakdown",
+    label: "Platform Breakdown",
+    condition: () => true,
+    render: (data, sn, ts) => (
+      <PlatformBreakdownSlide key="platform" visibilityMetrics={data.visibilityMetrics} slideNumber={sn} totalSlides={ts} />
+    ),
+    defaultModes: ["pitch", "progress"],
+  },
+  {
+    id: "competitive-landscape",
+    label: "Competitive Landscape",
+    condition: () => true,
+    render: (data, sn, ts) => (
+      <CompetitiveLandscapeSlide
+        key="competitive"
+        shareOfVoice={data.shareOfVoice}
+        competitorVisibility={data.competitorVisibility}
+        businessName={data.businessName}
+        slideNumber={sn}
+        totalSlides={ts}
+      />
+    ),
+    defaultModes: ["pitch", "progress"],
+  },
+  {
+    id: "opportunity-gap",
+    label: "Opportunity Gap",
+    condition: () => true,
+    render: (data, sn, ts) => (
+      <OpportunityGapSlide
+        key="opportunity"
+        visibilityMetrics={data.visibilityMetrics}
+        bottomPrompts={data.bottomPrompts}
+        businessName={data.businessName}
+        slideNumber={sn}
+        totalSlides={ts}
+      />
+    ),
+    defaultModes: ["pitch"],
+  },
+  {
+    id: "city-comparison",
+    label: "Visibility by Location",
+    condition: (data) => data.cityMetrics != null && data.cityMetrics.length > 1,
+    render: (data, sn, ts) => (
+      <CityComparisonSlide key="cities" cityMetrics={data.cityMetrics!} slideNumber={sn} totalSlides={ts} />
+    ),
+    defaultModes: ["pitch", "progress"],
+  },
+  {
+    id: "citations-prominence",
+    label: "Citations & Prominence",
+    condition: () => true,
+    render: (data, sn, ts) => (
+      <CitationsProminenceSlide
+        key="citations"
+        topCitations={data.topCitations}
+        avgRank={data.avgRank}
+        firstPlaceCount={data.firstPlaceCount}
+        slideNumber={sn}
+        totalSlides={ts}
+      />
+    ),
+    defaultModes: ["progress"],
+  },
+  {
+    id: "sentiment",
+    label: "Sentiment & Perception",
+    condition: (data) =>
+      (data.sentimentNarratives?.strengths?.length ?? 0) > 0 ||
+      (data.sentimentNarratives?.improvements?.length ?? 0) > 0,
+    render: (data, sn, ts) => (
+      <SentimentSlide key="sentiment" sentimentNarratives={data.sentimentNarratives} slideNumber={sn} totalSlides={ts} />
+    ),
+    defaultModes: ["progress"],
+  },
+  {
+    id: "group-performance",
+    label: "Service Group Performance",
+    condition: () => true,
+    render: (data, sn, ts) => (
+      <GroupPerformanceSlide key="groups" groupBarData={data.groupBarData} slideNumber={sn} totalSlides={ts} />
+    ),
+    defaultModes: ["pitch", "progress"],
+  },
+  {
+    id: "prompt-performance",
+    label: "Prompt Performance",
+    condition: () => true,
+    render: (data, sn, ts) => (
+      <PromptPerformanceSlide
+        key="prompts"
+        topPrompts={data.topPrompts}
+        bottomPrompts={data.bottomPrompts}
+        businessName={data.businessName}
+        slideNumber={sn}
+        totalSlides={ts}
+      />
+    ),
+    defaultModes: ["pitch", "progress"],
+  },
+  {
+    id: "cta",
+    label: "Next Steps",
+    condition: () => true,
+    render: (data) => (
+      <CtaSlide key="cta" businessName={data.businessName} />
+    ),
+    defaultModes: ["pitch"],
+  },
+  {
+    id: "recommendations",
+    label: "Recommendations",
+    condition: () => true,
+    render: (data, sn, ts) => (
+      <RecommendationsSlide key="recommendations" data={data} slideNumber={sn} totalSlides={ts} />
+    ),
+    defaultModes: ["progress"],
+  },
+];
+
+export { SLIDE_REGISTRY };
+export type { SlideDefinition };
+
+export function getDefaultSlideIds(mode: PresentationMode, data: ReportData): string[] {
+  return SLIDE_REGISTRY
+    .filter((s) => s.defaultModes.includes(mode) && s.condition(data))
+    .map((s) => s.id);
+}
 
 interface ExecutiveReportOverlayProps {
   data: ReportData;
+  mode: PresentationMode;
+  enabledSlides: string[];
   onClose: () => void;
 }
 
-export function ExecutiveReportOverlay({ data, onClose }: ExecutiveReportOverlayProps) {
+export function ExecutiveReportOverlay({ data, mode, enabledSlides, onClose }: ExecutiveReportOverlayProps) {
   const [currentSlide, setCurrentSlide] = useState(0);
 
-  const slides = buildSlideList(data);
-  const totalSlides = slides.length;
+  const slides = buildSlideList(data, mode, enabledSlides);
+  const totalSlides = slides.nodes.length;
 
   const goNext = useCallback(() => {
     setCurrentSlide((prev) => Math.min(prev + 1, totalSlides - 1));
@@ -50,13 +268,14 @@ export function ExecutiveReportOverlay({ data, onClose }: ExecutiveReportOverlay
           transition={{ duration: 0.25, ease: "easeInOut" }}
           className="h-full"
         >
-          {slides[currentSlide]}
+          {slides.nodes[currentSlide]}
         </motion.div>
       </AnimatePresence>
 
       <SlideNavigation
         currentSlide={currentSlide}
         totalSlides={totalSlides}
+        slideLabels={slides.labels}
         onPrevious={goPrevious}
         onNext={goNext}
         onGoToSlide={goToSlide}
@@ -66,73 +285,28 @@ export function ExecutiveReportOverlay({ data, onClose }: ExecutiveReportOverlay
   );
 }
 
-function buildSlideList(data: ReportData): React.ReactNode[] {
-  const slides: React.ReactNode[] = [];
+function buildSlideList(
+  data: ReportData,
+  mode: PresentationMode,
+  enabledSlides: string[],
+): { nodes: React.ReactNode[]; labels: string[] } {
+  const enabledSet = new Set(enabledSlides);
 
-  const hasSentiment = (data.sentimentNarratives?.strengths?.length ?? 0) > 0
-    || (data.sentimentNarratives?.improvements?.length ?? 0) > 0;
-  const hasCities = data.cityMetrics != null && data.cityMetrics.length > 1;
-
-  // Count total slides
-  let total = 8; // title + kpi + trend + platform + competitive + citations + groups + prompts
-  if (hasCities) total += 1;
-  if (hasSentiment) total += 1;
-
-  let n = 1;
-
-  // 1. Title
-  slides.push(
-    <TitleSlide key="title" businessName={data.businessName} scanDate={data.scanDate} city={data.city} />,
+  const activeSlides = SLIDE_REGISTRY.filter(
+    (s) => enabledSet.has(s.id) && s.condition(data),
   );
 
-  // 2. KPI Scorecard
-  slides.push(
-    <KpiScorecardSlide key="kpi" visibilityMetrics={data.visibilityMetrics} avgRank={data.avgRank} firstPlaceCount={data.firstPlaceCount} sentimentScore={data.sentimentScore} slideNumber={++n} totalSlides={total} />,
-  );
+  const totalSlides = activeSlides.length;
+  let slideNumber = 1;
 
-  // 3. City Comparison (conditional)
-  if (hasCities) {
-    slides.push(
-      <CityComparisonSlide key="cities" cityMetrics={data.cityMetrics!} slideNumber={++n} totalSlides={total} />,
-    );
+  const nodes: React.ReactNode[] = [];
+  const labels: string[] = [];
+
+  for (const slide of activeSlides) {
+    nodes.push(slide.render(data, slideNumber, totalSlides, mode));
+    labels.push(slide.label);
+    slideNumber++;
   }
 
-  // 4. Visibility Trend
-  slides.push(
-    <VisibilityTrendSlide key="trend" sessionChartData={data.sessionChartData} slideNumber={++n} totalSlides={total} />,
-  );
-
-  // 5. Platform Breakdown
-  slides.push(
-    <PlatformBreakdownSlide key="platform" visibilityMetrics={data.visibilityMetrics} slideNumber={++n} totalSlides={total} />,
-  );
-
-  // 6. Competitive Landscape
-  slides.push(
-    <CompetitiveLandscapeSlide key="competitive" shareOfVoice={data.shareOfVoice} competitorVisibility={data.competitorVisibility} businessName={data.businessName} slideNumber={++n} totalSlides={total} />,
-  );
-
-  // 7. Citations & Prominence
-  slides.push(
-    <CitationsProminenceSlide key="citations" topCitations={data.topCitations} avgRank={data.avgRank} firstPlaceCount={data.firstPlaceCount} slideNumber={++n} totalSlides={total} />,
-  );
-
-  // 8. Sentiment (conditional)
-  if (hasSentiment) {
-    slides.push(
-      <SentimentSlide key="sentiment" sentimentNarratives={data.sentimentNarratives} slideNumber={++n} totalSlides={total} />,
-    );
-  }
-
-  // 9. Group Performance
-  slides.push(
-    <GroupPerformanceSlide key="groups" groupBarData={data.groupBarData} slideNumber={++n} totalSlides={total} />,
-  );
-
-  // 10. Prompt Performance
-  slides.push(
-    <PromptPerformanceSlide key="prompts" topPrompts={data.topPrompts} bottomPrompts={data.bottomPrompts} businessName={data.businessName} slideNumber={++n} totalSlides={total} />,
-  );
-
-  return slides;
+  return { nodes, labels };
 }

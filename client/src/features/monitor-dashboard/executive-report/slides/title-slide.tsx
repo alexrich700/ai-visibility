@@ -1,12 +1,21 @@
 import logoFull from "@assets/RMG-Logo-Black-1920w_(1)_1765741951083.webp";
+import type { PresentationMode } from "../types";
 
 interface TitleSlideProps {
   businessName: string;
   scanDate: string | null;
   city: string | null;
+  mode?: PresentationMode;
 }
 
-export function TitleSlide({ businessName, scanDate, city }: TitleSlideProps) {
+const SUBTITLE: Record<PresentationMode, string> = {
+  pitch: "AI Visibility Assessment",
+  progress: "AI Visibility Progress Report",
+};
+
+export function TitleSlide({ businessName, scanDate, city, mode }: TitleSlideProps) {
+  const subtitle = mode ? SUBTITLE[mode] : "AI Visibility Report";
+
   return (
     <div className="h-full flex flex-col items-center justify-center text-center pt-1.5">
       <img src={logoFull} alt="Logo" className="h-12 mb-12 object-contain" />
@@ -18,7 +27,7 @@ export function TitleSlide({ businessName, scanDate, city }: TitleSlideProps) {
       </h1>
 
       <p className="text-2xl text-[#5599f9] font-medium mb-10">
-        AI Visibility Report
+        {subtitle}
       </p>
 
       <div className="flex items-center gap-4 text-gray-500">

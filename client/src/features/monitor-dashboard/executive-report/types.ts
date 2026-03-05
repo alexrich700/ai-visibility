@@ -6,6 +6,14 @@ import type {
   VisibilityMetrics,
 } from "../selectors";
 
+export type PresentationMode = "pitch" | "progress";
+
+export interface SlideConfig {
+  id: string;
+  label: string;
+  enabled: boolean;
+}
+
 export interface SentimentNarrative {
   text: string;
   strength: number;
@@ -37,6 +45,14 @@ export interface PromptPerformanceItem {
   competitors?: string | null;
 }
 
+export interface PreviousPeriodData {
+  visibilityRate: number;
+  citationRate: number;
+  avgRank: number | null;
+  sentimentScore: number | null;
+  scanDate: string | null;
+}
+
 export interface ReportData {
   businessName: string;
   scanDate: string | null;
@@ -54,4 +70,5 @@ export interface ReportData {
   cityMetrics: CityMetric[] | null;
   topPrompts: PromptPerformanceItem[];
   bottomPrompts: PromptPerformanceItem[];
+  previousPeriod: PreviousPeriodData | null;
 }
