@@ -15,7 +15,7 @@ export function SlideLayout({ title, subtitle, slideNumber, totalSlides, childre
       <div className="flex-shrink-0 h-1.5 bg-gradient-to-r from-[#5599f9] to-[#ffb41c]" />
 
       {/* Header with logo and title */}
-      <div className="flex-shrink-0 flex items-center justify-between px-12 pt-6 pb-4">
+      <div className="flex-shrink-0 flex items-center justify-between px-16 pt-4 pb-3">
         <div className="flex items-center gap-3">
           <img src={logoIcon} alt="Logo" className="w-8 h-8" />
           {title && (
@@ -31,7 +31,7 @@ export function SlideLayout({ title, subtitle, slideNumber, totalSlides, childre
       </div>
 
       {/* Slide content */}
-      <div className="flex-1 px-12 pb-8 overflow-hidden">
+      <div className="flex-1 min-h-0 px-16 pb-12 overflow-y-auto">
         {children}
       </div>
     </div>

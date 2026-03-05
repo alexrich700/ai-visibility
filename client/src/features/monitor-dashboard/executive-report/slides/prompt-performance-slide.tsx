@@ -58,7 +58,7 @@ function PromptRow({ prompt }: { prompt: PromptPerformanceItem }) {
 export function PromptPerformanceSlide({ topPrompts, bottomPrompts, slideNumber, totalSlides }: PromptPerformanceSlideProps) {
   return (
     <SlideLayout title="Prompt Performance" subtitle="Strongest and weakest performing search queries" slideNumber={slideNumber} totalSlides={totalSlides}>
-      <div className="grid md:grid-cols-2 gap-8 h-full">
+      <div className="grid md:grid-cols-2 gap-8 pt-2">
         {/* Top Performers */}
         <div>
           <div className="flex items-center gap-2 mb-4">

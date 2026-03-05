@@ -13,7 +13,7 @@ export function PlatformBreakdownSlide({ visibilityMetrics, slideNumber, totalSl
   return (
     <SlideLayout title="Platform Breakdown" subtitle="Visibility across AI platforms" slideNumber={slideNumber} totalSlides={totalSlides}>
       <div className="h-full flex items-center">
-        <div className="w-full max-w-4xl mx-auto space-y-12">
+        <div className="w-full space-y-10">
           {/* ChatGPT */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
