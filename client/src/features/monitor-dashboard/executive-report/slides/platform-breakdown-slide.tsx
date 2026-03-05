@@ -27,7 +27,7 @@ export function PlatformBreakdownSlide({ visibilityMetrics, slideNumber, totalSl
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-4 h-4 rounded-full bg-[#5599f9]" />
-                <span className="text-2xl font-bold text-gray-800">ChatGPT</span>
+                <span className="text-xl font-bold text-gray-800">ChatGPT</span>
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-4xl font-bold text-[#5599f9]">{chatgptVisibility}%</span>
@@ -47,7 +47,7 @@ export function PlatformBreakdownSlide({ visibilityMetrics, slideNumber, totalSl
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-4 h-4 rounded-full bg-[#ffb41c]" />
-                <span className="text-2xl font-bold text-gray-800">Google AI</span>
+                <span className="text-xl font-bold text-gray-800">Google AI</span>
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-4xl font-bold text-[#ffb41c]">{googleAIVisibility}%</span>

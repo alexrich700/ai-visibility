@@ -1,8 +1,11 @@
 import { Search, FileText, Globe } from "lucide-react";
+import { SlideLayout } from "../components/slide-layout";
 import logoFull from "@assets/RMG-Logo-Black-1920w_(1)_1765741951083.webp";
 
 interface CtaSlideProps {
   businessName: string;
+  slideNumber: number;
+  totalSlides: number;
 }
 
 const phases = [
@@ -47,23 +50,18 @@ const phases = [
   },
 ];
 
-export function CtaSlide({ businessName }: CtaSlideProps) {
+export function CtaSlide({ businessName, slideNumber, totalSlides }: CtaSlideProps) {
   return (
-    <div className="h-full flex flex-col pt-1.5">
-      {/* Header */}
-      <div className="flex-shrink-0 px-28 pt-6 pb-4">
-        <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
-          So What Would We Actually Do for {businessName}?
-        </h1>
-        <p className="text-gray-500 mt-1">
-          Here's how we'd approach closing the gap... three phases, clear deliverables.
-        </p>
-      </div>
-
+    <SlideLayout
+      title={`So What Would We Actually Do for ${businessName}?`}
+      subtitle="Here's how we'd approach closing the gap... three phases, clear deliverables."
+      slideNumber={slideNumber}
+      totalSlides={totalSlides}
+    >
       {/* Phase cards */}
-      <div className="flex-1 min-h-0 mx-28 mb-6 grid grid-cols-3 gap-6">
+      <div className="flex-1 min-h-0 grid grid-cols-3 gap-6">
         {phases.map((phase) => (
-          <div key={phase.phase} className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 flex flex-col">
+          <div key={phase.phase} className="bg-gray-50 rounded-2xl border border-gray-200 p-6 flex flex-col">
             {/* Phase header */}
             <div className="flex items-center gap-3 mb-1">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#5599f9] to-[#ffb41c] flex items-center justify-center">
@@ -71,7 +69,7 @@ export function CtaSlide({ businessName }: CtaSlideProps) {
               </div>
               <div>
                 <p className="text-xs font-bold uppercase tracking-widest text-[#5599f9]">{phase.phase}</p>
-                <h3 className="text-lg font-bold text-gray-900 leading-tight">{phase.title}</h3>
+                <h3 className="text-base font-bold text-gray-900 leading-tight">{phase.title}</h3>
               </div>
             </div>
             <p className="text-xs text-gray-400 mb-4 italic">{phase.timeline}</p>
@@ -90,7 +88,7 @@ export function CtaSlide({ businessName }: CtaSlideProps) {
       </div>
 
       {/* Footer CTA */}
-      <div className="mx-28 mb-8">
+      <div className="mt-6">
         <div className="bg-gradient-to-r from-[#5599f9] to-[#ffb41c] rounded-2xl p-6">
           <div className="flex items-center justify-center gap-4">
             <img src={logoFull} alt="Logo" className="h-7 object-contain brightness-0 invert" />
@@ -101,6 +99,6 @@ export function CtaSlide({ businessName }: CtaSlideProps) {
           </div>
         </div>
       </div>
-    </div>
+    </SlideLayout>
   );
 }

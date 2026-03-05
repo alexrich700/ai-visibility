@@ -207,8 +207,8 @@ const SLIDE_REGISTRY: SlideDefinition[] = [
     id: "cta",
     label: "Next Steps",
     condition: () => true,
-    render: (data) => (
-      <CtaSlide key="cta" businessName={data.businessName} />
+    render: (data, sn, ts) => (
+      <CtaSlide key="cta" businessName={data.businessName} slideNumber={sn} totalSlides={ts} />
     ),
     defaultModes: ["pitch"],
   },
