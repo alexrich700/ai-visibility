@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import type { PromptPerformanceItem } from "../types";
+import type { PromptPerformanceItem, PresentationMode } from "../types";
 
 interface PromptPerformanceSlideProps {
   topPrompts: PromptPerformanceItem[];
@@ -13,6 +13,7 @@ interface PromptPerformanceSlideProps {
   businessName: string;
   slideNumber: number;
   totalSlides: number;
+  mode?: PresentationMode;
 }
 
 function PlatformBadge({ found, label }: { found: boolean; label: string }) {
@@ -201,17 +202,23 @@ function ResponseModal({ prompt, businessName, onClose }: { prompt: PromptPerfor
   );
 }
 
-export function PromptPerformanceSlide({ topPrompts, bottomPrompts, businessName, slideNumber, totalSlides }: PromptPerformanceSlideProps) {
+export function PromptPerformanceSlide({ topPrompts, bottomPrompts, businessName, slideNumber, totalSlides, mode }: PromptPerformanceSlideProps) {
   const [selectedPrompt, setSelectedPrompt] = useState<PromptPerformanceItem | null>(null);
 
+  const isPitch = mode === "pitch";
+  const title = isPitch ? "The Questions People Are Asking AI" : "Prompt Performance";
+  const subtitle = isPitch
+    ? "These are real queries... click any to see exactly what ChatGPT and Google said"
+    : "Strongest and weakest performing search queries";
+
   return (
-    <SlideLayout title="Prompt Performance" subtitle="Strongest and weakest performing search queries" slideNumber={slideNumber} totalSlides={totalSlides}>
+    <SlideLayout title={title} subtitle={subtitle} slideNumber={slideNumber} totalSlides={totalSlides}>
       <div className="grid md:grid-cols-2 gap-8 h-full">
         {/* Top Performers */}
         <div className="flex flex-col h-full">
           <div className="flex items-center gap-2 mb-4 px-2">
             <div className="w-3 h-3 rounded-full bg-green-500" />
-            <h3 className="text-lg font-bold text-green-700">Top Performers</h3>
+            <h3 className="text-lg font-bold text-green-700">{isPitch ? "Where You're Showing Up" : "Top Performers"}</h3>
           </div>
           <div className="space-y-3 overflow-y-auto pr-2 flex-1">
             {topPrompts.length > 0 ? (
@@ -228,7 +235,7 @@ export function PromptPerformanceSlide({ topPrompts, bottomPrompts, businessName
         <div className="flex flex-col h-full">
           <div className="flex items-center gap-2 mb-4 px-2">
             <div className="w-3 h-3 rounded-full bg-red-500" />
-            <h3 className="text-lg font-bold text-red-700">Needs Attention</h3>
+            <h3 className="text-lg font-bold text-red-700">{isPitch ? "Where You're Not" : "Needs Attention"}</h3>
           </div>
           <div className="space-y-3 overflow-y-auto pr-2 flex-1">
             {bottomPrompts.length > 0 ? (

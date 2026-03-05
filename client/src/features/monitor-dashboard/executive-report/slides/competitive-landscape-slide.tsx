@@ -1,6 +1,7 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { SlideLayout } from "../components/slide-layout";
 import type { CompetitorVisibility, ShareOfVoiceItem } from "../../selectors";
+import type { PresentationMode } from "../types";
 
 interface CompetitiveLandscapeSlideProps {
   shareOfVoice: ShareOfVoiceItem[];
@@ -8,6 +9,7 @@ interface CompetitiveLandscapeSlideProps {
   businessName: string;
   slideNumber: number;
   totalSlides: number;
+  mode?: PresentationMode;
 }
 
 const COLORS = ["#5599f9", "#ffb41c", "#22c55e", "#ef4444", "#8b5cf6", "#ec4899"];
@@ -18,9 +20,16 @@ export function CompetitiveLandscapeSlide({
   businessName,
   slideNumber,
   totalSlides,
+  mode,
 }: CompetitiveLandscapeSlideProps) {
+  const isPitch = mode === "pitch";
+  const title = isPitch ? "Who's Showing Up Instead" : "Competitive Landscape";
+  const subtitle = isPitch
+    ? "These are the businesses AI is recommending in your space right now"
+    : "Share of voice and competitor visibility";
+
   return (
-    <SlideLayout title="Competitive Landscape" subtitle="Share of voice and competitor visibility" slideNumber={slideNumber} totalSlides={totalSlides}>
+    <SlideLayout title={title} subtitle={subtitle} slideNumber={slideNumber} totalSlides={totalSlides}>
       <div className="h-full flex items-center">
         <div className="grid grid-cols-2 gap-12 w-full">
           {/* Share of Voice */}
@@ -54,7 +63,9 @@ export function CompetitiveLandscapeSlide({
 
           {/* Competitor ranking */}
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-6">Top Competitors</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-6">
+              {isPitch ? "Top Competitors in AI Results" : "Top Competitors"}
+            </h3>
             {competitorVisibility.length > 0 ? (
               <div className="space-y-4">
                 {competitorVisibility.map((competitor, index) => (

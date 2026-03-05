@@ -39,7 +39,7 @@ const SLIDE_REGISTRY: SlideDefinition[] = [
   },
   {
     id: "what-is-ai-visibility",
-    label: "What is AI Visibility?",
+    label: "How Search Changed",
     condition: () => true,
     render: (_data, sn, ts) => (
       <WhatIsAiVisibilitySlide key="what-is-ai" slideNumber={sn} totalSlides={ts} />
@@ -48,7 +48,7 @@ const SLIDE_REGISTRY: SlideDefinition[] = [
   },
   {
     id: "why-geo-matters",
-    label: "Why GEO Matters",
+    label: "Why This Matters",
     condition: () => true,
     render: (_data, sn, ts) => (
       <WhyGeoMattersSlide key="why-geo" slideNumber={sn} totalSlides={ts} />
@@ -76,7 +76,7 @@ const SLIDE_REGISTRY: SlideDefinition[] = [
     id: "kpi",
     label: "Executive Summary",
     condition: () => true,
-    render: (data, sn, ts) => (
+    render: (data, sn, ts, mode) => (
       <KpiScorecardSlide
         key="kpi"
         visibilityMetrics={data.visibilityMetrics}
@@ -85,6 +85,7 @@ const SLIDE_REGISTRY: SlideDefinition[] = [
         sentimentScore={data.sentimentScore}
         slideNumber={sn}
         totalSlides={ts}
+        mode={mode}
       />
     ),
     defaultModes: ["pitch", "progress"],
@@ -102,8 +103,8 @@ const SLIDE_REGISTRY: SlideDefinition[] = [
     id: "platform-breakdown",
     label: "Platform Breakdown",
     condition: () => true,
-    render: (data, sn, ts) => (
-      <PlatformBreakdownSlide key="platform" visibilityMetrics={data.visibilityMetrics} slideNumber={sn} totalSlides={ts} />
+    render: (data, sn, ts, mode) => (
+      <PlatformBreakdownSlide key="platform" visibilityMetrics={data.visibilityMetrics} slideNumber={sn} totalSlides={ts} mode={mode} />
     ),
     defaultModes: ["pitch", "progress"],
   },
@@ -111,7 +112,7 @@ const SLIDE_REGISTRY: SlideDefinition[] = [
     id: "competitive-landscape",
     label: "Competitive Landscape",
     condition: () => true,
-    render: (data, sn, ts) => (
+    render: (data, sn, ts, mode) => (
       <CompetitiveLandscapeSlide
         key="competitive"
         shareOfVoice={data.shareOfVoice}
@@ -119,6 +120,7 @@ const SLIDE_REGISTRY: SlideDefinition[] = [
         businessName={data.businessName}
         slideNumber={sn}
         totalSlides={ts}
+        mode={mode}
       />
     ),
     defaultModes: ["pitch", "progress"],
@@ -143,8 +145,8 @@ const SLIDE_REGISTRY: SlideDefinition[] = [
     id: "city-comparison",
     label: "Visibility by Location",
     condition: (data) => data.cityMetrics != null && data.cityMetrics.length > 1,
-    render: (data, sn, ts) => (
-      <CityComparisonSlide key="cities" cityMetrics={data.cityMetrics!} slideNumber={sn} totalSlides={ts} />
+    render: (data, sn, ts, mode) => (
+      <CityComparisonSlide key="cities" cityMetrics={data.cityMetrics!} slideNumber={sn} totalSlides={ts} mode={mode} />
     ),
     defaultModes: ["pitch", "progress"],
   },
@@ -179,8 +181,8 @@ const SLIDE_REGISTRY: SlideDefinition[] = [
     id: "group-performance",
     label: "Service Group Performance",
     condition: () => true,
-    render: (data, sn, ts) => (
-      <GroupPerformanceSlide key="groups" groupBarData={data.groupBarData} slideNumber={sn} totalSlides={ts} />
+    render: (data, sn, ts, mode) => (
+      <GroupPerformanceSlide key="groups" groupBarData={data.groupBarData} slideNumber={sn} totalSlides={ts} mode={mode} />
     ),
     defaultModes: ["pitch", "progress"],
   },
@@ -188,7 +190,7 @@ const SLIDE_REGISTRY: SlideDefinition[] = [
     id: "prompt-performance",
     label: "Prompt Performance",
     condition: () => true,
-    render: (data, sn, ts) => (
+    render: (data, sn, ts, mode) => (
       <PromptPerformanceSlide
         key="prompts"
         topPrompts={data.topPrompts}
@@ -196,6 +198,7 @@ const SLIDE_REGISTRY: SlideDefinition[] = [
         businessName={data.businessName}
         slideNumber={sn}
         totalSlides={ts}
+        mode={mode}
       />
     ),
     defaultModes: ["pitch", "progress"],

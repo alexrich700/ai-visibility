@@ -1,17 +1,25 @@
 import { SlideLayout } from "../components/slide-layout";
 import type { VisibilityMetrics } from "../../selectors";
+import type { PresentationMode } from "../types";
 
 interface PlatformBreakdownSlideProps {
   visibilityMetrics: VisibilityMetrics;
   slideNumber: number;
   totalSlides: number;
+  mode?: PresentationMode;
 }
 
-export function PlatformBreakdownSlide({ visibilityMetrics, slideNumber, totalSlides }: PlatformBreakdownSlideProps) {
+export function PlatformBreakdownSlide({ visibilityMetrics, slideNumber, totalSlides, mode }: PlatformBreakdownSlideProps) {
   const { chatgptVisibility, googleAIVisibility, chatgptFoundCount, googleAIFoundCount, promptCount, visibilityRate, foundCount, totalExposures } = visibilityMetrics;
 
+  const isPitch = mode === "pitch";
+  const title = isPitch ? "Your Visibility by Platform" : "Platform Breakdown";
+  const subtitle = isPitch
+    ? "Let's break that down... where are you showing up, and where aren't you?"
+    : "Visibility across AI platforms";
+
   return (
-    <SlideLayout title="Platform Breakdown" subtitle="Visibility across AI platforms" slideNumber={slideNumber} totalSlides={totalSlides}>
+    <SlideLayout title={title} subtitle={subtitle} slideNumber={slideNumber} totalSlides={totalSlides}>
       <div className="h-full flex items-center">
         <div className="w-full max-w-4xl mx-auto space-y-12">
           {/* ChatGPT */}

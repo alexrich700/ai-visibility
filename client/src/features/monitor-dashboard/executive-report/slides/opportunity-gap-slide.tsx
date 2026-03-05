@@ -39,7 +39,12 @@ export function OpportunityGapSlide({
   const missedPrompts = bottomPrompts.filter((p) => !p.chatgptFound && !p.googleAIFound).slice(0, 4);
 
   return (
-    <SlideLayout title="Your AI Visibility Opportunity" subtitle={`Where ${businessName} can grow`} slideNumber={slideNumber} totalSlides={totalSlides}>
+    <SlideLayout
+      title="The Gap You're Leaving Open"
+      subtitle={`Right now, ${missedPercent}% of AI conversations about your space don't mention ${businessName}`}
+      slideNumber={slideNumber}
+      totalSlides={totalSlides}
+    >
       <div className="h-full flex items-center">
         <div className="grid grid-cols-2 gap-12 w-full">
           {/* Left: donut chart + metrics */}
@@ -91,7 +96,7 @@ export function OpportunityGapSlide({
           <div>
             <div className="flex items-center gap-2 mb-6">
               <AlertCircle className="w-5 h-5 text-red-500" />
-              <h3 className="text-lg font-semibold text-gray-900">AI Queries Where You're Invisible</h3>
+              <h3 className="text-lg font-semibold text-gray-900">Queries Where You're Missing</h3>
             </div>
             {missedPrompts.length > 0 ? (
               <div className="space-y-4">
@@ -123,7 +128,7 @@ export function OpportunityGapSlide({
               </div>
             )}
             <p className="text-sm text-gray-500 mt-6">
-              These are real queries potential customers ask AI — and your business isn't being recommended.
+              Real questions your potential customers are asking AI... and {businessName} isn't part of the answer.
             </p>
           </div>
         </div>
