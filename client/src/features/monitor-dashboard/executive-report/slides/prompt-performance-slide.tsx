@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CheckCircle2, XCircle, Minus, ExternalLink } from "lucide-react";
+import { CheckCircle2, XCircle, ExternalLink } from "lucide-react";
 import { SlideLayout } from "../components/slide-layout";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -15,19 +15,11 @@ interface PromptPerformanceSlideProps {
   totalSlides: number;
 }
 
-function PlatformBadge({ found, cited, label }: { found: boolean; cited: boolean; label: string }) {
-  if (cited) {
+function PlatformBadge({ found, label }: { found: boolean; label: string }) {
+  if (found) {
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
         <CheckCircle2 className="w-3 h-3" />
-        {label}
-      </span>
-    );
-  }
-  if (found) {
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-        <Minus className="w-3 h-3" />
         {label}
       </span>
     );
@@ -58,8 +50,8 @@ function PromptRow({ prompt, variant, onClick }: { prompt: PromptPerformanceItem
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-gray-800 leading-relaxed">{truncated}</p>
         <div className="flex items-center gap-2 mt-3">
-          <PlatformBadge found={prompt.chatgptFound} cited={prompt.chatgptCited ?? false} label="ChatGPT" />
-          <PlatformBadge found={prompt.googleAIFound} cited={prompt.googleAICited ?? false} label="Google" />
+          <PlatformBadge found={prompt.chatgptFound} label="ChatGPT" />
+          <PlatformBadge found={prompt.googleAIFound} label="Google" />
           {prompt.avgRank != null && (
             <span className="text-xs text-gray-500 ml-auto">Rank {prompt.avgRank}</span>
           )}
