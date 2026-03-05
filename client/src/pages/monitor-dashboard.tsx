@@ -66,6 +66,7 @@ import {
   type CompetitorVisibility,
   type GroupResults,
   type GroupTrendData,
+  type SessionWithCity,
   type ShareOfVoiceItem,
 } from "@/features/monitor-dashboard/selectors";
 
@@ -759,6 +760,45 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
   );
 
   const groupBarData = useMemo(() => buildGroupBarData(serviceResultsByGroup), [serviceResultsByGroup]);
+
+  // Per-city metrics for executive report city comparison slide
+  const cityMetrics = useMemo(() => {
+    const cities = maybeClient?.cities;
+    if (!cities || cities.length <= 1) return null;
+    return cities.map((cityName: string) => {
+      const citySession = sessions.find(s => (s as SessionWithCity).city === cityName);
+      if (!citySession) return { city: cityName, visibilityRate: 0, avgRank: null };
+      const cityResults = latestResults.filter(r => r.sessionId === citySession.id);
+      const serviceOnly = cityResults.filter(r => !brandSentimentGroupIds.has(r.groupId));
+      const metrics = computeVisibilityMetrics(serviceOnly);
+      const rank = computeAverageRank(serviceOnly);
+      return { city: cityName, visibilityRate: metrics.visibilityRate, avgRank: rank };
+    });
+  }, [maybeClient?.cities, sessions, latestResults, brandSentimentGroupIds]);
+
+  // Top and bottom performing prompts for executive report
+  const { topPrompts, bottomPrompts } = useMemo(() => {
+    const scored = serviceResultsOnly.map(r => {
+      let score = 0;
+      if (r.chatgptFound) score += 1;
+      if (r.googleAIFound) score += 1;
+      if (r.chatgptCited) score += 1;
+      if (r.googleAICited) score += 1;
+      const ranks = [r.chatgptRank, r.googleAIRank].filter((x): x is number => x != null);
+      const avg = ranks.length ? ranks.reduce((a, b) => a + b, 0) / ranks.length : 999;
+      return {
+        promptText: r.promptText,
+        chatgptFound: r.chatgptFound,
+        googleAIFound: r.googleAIFound,
+        chatgptCited: r.chatgptCited,
+        googleAICited: r.googleAICited,
+        avgRank: ranks.length ? Math.round(avg * 10) / 10 : null,
+        score,
+      };
+    });
+    const sorted = [...scored].sort((a, b) => b.score - a.score || (a.avgRank ?? 999) - (b.avgRank ?? 999));
+    return { topPrompts: sorted.slice(0, 5), bottomPrompts: sorted.slice(-5).reverse() };
+  }, [serviceResultsOnly]);
 
   const getVisibilityScore = (r: CheckResult) => {
     const chatgptVisible = r.chatgptCited || r.chatgptFound;
@@ -2360,6 +2400,9 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
             topCitations: computedTopCitations,
             sentimentNarratives: analytics?.sentimentNarratives ?? null,
             groupBarData: buildGroupBarData(serviceResultsByGroup),
+            cityMetrics,
+            topPrompts,
+            bottomPrompts,
           } satisfies ReportData}
           onClose={() => setPresentationMode(false)}
         />
