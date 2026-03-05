@@ -9,7 +9,7 @@ interface TitleSlideProps {
 }
 
 const SUBTITLE: Record<PresentationMode, string> = {
-  pitch: "AI Visibility Assessment",
+  pitch: "AI Visibility Audit",
   progress: "AI Visibility Progress Report",
 };
 

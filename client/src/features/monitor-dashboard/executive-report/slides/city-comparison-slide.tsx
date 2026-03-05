@@ -1,5 +1,6 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from "recharts";
 import { SlideLayout } from "../components/slide-layout";
+import type { PresentationMode } from "../types";
 
 interface CityMetric {
   city: string;
@@ -11,6 +12,7 @@ interface CityComparisonSlideProps {
   cityMetrics: CityMetric[];
   slideNumber: number;
   totalSlides: number;
+  mode?: PresentationMode;
 }
 
 function getBarColor(rate: number): string {
@@ -19,14 +21,20 @@ function getBarColor(rate: number): string {
   return "#ef4444";
 }
 
-export function CityComparisonSlide({ cityMetrics, slideNumber, totalSlides }: CityComparisonSlideProps) {
+export function CityComparisonSlide({ cityMetrics, slideNumber, totalSlides, mode }: CityComparisonSlideProps) {
   const sorted = [...cityMetrics].sort((a, b) => b.visibilityRate - a.visibilityRate);
   const avg = sorted.length > 0
     ? Math.round(sorted.reduce((sum, c) => sum + c.visibilityRate, 0) / sorted.length)
     : 0;
 
+  const isPitch = mode === "pitch";
+  const title = isPitch ? "How Your Markets Compare" : "Visibility by Location";
+  const subtitle = isPitch
+    ? "AI visibility varies by location... some markets need more attention than others"
+    : "AI visibility performance across tracked markets";
+
   return (
-    <SlideLayout title="Visibility by Location" subtitle="AI visibility performance across tracked markets" slideNumber={slideNumber} totalSlides={totalSlides}>
+    <SlideLayout title={title} subtitle={subtitle} slideNumber={slideNumber} totalSlides={totalSlides}>
       <div className="flex-1 min-h-0 flex flex-col">
         <div className="w-full flex-1 min-h-[280px]">
           <ResponsiveContainer width="100%" height="100%">

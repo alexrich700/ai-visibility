@@ -1,6 +1,7 @@
 import { Award, Eye, Target, TrendingUp } from "lucide-react";
 import { SlideLayout } from "../components/slide-layout";
 import type { VisibilityMetrics } from "../../selectors";
+import type { PresentationMode } from "../types";
 
 interface KpiScorecardSlideProps {
   visibilityMetrics: VisibilityMetrics;
@@ -9,6 +10,7 @@ interface KpiScorecardSlideProps {
   sentimentScore: number | null;
   slideNumber: number;
   totalSlides: number;
+  mode?: PresentationMode;
 }
 
 export function KpiScorecardSlide({
@@ -18,13 +20,16 @@ export function KpiScorecardSlide({
   sentimentScore,
   slideNumber,
   totalSlides,
+  mode,
 }: KpiScorecardSlideProps) {
   const { visibilityRate, citationRate } = visibilityMetrics;
+
+  const isPitch = mode === "pitch";
 
   const kpis = [
     {
       label: "Average Rank",
-      value: avgRank !== null ? avgRank.toFixed(1) : "—",
+      value: avgRank !== null ? avgRank.toFixed(1) : "\u2014",
       subtitle: avgRank !== null ? "Lower is better" : "No rankings yet",
       icon: Award,
       color: "text-gray-900",
@@ -54,7 +59,7 @@ export function KpiScorecardSlide({
     },
     {
       label: "Sentiment Score",
-      value: sentimentScore !== null ? `${sentimentScore}%` : "—",
+      value: sentimentScore !== null ? `${sentimentScore}%` : "\u2014",
       subtitle: sentimentScore !== null
         ? sentimentScore >= 70 ? "Positive perception" : sentimentScore >= 40 ? "Mixed perception" : "Needs attention"
         : "Not available",
@@ -66,8 +71,13 @@ export function KpiScorecardSlide({
     },
   ];
 
+  const title = isPitch ? "Here's Where You Stand Today" : "Executive Summary";
+  const subtitle = isPitch
+    ? "We ran the audit. These are your numbers."
+    : undefined;
+
   return (
-    <SlideLayout title="Executive Summary" slideNumber={slideNumber} totalSlides={totalSlides}>
+    <SlideLayout title={title} subtitle={subtitle} slideNumber={slideNumber} totalSlides={totalSlides}>
       <div className="h-full flex items-center">
         <div className="grid grid-cols-2 gap-8 w-full max-w-4xl mx-auto">
           {kpis.map((kpi) => (

@@ -1,19 +1,27 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { SlideLayout } from "../components/slide-layout";
+import type { PresentationMode } from "../types";
 
 interface GroupPerformanceSlideProps {
   groupBarData: { name: string; fullName: string; visibility: number; total: number }[];
   slideNumber: number;
   totalSlides: number;
+  mode?: PresentationMode;
 }
 
 const COLORS = ["#5599f9", "#ffb41c", "#22c55e", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316", "#6366f1"];
 
-export function GroupPerformanceSlide({ groupBarData, slideNumber, totalSlides }: GroupPerformanceSlideProps) {
+export function GroupPerformanceSlide({ groupBarData, slideNumber, totalSlides, mode }: GroupPerformanceSlideProps) {
   const sortedData = [...groupBarData].sort((a, b) => b.visibility - a.visibility);
 
+  const isPitch = mode === "pitch";
+  const title = isPitch ? "Not All Services Are Performing Equal" : "Service Group Performance";
+  const subtitle = isPitch
+    ? "Some of your offerings are showing up in AI results... others aren't even close"
+    : "Visibility breakdown by service category";
+
   return (
-    <SlideLayout title="Service Group Performance" subtitle="Visibility breakdown by service category" slideNumber={slideNumber} totalSlides={totalSlides}>
+    <SlideLayout title={title} subtitle={subtitle} slideNumber={slideNumber} totalSlides={totalSlides}>
       <div className="flex-1 min-h-0 flex flex-col">
         {sortedData.length > 0 ? (
           <div className="w-full flex-1 min-h-[300px]">
