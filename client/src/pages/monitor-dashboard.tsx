@@ -797,7 +797,9 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
       };
     });
     const sorted = [...scored].sort((a, b) => b.score - a.score || (a.avgRank ?? 999) - (b.avgRank ?? 999));
-    return { topPrompts: sorted.slice(0, 5), bottomPrompts: sorted.slice(-5).reverse() };
+    const top = sorted.slice(0, 5);
+    const bottom = sorted.slice(top.length).slice(-5).reverse();
+    return { topPrompts: top, bottomPrompts: bottom };
   }, [serviceResultsOnly]);
 
   const getVisibilityScore = (r: CheckResult) => {
