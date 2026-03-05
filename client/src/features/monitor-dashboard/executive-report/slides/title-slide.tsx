@@ -8,23 +8,23 @@ interface TitleSlideProps {
 
 export function TitleSlide({ businessName, scanDate, city }: TitleSlideProps) {
   return (
-    <div className="h-full flex flex-col items-center justify-center text-center">
-      <img src={logoFull} alt="Logo" className="h-12 mb-10 object-contain" />
+    <div className="h-full flex flex-col items-center justify-center text-center pt-1.5">
+      <img src={logoFull} alt="Logo" className="h-12 mb-12 object-contain" />
 
-      <div className="h-1 w-32 bg-gradient-to-r from-[#5599f9] to-[#ffb41c] rounded-full mb-10" />
+      <div className="h-1 w-40 bg-gradient-to-r from-[#5599f9] to-[#ffb41c] rounded-full mb-12" />
 
-      <h1 className="text-5xl font-bold text-gray-900 tracking-tight mb-4">
+      <h1 className="text-6xl font-bold text-gray-900 tracking-tight mb-6">
         {businessName}
       </h1>
 
-      <p className="text-2xl text-[#5599f9] font-medium mb-8">
+      <p className="text-2xl text-[#5599f9] font-medium mb-10">
         AI Visibility Report
       </p>
 
       <div className="flex items-center gap-4 text-gray-500">
-        {scanDate && <span className="text-lg">{scanDate}</span>}
+        {scanDate && <span className="text-lg font-medium">{scanDate}</span>}
         {scanDate && city && <span className="text-gray-300">|</span>}
-        {city && <span className="text-lg">{city}</span>}
+        {city && <span className="text-lg font-medium">{city}</span>}
       </div>
     </div>
   );

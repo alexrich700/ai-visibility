@@ -29,7 +29,8 @@ export function KpiScorecardSlide({
       icon: Award,
       color: "text-gray-900",
       iconColor: "text-amber-500",
-      bgColor: "bg-amber-50",
+      iconBg: "bg-amber-50",
+      borderColor: "#f59e0b",
     },
     {
       label: "Visibility Rate",
@@ -38,7 +39,8 @@ export function KpiScorecardSlide({
       icon: Eye,
       color: "text-[#5599f9]",
       iconColor: "text-[#5599f9]",
-      bgColor: "bg-blue-50",
+      iconBg: "bg-blue-50",
+      borderColor: "#5599f9",
     },
     {
       label: "Citation Rate",
@@ -47,7 +49,8 @@ export function KpiScorecardSlide({
       icon: Target,
       color: "text-[#ffb41c]",
       iconColor: "text-[#ffb41c]",
-      bgColor: "bg-amber-50",
+      iconBg: "bg-amber-50",
+      borderColor: "#ffb41c",
     },
     {
       label: "Sentiment Score",
@@ -58,7 +61,8 @@ export function KpiScorecardSlide({
       icon: TrendingUp,
       color: sentimentScore !== null && sentimentScore >= 70 ? "text-green-600" : sentimentScore !== null && sentimentScore >= 40 ? "text-amber-500" : "text-gray-900",
       iconColor: sentimentScore !== null && sentimentScore >= 70 ? "text-green-500" : sentimentScore !== null && sentimentScore >= 40 ? "text-amber-500" : "text-gray-400",
-      bgColor: sentimentScore !== null && sentimentScore >= 70 ? "bg-green-50" : sentimentScore !== null && sentimentScore >= 40 ? "bg-amber-50" : "bg-gray-50",
+      iconBg: sentimentScore !== null && sentimentScore >= 70 ? "bg-green-50" : sentimentScore !== null && sentimentScore >= 40 ? "bg-amber-50" : "bg-gray-50",
+      borderColor: sentimentScore !== null && sentimentScore >= 70 ? "#22c55e" : sentimentScore !== null && sentimentScore >= 40 ? "#f59e0b" : "#d1d5db",
     },
   ];
 
@@ -69,9 +73,10 @@ export function KpiScorecardSlide({
           {kpis.map((kpi) => (
             <div
               key={kpi.label}
-              className={`${kpi.bgColor} rounded-2xl p-8 flex items-start gap-6`}
+              className="bg-white rounded-2xl p-8 flex items-start gap-6 border border-gray-200 shadow-sm border-l-4"
+              style={{ borderLeftColor: kpi.borderColor }}
             >
-              <div className={`p-3 rounded-xl bg-white shadow-sm`}>
+              <div className={`p-3 rounded-xl ${kpi.iconBg}`}>
                 <kpi.icon className={`w-8 h-8 ${kpi.iconColor}`} />
               </div>
               <div>
