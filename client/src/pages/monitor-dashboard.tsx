@@ -45,7 +45,8 @@ import { format } from "date-fns";
 import logoIcon from "@assets/images_1765741951084.png";
 import type { MonitoringClient, MonitoringGroup, CheckSession, CheckResult } from "@shared/schema";
 import { ExecutiveReportOverlay } from "@/features/monitor-dashboard/executive-report/executive-report-overlay";
-import type { ReportData } from "@/features/monitor-dashboard/executive-report/types";
+import { PresentationModeDialog } from "@/features/monitor-dashboard/executive-report/components/presentation-mode-dialog";
+import type { PresentationMode, ReportData } from "@/features/monitor-dashboard/executive-report/types";
 import {
   buildCompetitorTrendChartData,
   buildGroupBarData,
@@ -261,7 +262,8 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
   
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
-  const [presentationMode, setPresentationMode] = useState(false);
+  const [presentationDialogOpen, setPresentationDialogOpen] = useState(false);
+  const [presentationMode, setPresentationMode] = useState<{ mode: PresentationMode; enabledSlides: string[] } | null>(null);
   
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
@@ -805,6 +807,50 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
     return { topPrompts: sorted.slice(0, 5), bottomPrompts: sorted.slice(-5).reverse() };
   }, [serviceResultsOnly]);
 
+  const previousPeriodData = useMemo(() => {
+    if (!previousSession) return null;
+    const prevTotal = previousSession.totalPrompts || 1;
+    const prevFound = previousSession.foundCount ?? 0;
+    const prevCited = previousSession.citedCount ?? 0;
+    const prevVisRate = Math.round((prevFound / (prevTotal * 2)) * 100);
+    const prevCitRate = Math.round((prevCited / (prevTotal * 2)) * 100);
+    const prevAvgRank = previousSession.avgChatgptRank != null && previousSession.avgGoogleAIRank != null
+      ? Math.round(((previousSession.avgChatgptRank + previousSession.avgGoogleAIRank) / 2) * 10) / 10
+      : previousSession.avgChatgptRank ?? previousSession.avgGoogleAIRank ?? null;
+    return {
+      visibilityRate: prevVisRate,
+      citationRate: prevCitRate,
+      avgRank: prevAvgRank,
+      sentimentScore: previousSession.sentimentScore ?? null,
+      scanDate: format(new Date(previousSession.createdAt), "MMMM d, yyyy"),
+    };
+  }, [previousSession]);
+
+  const reportData: ReportData = useMemo(() => ({
+    businessName: client.businessName,
+    scanDate: latestSession ? format(new Date(latestSession.createdAt), "MMMM d, yyyy") : null,
+    city: selectedViewCity !== "all" ? selectedViewCity : null,
+    visibilityMetrics,
+    avgRank,
+    firstPlaceCount,
+    sentimentScore: analytics?.sentimentScore ?? null,
+    sessionChartData,
+    shareOfVoice: computedShareOfVoice,
+    competitorVisibility: computedCompetitorVisibility,
+    topCitations: computedTopCitations,
+    sentimentNarratives: analytics?.sentimentNarratives ?? null,
+    groupBarData: buildGroupBarData(serviceResultsByGroup),
+    cityMetrics,
+    topPrompts,
+    bottomPrompts,
+    previousPeriod: previousPeriodData,
+  }), [
+    client.businessName, latestSession, selectedViewCity, visibilityMetrics,
+    avgRank, firstPlaceCount, analytics, sessionChartData, computedShareOfVoice,
+    computedCompetitorVisibility, computedTopCitations, serviceResultsByGroup,
+    cityMetrics, topPrompts, bottomPrompts, previousPeriodData,
+  ]);
+
   const getVisibilityScore = (r: CheckResult) => {
     const chatgptVisible = r.chatgptCited || r.chatgptFound;
     const googleVisible = r.googleAICited || r.googleAIFound;
@@ -1071,7 +1117,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setPresentationMode(true)}
+                onClick={() => setPresentationDialogOpen(true)}
                 className="flex items-center gap-2"
                 data-testid="button-present-report"
               >
@@ -2388,28 +2434,24 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
         </DialogContent>
       </Dialog>
 
+      {/* Presentation Mode Dialog */}
+      <PresentationModeDialog
+        open={presentationDialogOpen}
+        onClose={() => setPresentationDialogOpen(false)}
+        onStart={(mode, enabledSlides) => {
+          setPresentationDialogOpen(false);
+          setPresentationMode({ mode, enabledSlides });
+        }}
+        data={reportData}
+      />
+
       {/* Executive Report Presentation Overlay */}
       {presentationMode && (
         <ExecutiveReportOverlay
-          data={{
-            businessName: client.businessName,
-            scanDate: latestSession ? format(new Date(latestSession.createdAt), "MMMM d, yyyy") : null,
-            city: selectedViewCity !== "all" ? selectedViewCity : null,
-            visibilityMetrics,
-            avgRank,
-            firstPlaceCount,
-            sentimentScore: analytics?.sentimentScore ?? null,
-            sessionChartData,
-            shareOfVoice: computedShareOfVoice,
-            competitorVisibility: computedCompetitorVisibility,
-            topCitations: computedTopCitations,
-            sentimentNarratives: analytics?.sentimentNarratives ?? null,
-            groupBarData: buildGroupBarData(serviceResultsByGroup),
-            cityMetrics,
-            topPrompts,
-            bottomPrompts,
-          } satisfies ReportData}
-          onClose={() => setPresentationMode(false)}
+          data={reportData}
+          mode={presentationMode.mode}
+          enabledSlides={presentationMode.enabledSlides}
+          onClose={() => setPresentationMode(null)}
         />
       )}
     </div>

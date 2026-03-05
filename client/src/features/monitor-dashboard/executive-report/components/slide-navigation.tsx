@@ -1,16 +1,20 @@
-import { useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 
 interface SlideNavigationProps {
   currentSlide: number;
   totalSlides: number;
+  slideLabels?: string[];
   onPrevious: () => void;
   onNext: () => void;
   onGoToSlide: (index: number) => void;
   onClose: () => void;
 }
 
-export function SlideNavigation({ currentSlide, totalSlides, onPrevious, onNext, onGoToSlide, onClose }: SlideNavigationProps) {
+export function SlideNavigation({ currentSlide, totalSlides, slideLabels, onPrevious, onNext, onGoToSlide, onClose }: SlideNavigationProps) {
+  const [hoveredDot, setHoveredDot] = useState<number | null>(null);
+  const [showHint, setShowHint] = useState(currentSlide === 0);
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === "ArrowLeft") {
@@ -29,6 +33,11 @@ export function SlideNavigation({ currentSlide, totalSlides, onPrevious, onNext,
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
+
+  // Hide the keyboard hint after navigating away from the first slide
+  useEffect(() => {
+    if (currentSlide > 0) setShowHint(false);
+  }, [currentSlide]);
 
   return (
     <>
@@ -61,19 +70,36 @@ export function SlideNavigation({ currentSlide, totalSlides, onPrevious, onNext,
         </button>
       )}
 
-      {/* Progress dots */}
+      {/* Progress dots with tooltips */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
         {Array.from({ length: totalSlides }).map((_, i) => (
-          <button
-            key={i}
-            onClick={() => onGoToSlide(i)}
-            className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
-              i === currentSlide ? "bg-[#5599f9] w-6" : "bg-gray-300 w-2 hover:bg-gray-400"
-            }`}
-            aria-label={`Go to slide ${i + 1}`}
-          />
+          <div key={i} className="relative">
+            <button
+              onClick={() => onGoToSlide(i)}
+              onMouseEnter={() => setHoveredDot(i)}
+              onMouseLeave={() => setHoveredDot(null)}
+              className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
+                i === currentSlide ? "bg-[#5599f9] w-6" : "bg-gray-300 w-2 hover:bg-gray-400"
+              }`}
+              aria-label={`Go to slide ${i + 1}${slideLabels?.[i] ? `: ${slideLabels[i]}` : ""}`}
+            />
+            {/* Tooltip */}
+            {hoveredDot === i && slideLabels?.[i] && (
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1 bg-gray-900 text-white text-xs rounded-lg whitespace-nowrap pointer-events-none">
+                {slideLabels[i]}
+                <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900" />
+              </div>
+            )}
+          </div>
         ))}
       </div>
+
+      {/* Keyboard hint on first slide */}
+      {showHint && (
+        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-10 text-xs text-gray-400 animate-pulse">
+          Arrow keys to navigate &middot; Esc to close
+        </div>
+      )}
     </>
   );
 }
