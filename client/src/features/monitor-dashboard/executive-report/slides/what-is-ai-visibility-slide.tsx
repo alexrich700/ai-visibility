@@ -18,7 +18,7 @@ export function WhatIsAiVisibilitySlide({ slideNumber, totalSlides }: WhatIsAiVi
           {/* The Old Model */}
           <div className="p-8 rounded-2xl border border-gray-200 bg-gray-50/50">
             <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4">The Old Model</p>
-            <h3 className="text-2xl font-bold text-gray-900 mb-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-6">
               Crawl <span className="text-gray-300 mx-1">&rarr;</span> Index <span className="text-gray-300 mx-1">&rarr;</span> Rank
             </h3>
             <div className="space-y-3 text-gray-600 leading-relaxed">
@@ -35,7 +35,7 @@ export function WhatIsAiVisibilitySlide({ slideNumber, totalSlides }: WhatIsAiVi
           {/* The New Model */}
           <div className="p-8 rounded-2xl border-2 border-[#5599f9]/30 bg-blue-50/30">
             <p className="text-xs font-bold uppercase tracking-widest text-[#5599f9] mb-4">The New Model</p>
-            <h3 className="text-2xl font-bold text-gray-900 mb-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-6">
               Retrieve <span className="text-gray-300 mx-1">&rarr;</span> Synthesize <span className="text-gray-300 mx-1">&rarr;</span> Generate
             </h3>
             <div className="space-y-3 text-gray-600 leading-relaxed">
