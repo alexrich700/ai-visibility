@@ -16,7 +16,6 @@ import { WhyGeoMattersSlide } from "./slides/why-geo-matters-slide";
 import { OpportunityGapSlide } from "./slides/opportunity-gap-slide";
 import { CtaSlide } from "./slides/cta-slide";
 import { ProgressHighlightsSlide } from "./slides/progress-highlights-slide";
-import { RecommendationsSlide } from "./slides/recommendations-slide";
 import type { PresentationMode, ReportData } from "./types";
 
 interface SlideDefinition {
@@ -211,15 +210,6 @@ const SLIDE_REGISTRY: SlideDefinition[] = [
       <CtaSlide key="cta" businessName={data.businessName} slideNumber={sn} totalSlides={ts} />
     ),
     defaultModes: ["pitch"],
-  },
-  {
-    id: "recommendations",
-    label: "Recommendations",
-    condition: () => true,
-    render: (data, sn, ts) => (
-      <RecommendationsSlide key="recommendations" data={data} slideNumber={sn} totalSlides={ts} />
-    ),
-    defaultModes: ["progress"],
   },
 ];
 
