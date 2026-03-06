@@ -481,6 +481,7 @@ async function queryGeminiText(systemPrompt: string, userPrompt: string, maxToke
         : `${systemPrompt}\n\n${userPrompt}`,
       config: {
         maxOutputTokens: maxTokens,
+        ...(expectJson ? { responseMimeType: "application/json" } : {}),
       }
     });
 

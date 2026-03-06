@@ -2377,13 +2377,23 @@ export function registerMonitoringRoutes(app: Express): void {
           })) || []
         };
         if (rawStatements.positive.length > 0 || rawStatements.negative.length > 0) {
-          try {
-            sentimentNarratives = await synthesizeSentimentNarratives(rawStatements, client.businessName);
-            // Cache for future requests (fire-and-forget)
-            storage.updateCheckSession(latestSession.id, { sentimentNarratives } as any).catch(() => {});
-          } catch (narrativeError) {
-            monitoringLogger.error('Error synthesizing narratives for dashboard', { error: narrativeError instanceof Error ? narrativeError.message : String(narrativeError) });
-          }
+          const sessionId = latestSession.id;
+          const businessName = client.businessName;
+          (async () => {
+            try {
+              const timeoutMs = 15000;
+              const narrativeResult = await Promise.race([
+                synthesizeSentimentNarratives(rawStatements, businessName),
+                new Promise<null>((_, reject) => setTimeout(() => reject(new Error('Narrative generation timed out after 15s')), timeoutMs))
+              ]);
+              if (narrativeResult) {
+                await storage.updateCheckSession(sessionId, { sentimentNarratives: narrativeResult } as any).catch(() => {});
+                monitoringLogger.info('Sentiment narratives generated and cached in background', { sessionId });
+              }
+            } catch (narrativeError) {
+              monitoringLogger.error('Background narrative synthesis failed', { error: narrativeError instanceof Error ? narrativeError.message : String(narrativeError) });
+            }
+          })();
         }
       }
       
