@@ -1,0 +1,136 @@
+2026-03-05 22:11:14.17
+66a7c1b1
+User
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+2026-03-05 22:11:14.17
+66a7c1b1
+User
+[PROMPT_GEN] Generating 5 research prompts with Gemini 2.5 Flash for "Collage Picture Frames"...
+2026-03-05 22:11:14.17
+66a7c1b1
+User
+[PROMPT_GEN] Got 3000 chars of homepage content for "Collage Picture Frames"
+2026-03-05 22:11:19.89
+66a7c1b1
+User
+[PROMPT_GEN] Gemini generated 5 research prompts for "Matted Frames"
+2026-03-05 22:11:19.89
+66a7c1b1
+User
+Completed prompts for group: Matted Frames (5 prompts)
+2026-03-05 22:11:20.94
+66a7c1b1
+User
+[PROMPT_GEN] Gemini generated 5 research prompts for "Collage Picture Frames"
+2026-03-05 22:11:20.94
+66a7c1b1
+User
+[RATE_LIMIT_SAFE] Waiting 2791ms before next batch (jittered)...
+2026-03-05 22:11:20.94
+66a7c1b1
+User
+Completed prompts for group: Collage Picture Frames (5 prompts)
+2026-03-05 22:11:23.18
+66a7c1b1
+User
+[PROMPT_GEN] Scraping website for prompt context: https://www.arttoframe.com/
+2026-03-05 22:11:23.18
+66a7c1b1
+User
+Processing batch 4/8: Print + Frame, Acrylic Prints
+2026-03-05 22:11:23.18
+66a7c1b1
+User
+Generating prompts for group: Print + Frame
+2026-03-05 22:11:23.70
+66a7c1b1
+User
+[PROMPT_GEN] Claude Haiku unavailable, trying Gemini...
+2026-03-05 22:11:23.70
+66a7c1b1
+User
+[PROMPT_GEN] Got 3000 chars of homepage content for "Print + Frame"
+2026-03-05 22:11:23.70
+66a7c1b1
+User
+[PROMPT_GEN] Generating 5 research prompts with Gemini 2.5 Flash for "Print + Frame"...
+2026-03-05 22:11:23.70
+66a7c1b1
+User
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+2026-03-05 22:11:24.06
+66a7c1b1
+User
+[PROMPT_GEN] Scraping website for prompt context: https://www.arttoframe.com/
+2026-03-05 22:11:24.06
+66a7c1b1
+User
+Generating prompts for group: Acrylic Prints
+2026-03-05 22:11:24.43
+66a7c1b1
+User
+[PROMPT_GEN] Claude Haiku unavailable, trying Gemini...
+2026-03-05 22:11:24.43
+66a7c1b1
+User
+[PROMPT_GEN] Got 3000 chars of homepage content for "Acrylic Prints"
+2026-03-05 22:11:24.43
+66a7c1b1
+User
+[PROMPT_GEN] Generating 5 research prompts with Gemini 2.5 Flash for "Acrylic Prints"...
+2026-03-05 22:11:24.43
+66a7c1b1
+User
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+2026-03-05 22:11:28.94
+66a7c1b1
+User
+Completed prompts for group: Print + Frame (5 prompts)
+2026-03-05 22:11:28.94
+66a7c1b1
+User
+[PROMPT_GEN] Gemini generated 5 research prompts for "Print + Frame"
+2026-03-05 22:11:31.13
+66a7c1b1
+User
+[PROMPT_GEN] Gemini generated 5 research prompts for "Acrylic Prints"
+2026-03-05 22:11:31.13
+66a7c1b1
+User
+[RATE_LIMIT_SAFE] Waiting 2015ms before next batch (jittered)...
+2026-03-05 22:11:31.13
+66a7c1b1
+User
+Completed prompts for group: Acrylic Prints (5 prompts)
+2026-03-05 22:11:33.83
+66a7c1b1
+User
+Generating prompts for group: Acrylic Floating Frames
+2026-03-05 22:11:33.83
+66a7c1b1
+User
+Processing batch 5/8: Acrylic Floating Frames, Shadow Box Frames
+2026-03-05 22:11:33.83
+66a7c1b1
+User
+[PROMPT_GEN] Scraping website for prompt context: https://www.arttoframe.com/
+2026-03-05 22:11:34.23
+66a7c1b1
+User
+[PROMPT_GEN] Claude Haiku unavailable, trying Gemini...
+2026-03-05 22:11:34.23
+66a7c1b1
+User
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+2026-03-05 22:11:34.23
+66a7c1b1
+User
+[PROMPT_GEN] Got 3000 chars of homepage content for "Acrylic Floating Frames"
+2026-03-05 22:11:34.23
+66a7c1b1
+User
+[PROMPT_GEN] Generating 5 research prompts with Gemini 2.5 Flash for "Acrylic Floating Frames"...
+2026-03-05 22:11:34.36
+66a7c1b1
+User
+[PROMPT_GEN] Scraping website for prompt context: https://www.arttoframe.com/
