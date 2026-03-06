@@ -358,7 +358,9 @@ export class DatabaseStorage implements IStorage {
     try {
       await db.transaction(async (tx) => {
         // Delete in order respecting foreign key constraints:
-        // 1. Delete check results (depends on sessions and prompts)
+        // 1. Delete scan jobs (references both client and sessions)
+        await tx.delete(scanJobs).where(eq(scanJobs.clientId, id));
+        // 2. Delete check results (depends on sessions and prompts)
         await tx.delete(checkResults).where(eq(checkResults.clientId, id));
         // 2. Delete group metrics (depends on sessions)
         await tx.delete(checkGroupMetrics).where(eq(checkGroupMetrics.clientId, id));
