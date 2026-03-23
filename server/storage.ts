@@ -158,42 +158,60 @@ export interface IStorage {
   // Audit Keywords
   createAuditKeywords(keywords: InsertAuditKeyword[]): Promise<AuditKeyword[]>;
   getAuditKeywordsByAuditId(auditId: number): Promise<AuditKeyword[]>;
+  updateAuditKeyword(id: number, data: Partial<InsertAuditKeyword>): Promise<AuditKeyword | undefined>;
   deleteAuditKeywordsByAuditId(auditId: number): Promise<void>;
 
   // Audit Geo Grids
   createAuditGeoGrid(grid: InsertAuditGeoGrid): Promise<AuditGeoGrid>;
   getAuditGeoGridsByAuditId(auditId: number): Promise<AuditGeoGrid[]>;
+  updateAuditGeoGrid(id: number, data: Partial<InsertAuditGeoGrid>): Promise<AuditGeoGrid | undefined>;
+  deleteAuditGeoGridsByAuditId(auditId: number): Promise<void>;
   createAuditGeoGridPoints(points: InsertAuditGeoGridPoint[]): Promise<AuditGeoGridPoint[]>;
   getAuditGeoGridPointsByGridId(gridId: number): Promise<AuditGeoGridPoint[]>;
+  updateAuditGeoGridPoint(id: number, data: Partial<InsertAuditGeoGridPoint>): Promise<AuditGeoGridPoint | undefined>;
+  deleteAuditGeoGridPointsByGridId(gridId: number): Promise<void>;
 
   // Audit Technical Findings
   createAuditTechnicalFindings(findings: InsertAuditTechnicalFinding[]): Promise<AuditTechnicalFinding[]>;
   getAuditTechnicalFindingsByAuditId(auditId: number): Promise<AuditTechnicalFinding[]>;
+  updateAuditTechnicalFinding(id: number, data: Partial<InsertAuditTechnicalFinding>): Promise<AuditTechnicalFinding | undefined>;
+  deleteAuditTechnicalFindingsByAuditId(auditId: number): Promise<void>;
 
   // Audit Competitors
   createAuditCompetitors(competitors: InsertAuditCompetitor[]): Promise<AuditCompetitor[]>;
   getAuditCompetitorsByAuditId(auditId: number): Promise<AuditCompetitor[]>;
+  updateAuditCompetitor(id: number, data: Partial<InsertAuditCompetitor>): Promise<AuditCompetitor | undefined>;
+  deleteAuditCompetitorsByAuditId(auditId: number): Promise<void>;
 
   // Audit Content Gaps
   createAuditContentGaps(gaps: InsertAuditContentGap[]): Promise<AuditContentGap[]>;
   getAuditContentGapsByAuditId(auditId: number): Promise<AuditContentGap[]>;
+  updateAuditContentGap(id: number, data: Partial<InsertAuditContentGap>): Promise<AuditContentGap | undefined>;
+  deleteAuditContentGapsByAuditId(auditId: number): Promise<void>;
 
   // Audit Reviews
   createAuditReviews(reviews: InsertAuditReview[]): Promise<AuditReview[]>;
   getAuditReviewsByAuditId(auditId: number): Promise<AuditReview[]>;
+  updateAuditReview(id: number, data: Partial<InsertAuditReview>): Promise<AuditReview | undefined>;
+  deleteAuditReviewsByAuditId(auditId: number): Promise<void>;
 
   // Audit Deliverables
   createAuditDeliverables(deliverables: InsertAuditDeliverable[]): Promise<AuditDeliverable[]>;
   getAuditDeliverablesByAuditId(auditId: number): Promise<AuditDeliverable[]>;
+  updateAuditDeliverable(id: number, data: Partial<InsertAuditDeliverable>): Promise<AuditDeliverable | undefined>;
+  deleteAuditDeliverablesByAuditId(auditId: number): Promise<void>;
 
   // Audit PPC Forecast
   createAuditPpcForecasts(forecasts: InsertAuditPpcForecast[]): Promise<AuditPpcForecast[]>;
   getAuditPpcForecastsByAuditId(auditId: number): Promise<AuditPpcForecast[]>;
+  updateAuditPpcForecast(id: number, data: Partial<InsertAuditPpcForecast>): Promise<AuditPpcForecast | undefined>;
+  deleteAuditPpcForecastsByAuditId(auditId: number): Promise<void>;
 
   // Audit Stage Log
   createAuditStageLog(log: InsertAuditStageLog): Promise<AuditStageLog>;
   getAuditStageLogsByAuditId(auditId: number): Promise<AuditStageLog[]>;
   updateAuditStageLog(id: number, data: Partial<InsertAuditStageLog & { completedAt?: Date }>): Promise<AuditStageLog | undefined>;
+  deleteAuditStageLogsByAuditId(auditId: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1008,17 +1026,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getSeoAudits(options?: { status?: string; limit?: number; offset?: number }): Promise<SeoAudit[]> {
-    const conditions: ReturnType<typeof eq>[] = [];
-    if (options?.status) {
-      conditions.push(eq(seoAudits.status, options.status) as any);
-    }
-    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-
-    return await db.select().from(seoAudits)
-      .where(whereClause)
-      .orderBy(desc(seoAudits.createdAt))
+    let query = db.select().from(seoAudits).orderBy(desc(seoAudits.createdAt))
       .limit(options?.limit || 100)
       .offset(options?.offset || 0);
+
+    if (options?.status) {
+      return await query.where(eq(seoAudits.status, options.status));
+    }
+
+    return await query;
   }
 
   async updateSeoAudit(id: number, data: Partial<InsertSeoAudit>): Promise<SeoAudit | undefined> {
@@ -1058,6 +1074,11 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(auditKeywords).where(eq(auditKeywords.auditId, auditId));
   }
 
+  async updateAuditKeyword(id: number, data: Partial<InsertAuditKeyword>): Promise<AuditKeyword | undefined> {
+    const [result] = await db.update(auditKeywords).set(data).where(eq(auditKeywords.id, id)).returning();
+    return result;
+  }
+
   async deleteAuditKeywordsByAuditId(auditId: number): Promise<void> {
     await db.delete(auditKeywords).where(eq(auditKeywords.auditId, auditId));
   }
@@ -1071,6 +1092,19 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(auditGeoGrids).where(eq(auditGeoGrids.auditId, auditId));
   }
 
+  async updateAuditGeoGrid(id: number, data: Partial<InsertAuditGeoGrid>): Promise<AuditGeoGrid | undefined> {
+    const [result] = await db.update(auditGeoGrids).set(data).where(eq(auditGeoGrids.id, id)).returning();
+    return result;
+  }
+
+  async deleteAuditGeoGridsByAuditId(auditId: number): Promise<void> {
+    const grids = await db.select({ id: auditGeoGrids.id }).from(auditGeoGrids).where(eq(auditGeoGrids.auditId, auditId));
+    if (grids.length > 0) {
+      await db.delete(auditGeoGridPoints).where(inArray(auditGeoGridPoints.gridId, grids.map(g => g.id)));
+    }
+    await db.delete(auditGeoGrids).where(eq(auditGeoGrids.auditId, auditId));
+  }
+
   async createAuditGeoGridPoints(points: InsertAuditGeoGridPoint[]): Promise<AuditGeoGridPoint[]> {
     if (points.length === 0) return [];
     return await db.insert(auditGeoGridPoints).values(points).returning();
@@ -1078,6 +1112,15 @@ export class DatabaseStorage implements IStorage {
 
   async getAuditGeoGridPointsByGridId(gridId: number): Promise<AuditGeoGridPoint[]> {
     return await db.select().from(auditGeoGridPoints).where(eq(auditGeoGridPoints.gridId, gridId));
+  }
+
+  async updateAuditGeoGridPoint(id: number, data: Partial<InsertAuditGeoGridPoint>): Promise<AuditGeoGridPoint | undefined> {
+    const [result] = await db.update(auditGeoGridPoints).set(data).where(eq(auditGeoGridPoints.id, id)).returning();
+    return result;
+  }
+
+  async deleteAuditGeoGridPointsByGridId(gridId: number): Promise<void> {
+    await db.delete(auditGeoGridPoints).where(eq(auditGeoGridPoints.gridId, gridId));
   }
 
   async createAuditTechnicalFindings(findings: InsertAuditTechnicalFinding[]): Promise<AuditTechnicalFinding[]> {
@@ -1089,6 +1132,15 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(auditTechnicalFindings).where(eq(auditTechnicalFindings.auditId, auditId));
   }
 
+  async updateAuditTechnicalFinding(id: number, data: Partial<InsertAuditTechnicalFinding>): Promise<AuditTechnicalFinding | undefined> {
+    const [result] = await db.update(auditTechnicalFindings).set(data).where(eq(auditTechnicalFindings.id, id)).returning();
+    return result;
+  }
+
+  async deleteAuditTechnicalFindingsByAuditId(auditId: number): Promise<void> {
+    await db.delete(auditTechnicalFindings).where(eq(auditTechnicalFindings.auditId, auditId));
+  }
+
   async createAuditCompetitors(competitors: InsertAuditCompetitor[]): Promise<AuditCompetitor[]> {
     if (competitors.length === 0) return [];
     return await db.insert(auditCompetitors).values(competitors).returning();
@@ -1096,6 +1148,15 @@ export class DatabaseStorage implements IStorage {
 
   async getAuditCompetitorsByAuditId(auditId: number): Promise<AuditCompetitor[]> {
     return await db.select().from(auditCompetitors).where(eq(auditCompetitors.auditId, auditId));
+  }
+
+  async updateAuditCompetitor(id: number, data: Partial<InsertAuditCompetitor>): Promise<AuditCompetitor | undefined> {
+    const [result] = await db.update(auditCompetitors).set(data).where(eq(auditCompetitors.id, id)).returning();
+    return result;
+  }
+
+  async deleteAuditCompetitorsByAuditId(auditId: number): Promise<void> {
+    await db.delete(auditCompetitors).where(eq(auditCompetitors.auditId, auditId));
   }
 
   async createAuditContentGaps(gaps: InsertAuditContentGap[]): Promise<AuditContentGap[]> {
@@ -1107,6 +1168,15 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(auditContentGaps).where(eq(auditContentGaps.auditId, auditId));
   }
 
+  async updateAuditContentGap(id: number, data: Partial<InsertAuditContentGap>): Promise<AuditContentGap | undefined> {
+    const [result] = await db.update(auditContentGaps).set(data).where(eq(auditContentGaps.id, id)).returning();
+    return result;
+  }
+
+  async deleteAuditContentGapsByAuditId(auditId: number): Promise<void> {
+    await db.delete(auditContentGaps).where(eq(auditContentGaps.auditId, auditId));
+  }
+
   async createAuditReviews(reviews: InsertAuditReview[]): Promise<AuditReview[]> {
     if (reviews.length === 0) return [];
     return await db.insert(auditReviews).values(reviews).returning();
@@ -1114,6 +1184,15 @@ export class DatabaseStorage implements IStorage {
 
   async getAuditReviewsByAuditId(auditId: number): Promise<AuditReview[]> {
     return await db.select().from(auditReviews).where(eq(auditReviews.auditId, auditId));
+  }
+
+  async updateAuditReview(id: number, data: Partial<InsertAuditReview>): Promise<AuditReview | undefined> {
+    const [result] = await db.update(auditReviews).set(data).where(eq(auditReviews.id, id)).returning();
+    return result;
+  }
+
+  async deleteAuditReviewsByAuditId(auditId: number): Promise<void> {
+    await db.delete(auditReviews).where(eq(auditReviews.auditId, auditId));
   }
 
   async createAuditDeliverables(deliverables: InsertAuditDeliverable[]): Promise<AuditDeliverable[]> {
@@ -1127,6 +1206,15 @@ export class DatabaseStorage implements IStorage {
       .orderBy(asc(auditDeliverables.phase), asc(auditDeliverables.sortOrder));
   }
 
+  async updateAuditDeliverable(id: number, data: Partial<InsertAuditDeliverable>): Promise<AuditDeliverable | undefined> {
+    const [result] = await db.update(auditDeliverables).set(data).where(eq(auditDeliverables.id, id)).returning();
+    return result;
+  }
+
+  async deleteAuditDeliverablesByAuditId(auditId: number): Promise<void> {
+    await db.delete(auditDeliverables).where(eq(auditDeliverables.auditId, auditId));
+  }
+
   async createAuditPpcForecasts(forecasts: InsertAuditPpcForecast[]): Promise<AuditPpcForecast[]> {
     if (forecasts.length === 0) return [];
     return await db.insert(auditPpcForecast).values(forecasts).returning();
@@ -1134,6 +1222,15 @@ export class DatabaseStorage implements IStorage {
 
   async getAuditPpcForecastsByAuditId(auditId: number): Promise<AuditPpcForecast[]> {
     return await db.select().from(auditPpcForecast).where(eq(auditPpcForecast.auditId, auditId));
+  }
+
+  async updateAuditPpcForecast(id: number, data: Partial<InsertAuditPpcForecast>): Promise<AuditPpcForecast | undefined> {
+    const [result] = await db.update(auditPpcForecast).set(data).where(eq(auditPpcForecast.id, id)).returning();
+    return result;
+  }
+
+  async deleteAuditPpcForecastsByAuditId(auditId: number): Promise<void> {
+    await db.delete(auditPpcForecast).where(eq(auditPpcForecast.auditId, auditId));
   }
 
   async createAuditStageLog(logData: InsertAuditStageLog): Promise<AuditStageLog> {
@@ -1154,6 +1251,10 @@ export class DatabaseStorage implements IStorage {
       .where(eq(auditStageLog.id, id))
       .returning();
     return result;
+  }
+
+  async deleteAuditStageLogsByAuditId(auditId: number): Promise<void> {
+    await db.delete(auditStageLog).where(eq(auditStageLog.auditId, auditId));
   }
 }
 

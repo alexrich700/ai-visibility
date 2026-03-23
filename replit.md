@@ -71,12 +71,14 @@ A comprehensive 10-section SEO audit system with a 12-stage data pipeline, desig
 - `audit_stage_log` — Pipeline stage progress tracking
 
 **Service Layer** (`server/services/seo-audit/`):
-- `dataforseo.ts` — DataForSEO API: organic SERP, Maps SERP, Geo Grid, site crawl, backlinks
-- `pagespeed.ts` — Google PageSpeed Insights + technical check scoring engine
+- `http-client.ts` — Shared HTTP client with timeout support, `pooledFetch`, `DailyQuotaTracker`
+- `dataforseo.ts` — DataForSEO API: organic SERP, Maps SERP, Geo Grid (Haversine), site crawl, backlinks
+- `pagespeed.ts` — Google PageSpeed Insights (25K/day quota) + technical check scoring engine
 - `google-places.ts` — Google Places API: search, details, reviews, geocoding
 - `keyword-planner.ts` — Google Ads Keyword Planner (stubbed, requires OAuth)
 - `llm.ts` — Anthropic LLM: keyword classification, page scoring, review analysis, narrative generation
-- `queue.ts` — In-memory audit job queue with priority, concurrency control, rate limiting
+- `queue.ts` — In-memory audit job queue with priority, concurrency control, DB-backed stage logging
+- `index.ts` — Pipeline orchestrator (12-stage pipeline)
 
 **Storage** (`server/storage.ts`): IStorage interface extended with full CRUD for all 11 tables.
 

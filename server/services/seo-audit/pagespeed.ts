@@ -1,4 +1,8 @@
+import { pooledFetch, DailyQuotaTracker } from './http-client';
+
 const PSI_API_KEY = () => process.env.GOOGLE_PSI_API_KEY || '';
+
+const pageSpeedDailyQuota = new DailyQuotaTracker(25000);
 
 export interface PageSpeedData {
   lighthouseResult: {
@@ -23,6 +27,10 @@ export interface PageSpeedData {
 }
 
 export async function getPageSpeedInsights(url: string, strategy: 'mobile' | 'desktop' = 'mobile'): Promise<PageSpeedData> {
+  if (!pageSpeedDailyQuota.canMakeRequest()) {
+    throw new Error(`PageSpeed Insights daily quota exhausted (${pageSpeedDailyQuota.getUsed()} used of 25,000/day). Try again tomorrow.`);
+  }
+
   const params = new URLSearchParams({
     url,
     strategy,
@@ -32,9 +40,10 @@ export async function getPageSpeedInsights(url: string, strategy: 'mobile' | 'de
   const apiKey = PSI_API_KEY();
   if (apiKey) params.append('key', apiKey);
 
-  const response = await fetch(
-    `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?${params.toString()}`
-  );
+  const requestUrl = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?${params.toString()}`;
+  const response = await pooledFetch(requestUrl, { timeoutMs: 60000 });
+
+  pageSpeedDailyQuota.recordRequest();
 
   if (!response.ok) {
     const text = await response.text();
@@ -42,6 +51,13 @@ export async function getPageSpeedInsights(url: string, strategy: 'mobile' | 'de
   }
 
   return await response.json() as PageSpeedData;
+}
+
+export function getPageSpeedQuotaStatus(): { used: number; remaining: number } {
+  return {
+    used: pageSpeedDailyQuota.getUsed(),
+    remaining: pageSpeedDailyQuota.getRemaining(),
+  };
 }
 
 export interface TechnicalFinding {

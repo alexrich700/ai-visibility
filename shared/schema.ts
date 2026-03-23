@@ -851,6 +851,7 @@ export const auditStageLog = pgTable("audit_stage_log", {
   id: serial("id").primaryKey(),
   auditId: integer("audit_id").references(() => seoAudits.id, { onDelete: "cascade" }).notNull(),
   stage: text("stage").notNull(),
+  stageIndex: integer("stage_index").default(0).notNull(),
   status: text("status").notNull(),
   startedAt: timestamp("started_at").defaultNow().notNull(),
   completedAt: timestamp("completed_at"),

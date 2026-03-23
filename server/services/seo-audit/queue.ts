@@ -1,4 +1,5 @@
 import { EventEmitter } from 'events';
+import { storage } from '../../storage';
 
 export interface QueueJob {
   id: string;
@@ -17,6 +18,13 @@ const DEFAULT_CONFIG: QueueConfig = {
   maxConcurrent: 5,
   maxQueued: 50,
 };
+
+export type StageProcessor = (auditId: number) => Promise<void>;
+
+export interface PipelineStage {
+  name: string;
+  processor: StageProcessor;
+}
 
 class AuditJobQueue extends EventEmitter {
   private queue: QueueJob[] = [];
@@ -131,42 +139,45 @@ class AuditJobQueue extends EventEmitter {
 
 export const auditQueue = new AuditJobQueue();
 
-export class ApiRateLimiter {
-  private tokens: number;
-  private lastRefill: number;
-  private readonly maxTokens: number;
-  private readonly refillRatePerMs: number;
+export async function runStageWithLogging(
+  auditId: number,
+  stageName: string,
+  stageIndex: number,
+  processor: () => Promise<void>
+): Promise<void> {
+  const stageLog = await storage.createAuditStageLog({
+    auditId,
+    stage: stageName,
+    stageIndex,
+    status: 'running',
+  });
 
-  constructor(maxRequestsPerMinute: number) {
-    this.maxTokens = maxRequestsPerMinute;
-    this.tokens = maxRequestsPerMinute;
-    this.refillRatePerMs = maxRequestsPerMinute / 60000;
-    this.lastRefill = Date.now();
-  }
+  try {
+    await processor();
 
-  async acquire(): Promise<void> {
-    this.refill();
-    if (this.tokens < 1) {
-      const waitMs = Math.ceil((1 - this.tokens) / this.refillRatePerMs);
-      await new Promise(resolve => setTimeout(resolve, waitMs));
-      this.refill();
-    }
-    this.tokens -= 1;
-  }
+    await storage.updateAuditStageLog(stageLog.id, {
+      status: 'completed',
+      completedAt: new Date(),
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
 
-  private refill(): void {
-    const now = Date.now();
-    const elapsed = now - this.lastRefill;
-    this.tokens = Math.min(this.maxTokens, this.tokens + elapsed * this.refillRatePerMs);
-    this.lastRefill = now;
-  }
+    await storage.updateAuditStageLog(stageLog.id, {
+      status: 'failed',
+      errorMessage,
+      completedAt: new Date(),
+    });
 
-  getAvailableTokens(): number {
-    this.refill();
-    return Math.floor(this.tokens);
+    throw error;
   }
 }
 
-export const dataForSeoRateLimiter = new ApiRateLimiter(2000);
-export const pageSpeedRateLimiter = new ApiRateLimiter(400);
-export const placesRateLimiter = new ApiRateLimiter(100);
+export async function runPipelineWithLogging(
+  auditId: number,
+  stages: PipelineStage[]
+): Promise<void> {
+  for (let i = 0; i < stages.length; i++) {
+    const stage = stages[i];
+    await runStageWithLogging(auditId, stage.name, i, () => stage.processor(auditId));
+  }
+}

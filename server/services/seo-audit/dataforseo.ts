@@ -1,3 +1,5 @@
+import { pooledFetch } from './http-client';
+
 const D4SEO_LOGIN = () => process.env.DATAFORSEO_LOGIN || '';
 const D4SEO_PASSWORD = () => process.env.DATAFORSEO_PASSWORD || '';
 const BASE_URL = 'https://api.dataforseo.com/v3';
@@ -10,51 +12,17 @@ const MAX_RETRIES = 3;
 const RETRY_DELAYS = [1000, 2000, 4000];
 const BATCH_SIZE = 100;
 
-class RateLimiter {
-  private tokens: number;
-  private lastRefill: number;
-  private readonly maxTokens: number;
-  private readonly refillRate: number;
-
-  constructor(maxRequestsPerMinute: number) {
-    this.maxTokens = maxRequestsPerMinute;
-    this.tokens = maxRequestsPerMinute;
-    this.refillRate = maxRequestsPerMinute / 60000;
-    this.lastRefill = Date.now();
-  }
-
-  async acquire(): Promise<void> {
-    this.refill();
-    if (this.tokens < 1) {
-      const waitMs = Math.ceil((1 - this.tokens) / this.refillRate);
-      await new Promise(resolve => setTimeout(resolve, waitMs));
-      this.refill();
-    }
-    this.tokens -= 1;
-  }
-
-  private refill(): void {
-    const now = Date.now();
-    const elapsed = now - this.lastRefill;
-    this.tokens = Math.min(this.maxTokens, this.tokens + elapsed * this.refillRate);
-    this.lastRefill = now;
-  }
-}
-
-const rateLimiter = new RateLimiter(2000);
-
 async function d4seoRequest<T>(endpoint: string, body: any[], retries = MAX_RETRIES): Promise<T> {
-  await rateLimiter.acquire();
-
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const response = await fetch(`${BASE_URL}${endpoint}`, {
+      const response = await pooledFetch(`${BASE_URL}${endpoint}`, {
         method: 'POST',
         headers: {
           'Authorization': getAuthHeader(),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(body),
+        timeoutMs: 60000,
       });
 
       if (!response.ok) {
@@ -189,17 +157,56 @@ export interface GridPoint {
   col: number;
 }
 
+const EARTH_RADIUS_MILES = 3958.8;
+
+function haversineDestination(
+  lat: number,
+  lng: number,
+  bearingDeg: number,
+  distanceMiles: number
+): { lat: number; lng: number } {
+  const latRad = lat * Math.PI / 180;
+  const lngRad = lng * Math.PI / 180;
+  const bearingRad = bearingDeg * Math.PI / 180;
+  const angularDist = distanceMiles / EARTH_RADIUS_MILES;
+
+  const destLatRad = Math.asin(
+    Math.sin(latRad) * Math.cos(angularDist) +
+    Math.cos(latRad) * Math.sin(angularDist) * Math.cos(bearingRad)
+  );
+
+  const destLngRad = lngRad + Math.atan2(
+    Math.sin(bearingRad) * Math.sin(angularDist) * Math.cos(latRad),
+    Math.cos(angularDist) - Math.sin(latRad) * Math.sin(destLatRad)
+  );
+
+  return {
+    lat: parseFloat((destLatRad * 180 / Math.PI).toFixed(7)),
+    lng: parseFloat((destLngRad * 180 / Math.PI).toFixed(7)),
+  };
+}
+
 export function generateGridPoints(centerLat: number, centerLng: number, gridSize: number, spacingMiles: number): GridPoint[] {
   const points: GridPoint[] = [];
   const halfGrid = Math.floor(gridSize / 2);
-  const latDegreesPerMile = 1 / 69.0;
-  const lngDegreesPerMile = 1 / (69.0 * Math.cos(centerLat * Math.PI / 180));
 
   for (let row = -halfGrid; row <= halfGrid; row++) {
     for (let col = -halfGrid; col <= halfGrid; col++) {
+      const nsDist = Math.abs(row) * spacingMiles;
+      const nsBearing = row >= 0 ? 0 : 180;
+      const nsPoint = nsDist > 0
+        ? haversineDestination(centerLat, centerLng, nsBearing, nsDist)
+        : { lat: centerLat, lng: centerLng };
+
+      const ewDist = Math.abs(col) * spacingMiles;
+      const ewBearing = col >= 0 ? 90 : 270;
+      const finalPoint = ewDist > 0
+        ? haversineDestination(nsPoint.lat, nsPoint.lng, ewBearing, ewDist)
+        : nsPoint;
+
       points.push({
-        lat: parseFloat((centerLat + (row * spacingMiles * latDegreesPerMile)).toFixed(7)),
-        lng: parseFloat((centerLng + (col * spacingMiles * lngDegreesPerMile)).toFixed(7)),
+        lat: finalPoint.lat,
+        lng: finalPoint.lng,
         row: row + halfGrid,
         col: col + halfGrid,
       });
