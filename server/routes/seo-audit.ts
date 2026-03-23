@@ -1,11 +1,40 @@
-import { Router, type Request, type Response } from 'express';
+import { Router, type Request, type Response, type NextFunction } from 'express';
 import { z } from 'zod';
 import { storage } from '../storage';
-import { requireAdminAuth } from '../middleware/auth';
+import { requireAdminAuth, isAdminRequest } from '../middleware/auth';
 import { enqueuePipelineRun, getPipelineEmitter, type PipelineEvent } from '../services/seo-audit/pipeline';
 import { auditQueue } from '../services/seo-audit/queue';
 
 const router = Router();
+
+async function requireAdminOrMagicLink(req: Request, res: Response, next: NextFunction): Promise<void> {
+  if (await isAdminRequest(req)) {
+    next();
+    return;
+  }
+
+  const token = req.query.token as string | undefined
+    || req.headers['x-audit-token'] as string | undefined;
+
+  if (!token) {
+    res.status(401).json({ error: 'Authorization required. Provide admin auth or a valid audit token.' });
+    return;
+  }
+
+  const audit = await storage.getSeoAuditByMagicLink(token);
+  if (!audit) {
+    res.status(401).json({ error: 'Invalid or expired audit token' });
+    return;
+  }
+
+  const id = parseInt(req.params.id, 10);
+  if (!isNaN(id) && audit.id !== id) {
+    res.status(403).json({ error: 'Token does not match requested audit' });
+    return;
+  }
+
+  next();
+}
 
 const createAuditSchema = z.object({
   businessName: z.string().min(1),
@@ -99,7 +128,7 @@ router.get('/queue/status', requireAdminAuth, async (_req: Request, res: Respons
   }
 });
 
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', requireAdminOrMagicLink, async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) {
@@ -165,12 +194,14 @@ router.post('/:id/run', requireAdminAuth, async (req: Request, res: Response) =>
       return;
     }
 
+    await storage.updateSeoAudit(id, { status: 'queued' });
     enqueuePipelineRun(id);
 
     const queueStatus = auditQueue.getStatus();
     res.json({
       message: 'Audit pipeline enqueued',
       auditId: id,
+      status: 'queued',
       queuePosition: queueStatus.queued,
       queueStatus,
     });
@@ -185,7 +216,7 @@ router.post('/:id/run', requireAdminAuth, async (req: Request, res: Response) =>
   }
 });
 
-router.get('/:id/status', async (req: Request, res: Response) => {
+router.get('/:id/status', requireAdminOrMagicLink, async (req: Request, res: Response) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) {
     res.status(400).json({ error: 'Invalid audit ID' });
@@ -259,7 +290,7 @@ router.get('/:id/status', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/:id/sections/:section', async (req: Request, res: Response) => {
+router.get('/:id/sections/:section', requireAdminOrMagicLink, async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id, 10);
     const section = req.params.section as SectionName;
@@ -287,7 +318,7 @@ router.get('/:id/sections/:section', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/:id/geogrid/:keyword', async (req: Request, res: Response) => {
+router.get('/:id/geogrid/:keyword', requireAdminOrMagicLink, async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id, 10);
     const keyword = decodeURIComponent(req.params.keyword);
@@ -333,7 +364,7 @@ router.post('/:id/share', requireAdminAuth, async (req: Request, res: Response) 
       await storage.updateSeoAudit(id, { magicLinkToken: token });
     }
 
-    res.json({ token, url: `/api/seo-audit/view/${token}` });
+    res.json({ token, url: `/api/seo-audits/view/${token}` });
   } catch (error) {
     console.error('[SeoAudit] Share error:', error);
     res.status(500).json({ error: 'Failed to generate share link' });

@@ -38,6 +38,7 @@ import {
   generateActionPlanNarrative,
   extractServicesFromPages,
 } from './llm';
+import { runPromptCheck } from '../../ai-services';
 import type {
   SeoAudit,
   InsertAuditKeyword,
@@ -533,7 +534,71 @@ class SEOAuditPipeline extends EventEmitter {
   }
 
   private async stageGeoVisibility(audit: SeoAudit): Promise<void> {
-    console.log(`[Pipeline] GEO/AI Visibility stage for audit ${audit.id} - delegates to existing engine`);
+    const keywords = await storage.getAuditKeywordsByAuditId(audit.id);
+    const services = (audit.services as string[]) || [];
+    const cities = (audit.serviceAreaCities as string[]) || [];
+    const domain = new URL(audit.businessUrl).hostname.replace(/^www\./, '');
+
+    const highIntentKeywords = keywords
+      .filter(k => k.intent === 'transactional' || k.intent === 'commercial' || k.priority === 'high')
+      .slice(0, 20);
+
+    const keywordsToCheck = highIntentKeywords.length > 0
+      ? highIntentKeywords.map(k => k.keyword)
+      : services.slice(0, 10).flatMap(svc =>
+          cities.length > 0
+            ? [`best ${svc} in ${cities[0]}`, `${svc} near me`]
+            : [`best ${svc}`, `top ${svc} companies`]
+        ).slice(0, 20);
+
+    if (keywordsToCheck.length === 0) return;
+
+    let totalChecked = 0;
+    let foundInChatGpt = 0;
+    let foundInGemini = 0;
+    let citedInChatGpt = 0;
+    let citedInGemini = 0;
+
+    const location = cities[0] || undefined;
+
+    const batchSize = 3;
+    for (let i = 0; i < keywordsToCheck.length; i += batchSize) {
+      const batch = keywordsToCheck.slice(i, i + batchSize);
+
+      const results = await Promise.allSettled(
+        batch.map(kw => runPromptCheck(kw, audit.businessName, domain, location))
+      );
+
+      for (const result of results) {
+        if (result.status === 'fulfilled') {
+          totalChecked++;
+          if (result.value.chatgpt.found) foundInChatGpt++;
+          if (result.value.googleAI.found) foundInGemini++;
+          if (result.value.chatgpt.cited) citedInChatGpt++;
+          if (result.value.googleAI.cited) citedInGemini++;
+        }
+      }
+    }
+
+    if (totalChecked > 0) {
+      const chatGptVisibility = Math.round((foundInChatGpt / totalChecked) * 100);
+      const geminiVisibility = Math.round((foundInGemini / totalChecked) * 100);
+      const overallVisibility = Math.round(((foundInChatGpt + foundInGemini) / (totalChecked * 2)) * 100);
+
+      await storage.updateSeoAudit(audit.id, {
+        aiVisibilityScore: overallVisibility,
+        geoVisibilityData: {
+          totalChecked,
+          chatGptVisibility,
+          geminiVisibility,
+          overallVisibility,
+          foundInChatGpt,
+          foundInGemini,
+          citedInChatGpt,
+          citedInGemini,
+        },
+      });
+    }
   }
 
   private async stageReviewHealth(audit: SeoAudit): Promise<void> {

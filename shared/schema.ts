@@ -620,6 +620,8 @@ export const seoAudits = pgTable("seo_audits", {
   totalDeliverables: integer("total_deliverables"),
   estimatedTotalHours: real("estimated_total_hours"),
   estimatedMonthlyInvestment: real("estimated_monthly_investment"),
+  aiVisibilityScore: integer("ai_visibility_score"),
+  geoVisibilityData: jsonb("geo_visibility_data"),
   executiveNarrative: text("executive_narrative"),
   crawlTaskId: text("crawl_task_id"),
   createdBy: integer("created_by"),
