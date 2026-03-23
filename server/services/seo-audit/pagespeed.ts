@@ -1,4 +1,4 @@
-import { pooledFetch, DailyQuotaTracker } from './http-client';
+import { fetchWithTimeout, DailyQuotaTracker } from './http-client';
 import type { CrawlSummary } from './dataforseo';
 
 const PSI_API_KEY = () => process.env.GOOGLE_PSI_API_KEY || '';
@@ -16,7 +16,7 @@ export interface PageSpeedData {
     audits: Record<string, {
       numericValue?: number;
       score?: number | null;
-      details?: any;
+      details?: Record<string, unknown>;
     }>;
   };
   loadingExperience?: {
@@ -42,7 +42,7 @@ export async function getPageSpeedInsights(url: string, strategy: 'mobile' | 'de
   if (apiKey) params.append('key', apiKey);
 
   const requestUrl = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?${params.toString()}`;
-  const response = await pooledFetch(requestUrl, { timeoutMs: 60000 });
+  const response = await fetchWithTimeout(requestUrl, { timeoutMs: 60000 });
 
   pageSpeedDailyQuota.recordRequest();
 

@@ -20,7 +20,7 @@ export interface KeywordClassification {
 }
 
 export async function classifyKeywords(
-  keywords: Array<{ keyword: string; [key: string]: any }>,
+  keywords: Array<{ keyword: string; searchVolume?: number; cpc?: number }>,
   services: string[],
   cities: string[]
 ): Promise<KeywordClassification[]> {
@@ -226,7 +226,22 @@ Return JSON:
   }
 }
 
-export async function generateActionPlanNarrative(auditSummary: any): Promise<string> {
+export interface AuditSummaryForNarrative {
+  businessName: string;
+  businessUrl: string;
+  siteHealthGrade?: string;
+  shareOfLocalVoice?: number;
+  averageGridRank?: number;
+  totalKeywordGaps?: number;
+  totalContentGaps?: number;
+  totalDeliverables?: number;
+  estimatedTotalHours?: number;
+  estimatedMonthlyInvestment?: number;
+  marketPositionScore?: number;
+  topFindings?: string[];
+}
+
+export async function generateActionPlanNarrative(auditSummary: AuditSummaryForNarrative): Promise<string> {
   const client = await getAnthropicClient();
 
   try {

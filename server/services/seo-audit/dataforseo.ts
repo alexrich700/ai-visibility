@@ -1,4 +1,4 @@
-import { pooledFetch, dataForSeoLimiter } from './http-client';
+import { fetchWithTimeout, dataForSeoLimiter } from './http-client';
 
 const D4SEO_LOGIN = () => process.env.DATAFORSEO_LOGIN || '';
 const D4SEO_PASSWORD = () => process.env.DATAFORSEO_PASSWORD || '';
@@ -52,7 +52,7 @@ async function d4seoRequest(endpoint: string, body: unknown[], retries = MAX_RET
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const response = await pooledFetch(`${BASE_URL}${endpoint}`, {
+      const response = await fetchWithTimeout(`${BASE_URL}${endpoint}`, {
         method: 'POST',
         headers: {
           'Authorization': getAuthHeader(),
@@ -94,7 +94,7 @@ async function d4seoRequest(endpoint: string, body: unknown[], retries = MAX_RET
 async function d4seoGet(endpoint: string): Promise<D4SeoApiResponse> {
   await dataForSeoLimiter.acquire();
 
-  const response = await pooledFetch(`${BASE_URL}${endpoint}`, {
+  const response = await fetchWithTimeout(`${BASE_URL}${endpoint}`, {
     headers: {
       'Authorization': getAuthHeader(),
     },

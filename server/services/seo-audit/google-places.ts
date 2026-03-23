@@ -1,4 +1,4 @@
-import { pooledFetch, placesLimiter } from './http-client';
+import { fetchWithTimeout, placesLimiter } from './http-client';
 
 const PLACES_API_KEY = () => process.env.GOOGLE_PLACES_API_KEY || '';
 
@@ -47,7 +47,7 @@ export async function searchPlace(query: string): Promise<PlaceResult | null> {
     });
 
     await placesLimiter.acquire();
-    const response = await pooledFetch(
+    const response = await fetchWithTimeout(
       `https://maps.googleapis.com/maps/api/place/findplacefromtext/json?${params.toString()}`,
       { timeoutMs: 15000 }
     );
@@ -90,7 +90,7 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
     });
 
     await placesLimiter.acquire();
-    const response = await pooledFetch(
+    const response = await fetchWithTimeout(
       `https://maps.googleapis.com/maps/api/place/details/json?${params.toString()}`,
       { timeoutMs: 15000 }
     );
@@ -110,7 +110,7 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
       address: result.formatted_address || '',
       rating: result.rating || null,
       reviewCount: result.user_ratings_total || null,
-      reviews: (result.reviews || []).map((r: any) => ({
+      reviews: (result.reviews || []).map((r: { author_name?: string; rating?: number; text?: string; time?: number; relative_time_description?: string }) => ({
         author: r.author_name || '',
         rating: r.rating || 0,
         text: r.text || '',

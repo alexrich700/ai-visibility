@@ -5,7 +5,7 @@ export interface HttpRequestOptions {
   timeoutMs?: number;
 }
 
-export async function pooledFetch(
+export async function fetchWithTimeout(
   url: string,
   options: HttpRequestOptions = {}
 ): Promise<Response> {
@@ -27,13 +27,13 @@ export async function pooledFetch(
   }
 }
 
-export async function pooledJsonPost<T>(
+export async function jsonPost<T>(
   url: string,
   body: unknown,
   headers: Record<string, string> = {},
   timeoutMs: number = 30000
 ): Promise<T> {
-  const response = await pooledFetch(url, {
+  const response = await fetchWithTimeout(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -51,12 +51,12 @@ export async function pooledJsonPost<T>(
   return await response.json() as T;
 }
 
-export async function pooledJsonGet<T>(
+export async function jsonGet<T>(
   url: string,
   headers: Record<string, string> = {},
   timeoutMs: number = 30000
 ): Promise<T> {
-  const response = await pooledFetch(url, {
+  const response = await fetchWithTimeout(url, {
     method: 'GET',
     headers,
     timeoutMs,

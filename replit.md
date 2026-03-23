@@ -71,7 +71,7 @@ A comprehensive 10-section SEO audit system with a 12-stage data pipeline, desig
 - `audit_stage_log` — Pipeline stage progress tracking
 
 **Service Layer** (`server/services/seo-audit/`):
-- `http-client.ts` — Shared HTTP client with timeout support, `pooledFetch`, `DailyQuotaTracker`
+- `http-client.ts` — Shared HTTP client: `fetchWithTimeout`, `TokenBucketRateLimiter`, `DailyQuotaTracker`
 - `dataforseo.ts` — DataForSEO API: organic SERP, Maps SERP, Geo Grid (Haversine), site crawl, backlinks
 - `pagespeed.ts` — Google PageSpeed Insights (25K/day quota) + technical check scoring engine
 - `google-places.ts` — Google Places API: search, details, reviews, geocoding
