@@ -588,6 +588,7 @@ export const SEO_AUDIT_STATUS = {
   QUEUED: 'queued',
   RUNNING: 'running',
   COMPLETED: 'completed',
+  COMPLETED_WITH_ERRORS: 'completed_with_errors',
   FAILED: 'failed',
 } as const;
 export type SeoAuditStatus = typeof SEO_AUDIT_STATUS[keyof typeof SEO_AUDIT_STATUS];
