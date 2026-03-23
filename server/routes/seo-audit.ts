@@ -194,8 +194,8 @@ router.post('/:id/run', requireAdminAuth, async (req: Request, res: Response) =>
       return;
     }
 
-    await storage.updateSeoAudit(id, { status: 'queued' });
     enqueuePipelineRun(id);
+    await storage.updateSeoAudit(id, { status: 'queued' });
 
     const queueStatus = auditQueue.getStatus();
     res.json({
@@ -364,7 +364,7 @@ router.post('/:id/share', requireAdminAuth, async (req: Request, res: Response) 
       await storage.updateSeoAudit(id, { magicLinkToken: token });
     }
 
-    res.json({ token, url: `/api/seo-audits/view/${token}` });
+    res.json({ token, url: `/api/seo-audit/view/${token}` });
   } catch (error) {
     console.error('[SeoAudit] Share error:', error);
     res.status(500).json({ error: 'Failed to generate share link' });

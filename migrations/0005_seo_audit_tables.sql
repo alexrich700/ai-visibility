@@ -26,8 +26,6 @@ CREATE TABLE IF NOT EXISTS seo_audits (
   total_deliverables integer,
   estimated_total_hours real,
   estimated_monthly_investment real,
-  ai_visibility_score integer,
-  geo_visibility_data jsonb,
   executive_narrative text,
   crawl_task_id text,
   created_by integer,
