@@ -263,7 +263,7 @@ export default function Home() {
 
   const Branding = () => (
     <div className="flex items-center">
-      <img src={logoIcon} alt="Motivent Marketing" className="h-8 object-contain" />
+      <img src={logoIcon} alt="Motivent Marketing" className="h-12 object-contain" />
     </div>
   );
 
