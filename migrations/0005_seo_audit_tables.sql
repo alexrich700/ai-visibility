@@ -193,3 +193,4 @@ CREATE TABLE IF NOT EXISTS audit_stage_log (
 );
 
 CREATE INDEX IF NOT EXISTS audit_stage_log_audit_id_idx ON audit_stage_log (audit_id);
+CREATE INDEX IF NOT EXISTS audit_stage_log_status_idx ON audit_stage_log (status);

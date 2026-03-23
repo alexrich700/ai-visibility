@@ -859,6 +859,7 @@ export const auditStageLog = pgTable("audit_stage_log", {
   metadata: jsonb("metadata").default({}),
 }, (table) => ({
   auditIdIdx: index("audit_stage_log_audit_id_idx").on(table.auditId),
+  statusIdx: index("audit_stage_log_status_idx").on(table.status),
 }));
 
 export const insertAuditStageLogSchema = createInsertSchema(auditStageLog).omit({

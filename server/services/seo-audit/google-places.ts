@@ -147,8 +147,10 @@ export async function geocodeAddress(address: string): Promise<{ lat: number; ln
       key: apiKey,
     });
 
-    const response = await fetch(
-      `https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`
+    await placesLimiter.acquire();
+    const response = await fetchWithTimeout(
+      `https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`,
+      { timeoutMs: 15000 }
     );
 
     if (!response.ok) {
