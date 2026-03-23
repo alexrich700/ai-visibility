@@ -916,8 +916,8 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
 
   const SortIcon = ({ column }: { column: string }) => {
     if (sortColumn !== column) return <ArrowUpDown className="w-3 h-3 ml-1 opacity-0 group-hover/sort:opacity-50 transition-opacity" />;
-    if (sortDirection === "asc") return <ArrowUp className="w-3 h-3 ml-1 text-blue-600" />;
-    return <ArrowDown className="w-3 h-3 ml-1 text-blue-600" />;
+    if (sortDirection === "asc") return <ArrowUp className="w-3 h-3 ml-1 text-orange-600" />;
+    return <ArrowDown className="w-3 h-3 ml-1 text-orange-600" />;
   };
 
   useEffect(() => {
@@ -1219,7 +1219,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
         {/* Scorecard Row */}
         <div className="grid md:grid-cols-4 gap-4">
           {/* Average Rank */}
-          <Card className="shadow-2xl shadow-blue-900/5">
+          <Card className="shadow-2xl shadow-orange-900/5">
             <CardContent className="p-6">
               <div className="flex items-start justify-between">
                 <div>
@@ -1242,7 +1242,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
           </Card>
 
           {/* Visibility Rate */}
-          <Card className="shadow-2xl shadow-blue-900/5">
+          <Card className="shadow-2xl shadow-orange-900/5">
             <CardContent className="p-6">
               <div className="flex items-start justify-between">
                 <div>
@@ -1261,7 +1261,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
           </Card>
 
           {/* Citation Rate */}
-          <Card className="shadow-2xl shadow-blue-900/5">
+          <Card className="shadow-2xl shadow-orange-900/5">
             <CardContent className="p-6">
               <div className="flex items-start justify-between">
                 <div>
@@ -1280,7 +1280,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
           </Card>
 
           {/* Next Check */}
-          <Card className="shadow-2xl shadow-blue-900/5">
+          <Card className="shadow-2xl shadow-orange-900/5">
             <CardContent className="p-6">
               <div className="flex items-start justify-between">
                 <div>
@@ -1304,7 +1304,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
         {/* Charts Row */}
         <div className="grid md:grid-cols-3 gap-6">
           {/* Score Trend Chart with View Selector */}
-          <Card className="md:col-span-2 shadow-2xl shadow-blue-900/5">
+          <Card className="md:col-span-2 shadow-2xl shadow-orange-900/5">
             <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap">
               <CardTitle className="text-lg font-bold tracking-tight flex items-center">
                 Visibility Trend
@@ -1457,7 +1457,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
           </Card>
 
           {/* Platform Visibility */}
-          <Card className="shadow-2xl shadow-blue-900/5">
+          <Card className="shadow-2xl shadow-orange-900/5">
             <CardHeader>
               <CardTitle className="text-lg font-bold tracking-tight flex items-center">
                 Platform Visibility
@@ -1522,7 +1522,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
         {/* Analytics Grid - 3 Column Layout */}
         <div className="grid md:grid-cols-3 gap-4">
           {/* Top Citations */}
-          <Card className="shadow-2xl shadow-blue-900/5">
+          <Card className="shadow-2xl shadow-orange-900/5">
             <CardHeader className="pb-2">
               <div className="flex items-center gap-2">
                 <Link2 className="w-4 h-4 text-[#ffb41c]" />
@@ -1562,7 +1562,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
           </Card>
 
           {/* Prominence */}
-          <Card className="shadow-2xl shadow-blue-900/5">
+          <Card className="shadow-2xl shadow-orange-900/5">
             <CardHeader className="pb-2">
               <div className="flex items-center gap-2">
                 <Award className="w-4 h-4 text-green-500" />
@@ -1595,7 +1595,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
           </Card>
 
           {/* Competitor Visibility */}
-          <Card className="shadow-2xl shadow-blue-900/5">
+          <Card className="shadow-2xl shadow-orange-900/5">
             <CardHeader className="pb-2">
               <div className="flex items-center gap-2">
                 <Building2 className="w-4 h-4 text-[#ff5800]" />
@@ -1634,7 +1634,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
 
         {/* Key Sentiment Drivers - Two Column Layout (SEMRush Style) */}
         {analytics && (analytics.sentimentNarratives?.strengths?.length || analytics.sentimentNarratives?.improvements?.length) ? (
-          <Card className="shadow-2xl shadow-blue-900/5">
+          <Card className="shadow-2xl shadow-orange-900/5">
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2">
                 <Meh className="w-5 h-5 text-[#ffb41c]" />
@@ -1756,7 +1756,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
         ) : null}
 
         {/* Group Performance */}
-        <Card className="shadow-2xl shadow-blue-900/5">
+        <Card className="shadow-2xl shadow-orange-900/5">
           <CardHeader>
             <CardTitle className="text-lg font-bold tracking-tight">Visibility by Group</CardTitle>
           </CardHeader>
@@ -1782,7 +1782,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
         </Card>
 
         {/* Detailed Results - Table Layout */}
-        <Card className="shadow-2xl shadow-blue-900/5">
+        <Card className="shadow-2xl shadow-orange-900/5">
           <CardHeader className="pb-3">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle className="text-lg font-bold tracking-tight">Prompt Results</CardTitle>
@@ -1915,12 +1915,12 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
                       <div className="flex items-center justify-center gap-1.5" data-testid={`status-chatgpt-${result.id}`}>
                         <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
                           result.chatgptCited ? "bg-green-500" :
-                          result.chatgptFound ? "bg-blue-500" :
+                          result.chatgptFound ? "bg-orange-500" :
                           "bg-gray-300"
                         }`} />
                         <span className={`text-xs font-medium ${
                           result.chatgptCited ? "text-green-700" :
-                          result.chatgptFound ? "text-blue-600" :
+                          result.chatgptFound ? "text-orange-600" :
                           "text-gray-400"
                         }`}>
                           {result.chatgptCited ? "Cited" : result.chatgptFound ? "Found" : "—"}
@@ -1931,12 +1931,12 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
                       <div className="flex items-center justify-center gap-1.5" data-testid={`status-googleai-${result.id}`}>
                         <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
                           result.googleAICited ? "bg-green-500" :
-                          result.googleAIFound ? "bg-blue-500" :
+                          result.googleAIFound ? "bg-orange-500" :
                           "bg-gray-300"
                         }`} />
                         <span className={`text-xs font-medium ${
                           result.googleAICited ? "text-green-700" :
-                          result.googleAIFound ? "text-blue-600" :
+                          result.googleAIFound ? "text-orange-600" :
                           "text-gray-400"
                         }`}>
                           {result.googleAICited ? "Cited" : result.googleAIFound ? "Found" : "—"}
@@ -2020,7 +2020,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
 
         {/* Brand Sentiment Section - Dedicated section for brand-specific prompts */}
         {brandSentimentResults.length > 0 && (
-          <Card className="shadow-2xl shadow-blue-900/5">
+          <Card className="shadow-2xl shadow-orange-900/5">
             <CardHeader>
               <div className="flex items-center justify-between gap-4">
                 <div>

@@ -75,7 +75,7 @@ export default function AdminLogin() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md p-8 bg-white rounded-xl border border-gray-200 shadow-2xl shadow-blue-900/5">
+      <Card className="w-full max-w-md p-8 bg-white rounded-xl border border-gray-200 shadow-2xl shadow-orange-900/5">
         {authView === "login" && (
           <>
             <div className="text-center mb-8">

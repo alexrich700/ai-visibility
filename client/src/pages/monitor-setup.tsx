@@ -820,7 +820,7 @@ export default function MonitorSetup() {
       <main className="max-w-4xl mx-auto px-6 py-8">
         {/* Step 1: Business Info */}
         {currentStep === "business" && (
-          <Card className="shadow-2xl shadow-blue-900/5">
+          <Card className="shadow-2xl shadow-orange-900/5">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-2xl font-bold tracking-tight">
                 <Building2 className="w-6 h-6 text-[#ff5800]" />
@@ -1040,7 +1040,7 @@ export default function MonitorSetup() {
 
         {/* Step 2: Groups */}
         {currentStep === "groups" && (
-          <Card className="shadow-2xl shadow-blue-900/5">
+          <Card className="shadow-2xl shadow-orange-900/5">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-2xl font-bold tracking-tight">
                 <Sparkles className="w-6 h-6 text-[#ffb41c]" />
@@ -1158,7 +1158,7 @@ export default function MonitorSetup() {
 
         {/* Step 3: Prompts */}
         {currentStep === "prompts" && (
-          <Card className="shadow-2xl shadow-blue-900/5">
+          <Card className="shadow-2xl shadow-orange-900/5">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-2xl font-bold tracking-tight">
                 <FileText className="w-6 h-6 text-[#ff5800]" />
@@ -1270,7 +1270,7 @@ export default function MonitorSetup() {
 
         {/* Step 4: Scanning */}
         {currentStep === "scanning" && (
-          <Card className="shadow-2xl shadow-blue-900/5">
+          <Card className="shadow-2xl shadow-orange-900/5">
             <CardHeader className="text-center">
               <CardTitle className="flex items-center justify-center gap-2 text-2xl font-bold tracking-tight">
                 <Zap className="w-6 h-6 text-[#ffb41c]" />

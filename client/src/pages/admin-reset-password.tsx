@@ -64,7 +64,7 @@ export default function AdminResetPassword() {
   if (!token) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md p-8 bg-white rounded-xl border border-gray-200 shadow-2xl shadow-blue-900/5">
+        <Card className="w-full max-w-md p-8 bg-white rounded-xl border border-gray-200 shadow-2xl shadow-orange-900/5">
           <div className="text-center mb-8">
             <div className="w-16 h-16 bg-red-500 rounded-xl flex items-center justify-center mx-auto mb-4">
               <X className="w-8 h-8 text-white" />
@@ -88,7 +88,7 @@ export default function AdminResetPassword() {
   if (success) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md p-8 bg-white rounded-xl border border-gray-200 shadow-2xl shadow-blue-900/5">
+        <Card className="w-full max-w-md p-8 bg-white rounded-xl border border-gray-200 shadow-2xl shadow-orange-900/5">
           <div className="text-center mb-8">
             <div className="w-16 h-16 bg-green-500 rounded-xl flex items-center justify-center mx-auto mb-4">
               <Check className="w-8 h-8 text-white" />
@@ -111,7 +111,7 @@ export default function AdminResetPassword() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md p-8 bg-white rounded-xl border border-gray-200 shadow-2xl shadow-blue-900/5">
+      <Card className="w-full max-w-md p-8 bg-white rounded-xl border border-gray-200 shadow-2xl shadow-orange-900/5">
         <div className="text-center mb-8">
           <div className="w-16 h-16 bg-[#ff5800] rounded-xl flex items-center justify-center mx-auto mb-4">
             <Lock className="w-8 h-8 text-white" />

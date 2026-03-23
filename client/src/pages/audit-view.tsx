@@ -978,7 +978,7 @@ export default function AuditView(props: AuditViewProps = {}) {
                   </div>
 
                   <div className="flex gap-4 items-start p-4 bg-gray-50 rounded-xl border border-gray-100">
-                    <Globe size={24} className="text-blue-600 shrink-0" />
+                    <Globe size={24} className="text-orange-600 shrink-0" />
                     <div className="flex-1">
                       <div className="flex items-center justify-between">
                         <h4 className="font-bold text-[#010400]">Google AI</h4>
