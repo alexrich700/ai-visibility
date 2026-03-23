@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import type { AuditResults, PromptResult } from "@shared/schema";
-import logoFull from "@assets/Motivent_Logo_-_Primary_1774297429560.png";
+
 import logoIcon from "@assets/Motivent_Logo_-_Tertiary_1774297439930.png";
 
 interface AuditWithLead {
@@ -312,8 +312,7 @@ export default function AdminAuditView() {
           <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-8">
             <div className="space-y-6">
               <div className="flex items-center gap-3">
-                <img src={logoIcon} alt="Motivent Marketing" className="h-10 w-10 rounded-md" />
-                <img src={logoFull} alt="Motivent Marketing" className="h-8 invert" />
+                <img src={logoIcon} alt="Motivent Marketing" className="h-10 object-contain invert" />
               </div>
               <div>
                 <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-2" data-testid="full-report-title">AI Visibility Audit</h1>
@@ -618,8 +617,7 @@ export default function AdminAuditView() {
         {/* 5. Footer */}
         <footer className="p-12 bg-gray-50 border-t border-gray-200 text-center">
           <div className="flex items-center justify-center gap-3 mb-4">
-            <img src={logoIcon} alt="Motivent Marketing" className="h-8 w-8 rounded-md" />
-            <img src={logoFull} alt="Motivent Marketing" className="h-6" />
+            <img src={logoIcon} alt="Motivent Marketing" className="h-8 object-contain" />
           </div>
           <p className="text-gray-500 text-sm">
             Prepared by Motivent Marketing | AI Visibility Audit Report

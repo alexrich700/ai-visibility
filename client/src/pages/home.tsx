@@ -20,7 +20,6 @@ import {
 } from "lucide-react";
 import type { AuditRequest, AuditResults } from "@shared/schema";
 import { LEAD_GEN_TOTAL_PROMPTS } from "@shared/audit-constants";
-import logoFull from "@assets/Motivent_Logo_-_Primary_1774297429560.png";
 import logoIcon from "@assets/Motivent_Logo_-_Tertiary_1774297439930.png";
 
 type Step = "input" | "scanning";
@@ -263,9 +262,8 @@ export default function Home() {
   };
 
   const Branding = () => (
-    <div className="flex items-center gap-3">
-      <img src={logoIcon} alt="Motivent Marketing" className="h-8 w-8 rounded-md" />
-      <img src={logoFull} alt="Motivent Marketing" className="h-6" />
+    <div className="flex items-center">
+      <img src={logoIcon} alt="Motivent Marketing" className="h-8 object-contain" />
     </div>
   );
 

@@ -51,7 +51,7 @@ export function AdminSidebar() {
     <Sidebar>
       <SidebarHeader>
         <div className="flex items-center gap-3 px-2 py-2">
-          <img src={logoIcon} alt="Logo" className="w-8 h-8 rounded-lg" />
+          <img src={logoIcon} alt="Motivent Marketing" className="h-6 object-contain" />
           <div className="flex flex-col">
             <span className="text-sm font-bold tracking-tight">Admin Portal</span>
             <span className="text-xs text-muted-foreground">Internal Dashboard</span>
