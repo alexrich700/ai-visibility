@@ -281,8 +281,8 @@ router.get('/:id/status', requireAdminOrMagicLink, async (req: Request, res: Res
 
   req.on('close', cleanup);
 
-  if (audit.status === 'completed') {
-    sendEvent({ type: 'pipeline_complete', auditId: id, timestamp: Date.now() });
+  if (audit.status === 'completed' || audit.status === 'completed_with_errors') {
+    sendEvent({ type: 'pipeline_complete', auditId: id, hadErrors: audit.status === 'completed_with_errors', timestamp: Date.now() });
     cleanup();
   } else if (audit.status === 'failed') {
     sendEvent({ type: 'pipeline_error', auditId: id, error: 'Pipeline previously failed', timestamp: Date.now() });
