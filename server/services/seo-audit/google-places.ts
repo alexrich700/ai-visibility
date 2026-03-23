@@ -1,4 +1,4 @@
-import { pooledFetch } from './http-client';
+import { pooledFetch, placesLimiter } from './http-client';
 
 const PLACES_API_KEY = () => process.env.GOOGLE_PLACES_API_KEY || '';
 
@@ -46,6 +46,7 @@ export async function searchPlace(query: string): Promise<PlaceResult | null> {
       key: apiKey,
     });
 
+    await placesLimiter.acquire();
     const response = await pooledFetch(
       `https://maps.googleapis.com/maps/api/place/findplacefromtext/json?${params.toString()}`,
       { timeoutMs: 15000 }
@@ -88,6 +89,7 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
       key: apiKey,
     });
 
+    await placesLimiter.acquire();
     const response = await pooledFetch(
       `https://maps.googleapis.com/maps/api/place/details/json?${params.toString()}`,
       { timeoutMs: 15000 }

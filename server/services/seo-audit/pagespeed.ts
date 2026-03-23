@@ -1,4 +1,5 @@
 import { pooledFetch, DailyQuotaTracker } from './http-client';
+import type { CrawlSummary } from './dataforseo';
 
 const PSI_API_KEY = () => process.env.GOOGLE_PSI_API_KEY || '';
 
@@ -70,7 +71,7 @@ export interface TechnicalFinding {
   impact: 'high' | 'medium' | 'low';
 }
 
-export function runTechnicalChecks(psiData: PageSpeedData, crawlData?: any): TechnicalFinding[] {
+export function runTechnicalChecks(psiData: PageSpeedData, crawlData?: CrawlSummary | null): TechnicalFinding[] {
   const findings: TechnicalFinding[] = [];
   const audits = psiData.lighthouseResult?.audits || {};
 
@@ -149,6 +150,27 @@ export function runTechnicalChecks(psiData: PageSpeedData, crawlData?: any): Tec
     threshold: '≤ 200ms',
     description: 'Sum of blocking time for long tasks',
     impact: tbt > 600 ? 'high' : 'medium',
+  });
+
+  const ttfb = audits['server-response-time']?.numericValue || 0;
+  findings.push({
+    category: 'speed',
+    check_name: 'Time to First Byte (TTFB)',
+    status: ttfb <= 800 ? 'pass' : ttfb <= 1800 ? 'warning' : 'fail',
+    value: `${Math.round(ttfb)}ms`,
+    threshold: '≤ 800ms',
+    description: 'Server response time for the initial request',
+    impact: ttfb > 1800 ? 'high' : 'medium',
+  });
+
+  findings.push({
+    category: 'onpage',
+    check_name: 'Image Optimization',
+    status: audits['uses-optimized-images']?.score === 1 || audits['uses-optimized-images']?.score === null ? 'pass' : 'warning',
+    value: audits['uses-optimized-images']?.score === 1 || audits['uses-optimized-images']?.score === null ? 'Optimized' : 'Unoptimized images found',
+    threshold: 'All optimized',
+    description: 'Images are properly compressed and sized',
+    impact: 'medium',
   });
 
   findings.push({

@@ -70,6 +70,45 @@ export async function pooledJsonGet<T>(
   return await response.json() as T;
 }
 
+export class TokenBucketRateLimiter {
+  private tokens: number;
+  private lastRefill: number;
+  private readonly maxTokens: number;
+  private readonly refillRatePerMs: number;
+
+  constructor(maxRequestsPerMinute: number) {
+    this.maxTokens = maxRequestsPerMinute;
+    this.tokens = maxRequestsPerMinute;
+    this.refillRatePerMs = maxRequestsPerMinute / 60000;
+    this.lastRefill = Date.now();
+  }
+
+  async acquire(): Promise<void> {
+    this.refill();
+    if (this.tokens < 1) {
+      const waitMs = Math.ceil((1 - this.tokens) / this.refillRatePerMs);
+      await new Promise(resolve => setTimeout(resolve, waitMs));
+      this.refill();
+    }
+    this.tokens -= 1;
+  }
+
+  private refill(): void {
+    const now = Date.now();
+    const elapsed = now - this.lastRefill;
+    this.tokens = Math.min(this.maxTokens, this.tokens + elapsed * this.refillRatePerMs);
+    this.lastRefill = now;
+  }
+
+  getAvailableTokens(): number {
+    this.refill();
+    return Math.floor(this.tokens);
+  }
+}
+
+export const dataForSeoLimiter = new TokenBucketRateLimiter(2000);
+export const placesLimiter = new TokenBucketRateLimiter(100);
+
 export class DailyQuotaTracker {
   private used: number = 0;
   private dailyLimit: number;

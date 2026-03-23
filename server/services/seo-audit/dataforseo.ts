@@ -1,4 +1,4 @@
-import { pooledFetch } from './http-client';
+import { pooledFetch, dataForSeoLimiter } from './http-client';
 
 const D4SEO_LOGIN = () => process.env.DATAFORSEO_LOGIN || '';
 const D4SEO_PASSWORD = () => process.env.DATAFORSEO_PASSWORD || '';
@@ -12,7 +12,44 @@ const MAX_RETRIES = 3;
 const RETRY_DELAYS = [1000, 2000, 4000];
 const BATCH_SIZE = 100;
 
-async function d4seoRequest<T>(endpoint: string, body: any[], retries = MAX_RETRIES): Promise<T> {
+interface D4SeoApiResponse {
+  status_code: number;
+  status_message: string;
+  tasks: D4SeoTask[];
+}
+
+interface D4SeoTask {
+  id: string;
+  status_code: number;
+  status_message: string;
+  data?: { tag?: string };
+  result: D4SeoTaskResult[] | null;
+}
+
+interface D4SeoTaskResult {
+  items: D4SeoItem[] | null;
+  items_count: number;
+  crawl_progress?: string;
+  crawl_status?: Record<string, number>;
+  [key: string]: unknown;
+}
+
+interface D4SeoItem {
+  type: string;
+  rank_absolute: number;
+  url?: string;
+  domain?: string;
+  title?: string;
+  description?: string;
+  rating?: { value: number; votes_count: number };
+  address?: string;
+  place_id?: string;
+  [key: string]: unknown;
+}
+
+async function d4seoRequest(endpoint: string, body: unknown[], retries = MAX_RETRIES): Promise<D4SeoApiResponse> {
+  await dataForSeoLimiter.acquire();
+
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const response = await pooledFetch(`${BASE_URL}${endpoint}`, {
@@ -36,11 +73,11 @@ async function d4seoRequest<T>(endpoint: string, body: any[], retries = MAX_RETR
         throw new Error(`DataForSEO API error ${response.status}: ${text}`);
       }
 
-      const data = await response.json();
+      const data = await response.json() as D4SeoApiResponse;
       if (data.status_code !== 20000) {
         throw new Error(`DataForSEO error: ${data.status_message || 'Unknown error'}`);
       }
-      return data as T;
+      return data;
     } catch (error) {
       if (attempt < retries && !(error instanceof Error && error.message.includes('API error 4'))) {
         const delay = RETRY_DELAYS[attempt] || 4000;
@@ -54,6 +91,20 @@ async function d4seoRequest<T>(endpoint: string, body: any[], retries = MAX_RETR
   throw new Error('DataForSEO: max retries exceeded');
 }
 
+async function d4seoGet(endpoint: string): Promise<D4SeoApiResponse> {
+  await dataForSeoLimiter.acquire();
+
+  const response = await pooledFetch(`${BASE_URL}${endpoint}`, {
+    headers: {
+      'Authorization': getAuthHeader(),
+    },
+    timeoutMs: 60000,
+  });
+
+  if (!response.ok) throw new Error(`DataForSEO GET error: ${response.status}`);
+  return await response.json() as D4SeoApiResponse;
+}
+
 function chunk<T>(arr: T[], size: number): T[][] {
   const chunks: T[][] = [];
   for (let i = 0; i < arr.length; i += size) {
@@ -65,18 +116,11 @@ function chunk<T>(arr: T[], size: number): T[][] {
 export interface SerpResult {
   keyword: string;
   locationName: string;
-  items: Array<{
-    type: string;
-    rank_absolute: number;
-    url?: string;
-    domain?: string;
-    title?: string;
-    description?: string;
-  }>;
+  items: D4SeoItem[];
 }
 
 export async function getOrganicSerp(params: { keyword: string; locationName: string; languageCode?: string }): Promise<SerpResult> {
-  const data = await d4seoRequest<any>('/serp/google/organic/live/advanced', [{
+  const data = await d4seoRequest('/serp/google/organic/live/advanced', [{
     keyword: params.keyword,
     location_name: params.locationName,
     language_code: params.languageCode || 'en',
@@ -103,7 +147,7 @@ export async function batchOrganicSerp(pairs: Array<{ keyword: string; locationN
       depth: 100,
     }));
 
-    const data = await d4seoRequest<any>('/serp/google/organic/live/advanced', tasks);
+    const data = await d4seoRequest('/serp/google/organic/live/advanced', tasks);
 
     for (let i = 0; i < batch.length; i++) {
       const task = data.tasks?.[i];
@@ -122,19 +166,11 @@ export interface MapsSerpResult {
   keyword: string;
   lat: number;
   lng: number;
-  items: Array<{
-    rank_absolute: number;
-    title: string;
-    domain?: string;
-    url?: string;
-    rating?: { value: number; votes_count: number };
-    address?: string;
-    place_id?: string;
-  }>;
+  items: D4SeoItem[];
 }
 
 export async function getMapsSerp(params: { keyword: string; lat: number; lng: number; depth?: number }): Promise<MapsSerpResult> {
-  const data = await d4seoRequest<any>('/serp/google/maps/live/advanced', [{
+  const data = await d4seoRequest('/serp/google/maps/live/advanced', [{
     keyword: params.keyword,
     location_coordinate: `${params.lat},${params.lng},17z`,
     language_code: 'en',
@@ -218,10 +254,12 @@ export function generateGridPoints(centerLat: number, centerLng: number, gridSiz
 export function findRank(items: Array<{ title?: string; rank_absolute: number }>, businessName: string): number | null {
   if (!items || !businessName) return null;
   const normalized = businessName.toLowerCase().trim();
-  const match = items.find(item =>
-    item.title && item.title.toLowerCase().includes(normalized)
-  );
-  return match ? match.rank_absolute : null;
+  for (const item of items) {
+    if (item.title && item.title.toLowerCase().includes(normalized)) {
+      return item.rank_absolute;
+    }
+  }
+  return null;
 }
 
 export interface GridMetrics {
@@ -248,6 +286,14 @@ export interface GridPointResult {
     reviews: number | null;
     domain: string | null;
   }>;
+}
+
+interface GridTag {
+  keyword: string;
+  row: number;
+  col: number;
+  lat: number;
+  lng: number;
 }
 
 export async function runGeoGrid(params: {
@@ -282,17 +328,29 @@ export async function runGeoGrid(params: {
   }
 
   const batches = chunk(allTasks, BATCH_SIZE);
-  const allResults: any[] = [];
+
+  interface GeoGridResult {
+    tag: string;
+    items: D4SeoItem[];
+  }
+
+  const allResults: GeoGridResult[] = [];
 
   for (const batch of batches) {
     try {
-      const data = await d4seoRequest<any>('/serp/google/maps/live/advanced', batch);
+      const data = await d4seoRequest('/serp/google/maps/live/advanced', batch);
       if (data.tasks) {
-        for (const task of data.tasks) {
+        for (let taskIdx = 0; taskIdx < data.tasks.length; taskIdx++) {
+          const task = data.tasks[taskIdx];
           if (task.result) {
+            const taskTag = task.data?.tag || batch[taskIdx]?.tag;
+            if (!taskTag) {
+              console.error(`[DataForSEO] Missing tag for task index ${taskIdx}`);
+              continue;
+            }
             for (const result of task.result) {
               allResults.push({
-                tag: task.data?.tag || batch[0]?.tag,
+                tag: taskTag,
                 items: result.items || [],
               });
             }
@@ -309,7 +367,7 @@ export async function runGeoGrid(params: {
 
   for (const result of allResults) {
     try {
-      const tagData = JSON.parse(result.tag);
+      const tagData: GridTag = JSON.parse(result.tag);
       const { keyword, row, col, lat, lng } = tagData;
       const clientRank = findRank(result.items, params.clientBusinessName);
       const competitorRank = params.competitorBusinessName
@@ -321,12 +379,12 @@ export async function runGeoGrid(params: {
         row, col, lat, lng,
         clientRank,
         competitorRank,
-        topResults: (result.items || []).slice(0, 5).map((i: any) => ({
-          rank: i.rank_absolute,
-          name: i.title || '',
-          rating: i.rating?.value || null,
-          reviews: i.rating?.votes_count || null,
-          domain: i.domain || null,
+        topResults: (result.items || []).slice(0, 5).map((item: D4SeoItem) => ({
+          rank: item.rank_absolute,
+          name: item.title || '',
+          rating: item.rating?.value || null,
+          reviews: item.rating?.votes_count || null,
+          domain: item.domain || null,
         })),
       });
     } catch (e) {
@@ -360,7 +418,7 @@ export async function runGeoGrid(params: {
 }
 
 export async function startSiteCrawl(params: { targetUrl: string; maxPages?: number }): Promise<string> {
-  const data = await d4seoRequest<any>('/on_page/task_post', [{
+  const data = await d4seoRequest('/on_page/task_post', [{
     target: params.targetUrl,
     max_crawl_pages: params.maxPages || 500,
     load_resources: true,
@@ -373,20 +431,47 @@ export async function startSiteCrawl(params: { targetUrl: string; maxPages?: num
   return taskId;
 }
 
-export async function getCrawlSummary(taskId: string): Promise<any> {
-  const response = await fetch(`${BASE_URL}/on_page/summary/${taskId}`, {
-    headers: { 'Authorization': getAuthHeader() },
-  });
-
-  if (!response.ok) throw new Error(`DataForSEO crawl summary error: ${response.status}`);
-  const data = await response.json();
-  return data.tasks?.[0]?.result?.[0] || null;
+export interface CrawlSummary {
+  crawl_progress: string;
+  crawl_status: Record<string, number>;
+  pages_count: number;
+  pages_crawled: number;
+  broken_links_count?: number;
+  redirect_count?: number;
+  non_indexable_count?: number;
+  pages_with_no_title?: number;
+  pages_with_no_description?: number;
+  pages_with_no_h1?: number;
+  duplicate_title_count?: number;
+  duplicate_description_count?: number;
+  duplicate_content_count?: number;
+  pages_with_large_page_size?: number;
+  has_robots_txt?: boolean;
+  has_sitemap?: boolean;
+  have_schema_markup?: boolean;
+  have_local_business_schema?: boolean;
+  [key: string]: unknown;
 }
 
-export async function getCrawlPages(taskId: string, filters?: Record<string, any>): Promise<any[]> {
-  const body: any = { id: taskId, limit: 1000 };
+export async function getCrawlSummary(taskId: string): Promise<CrawlSummary | null> {
+  const data = await d4seoGet(`/on_page/summary/${taskId}`);
+  const result = data.tasks?.[0]?.result?.[0];
+  if (!result) return null;
+  return result as unknown as CrawlSummary;
+}
+
+export interface CrawlPage {
+  url: string;
+  status_code: number;
+  resource_type: string;
+  meta?: { title?: string; description?: string };
+  [key: string]: unknown;
+}
+
+export async function getCrawlPages(taskId: string, filters?: Record<string, string | number>): Promise<CrawlPage[]> {
+  const body: Record<string, unknown> = { id: taskId, limit: 1000 };
   if (filters) {
-    const filterArray: any[] = [];
+    const filterArray: Array<[string, string, string | number]> = [];
     if (filters.status_code) {
       filterArray.push(['resource_type', '=', 'html']);
       filterArray.push(['status_code', '=', filters.status_code]);
@@ -394,22 +479,45 @@ export async function getCrawlPages(taskId: string, filters?: Record<string, any
     if (filterArray.length > 0) body.filters = filterArray;
   }
 
-  const data = await d4seoRequest<any>('/on_page/pages', [body]);
-  return data.tasks?.[0]?.result?.[0]?.items || [];
+  const data = await d4seoRequest('/on_page/pages', [body]);
+  const items = data.tasks?.[0]?.result?.[0]?.items;
+  if (!items) return [];
+  return items as unknown as CrawlPage[];
 }
 
-export async function getBacklinkSummary(domain: string): Promise<any> {
-  const data = await d4seoRequest<any>('/backlinks/summary/live', [{
+export interface BacklinkSummary {
+  total_backlinks: number;
+  referring_domains: number;
+  referring_main_domains: number;
+  rank: number;
+  broken_backlinks: number;
+  [key: string]: unknown;
+}
+
+export async function getBacklinkSummary(domain: string): Promise<BacklinkSummary> {
+  const data = await d4seoRequest('/backlinks/summary/live', [{
     target: domain,
     internal_list_limit: 0,
     backlinks_status_type: 'live',
   }]);
 
-  return data.tasks?.[0]?.result?.[0] || {};
+  const result = data.tasks?.[0]?.result?.[0];
+  if (!result) return {} as BacklinkSummary;
+  return result as unknown as BacklinkSummary;
 }
 
-export async function getTopBacklinks(domain: string, limit = 10): Promise<any[]> {
-  const data = await d4seoRequest<any>('/backlinks/backlinks/live', [{
+export interface BacklinkItem {
+  url_from: string;
+  url_to: string;
+  domain_from: string;
+  rank: number;
+  anchor: string;
+  dofollow: boolean;
+  [key: string]: unknown;
+}
+
+export async function getTopBacklinks(domain: string, limit = 10): Promise<BacklinkItem[]> {
+  const data = await d4seoRequest('/backlinks/backlinks/live', [{
     target: domain,
     limit,
     order_by: ['rank,desc'],
@@ -417,5 +525,7 @@ export async function getTopBacklinks(domain: string, limit = 10): Promise<any[]
     filters: [['dofollow', '=', true]],
   }]);
 
-  return data.tasks?.[0]?.result?.[0]?.items || [];
+  const items = data.tasks?.[0]?.result?.[0]?.items;
+  if (!items) return [];
+  return items as unknown as BacklinkItem[];
 }
