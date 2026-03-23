@@ -47,7 +47,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, getSessionAwareQueryFn, queryClient } from "@/lib/queryClient";
-import logoIcon from "@assets/Motivent_Logo_-_Primary_1774297429560.png";
+
 import type { MonitoringClient, MonitoringGroup, MonitoringPrompt, CheckSession } from "@shared/schema";
 
 interface GroupWithPrompts extends MonitoringGroup {

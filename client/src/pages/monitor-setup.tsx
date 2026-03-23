@@ -13,7 +13,6 @@ import {
   Building2, Globe, MapPin, Briefcase, Clock, ArrowRight, ArrowLeft,
   Plus, Trash2, Edit2, Check, X, Loader2, Sparkles, FileText, Zap
 } from "lucide-react";
-import logoIcon from "@assets/Motivent_Logo_-_Primary_1774297429560.png";
 
 interface GroupItem {
   id: string;
