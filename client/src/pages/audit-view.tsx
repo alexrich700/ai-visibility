@@ -34,8 +34,8 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import type { AuditResults, SentimentResult } from "@shared/schema";
-import logoFull from "@assets/RMG-Logo-Black-1920w_(1)_1765741951083.webp";
-import logoIcon from "@assets/images_1765741951084.png";
+import logoFull from "@assets/Motivent_Logo_-_Primary_1774297429560.png";
+import logoIcon from "@assets/Motivent_Logo_-_Tertiary_1774297439930.png";
 
 interface NegativeSignal {
   platform: "ChatGPT" | "Google AI";
@@ -294,7 +294,7 @@ export default function AuditView(props: AuditViewProps = {}) {
             
             return (
               <div key={i} className="flex gap-2 ml-2">
-                <span className="font-bold text-[#5599f9] shrink-0">{number}.</span>
+                <span className="font-bold text-[#ff5800] shrink-0">{number}.</span>
                 <p className="text-gray-700">
                   {parts.map((part, j) => {
                     if (part.startsWith('**') && part.endsWith('**')) {
@@ -302,7 +302,7 @@ export default function AuditView(props: AuditViewProps = {}) {
                     }
                     const linkMatch = part.match(/\[([^\]]+)\]\(([^)]+)\)/);
                     if (linkMatch) {
-                      return <a key={j} href={linkMatch[2]} className="text-[#5599f9] underline" target="_blank" rel="noopener noreferrer">{linkMatch[1]}</a>;
+                      return <a key={j} href={linkMatch[2]} className="text-[#ff5800] underline" target="_blank" rel="noopener noreferrer">{linkMatch[1]}</a>;
                     }
                     return <span key={j}>{part}</span>;
                   })}
@@ -317,7 +317,7 @@ export default function AuditView(props: AuditViewProps = {}) {
             
             return (
               <div key={i} className="flex gap-2 ml-2">
-                <span className="text-[#5599f9] shrink-0">-</span>
+                <span className="text-[#ff5800] shrink-0">-</span>
                 <p className="text-gray-700">
                   {parts.map((part, j) => {
                     if (part.startsWith('**') && part.endsWith('**')) {
@@ -325,7 +325,7 @@ export default function AuditView(props: AuditViewProps = {}) {
                     }
                     const linkMatch = part.match(/\[([^\]]+)\]\(([^)]+)\)/);
                     if (linkMatch) {
-                      return <a key={j} href={linkMatch[2]} className="text-[#5599f9] underline" target="_blank" rel="noopener noreferrer">{linkMatch[1]}</a>;
+                      return <a key={j} href={linkMatch[2]} className="text-[#ff5800] underline" target="_blank" rel="noopener noreferrer">{linkMatch[1]}</a>;
                     }
                     return <span key={j}>{part}</span>;
                   })}
@@ -344,7 +344,7 @@ export default function AuditView(props: AuditViewProps = {}) {
                 }
                 const linkMatch = part.match(/\[([^\]]+)\]\(([^)]+)\)/);
                 if (linkMatch) {
-                  return <a key={j} href={linkMatch[2]} className="text-[#5599f9] underline" target="_blank" rel="noopener noreferrer">{linkMatch[1]}</a>;
+                  return <a key={j} href={linkMatch[2]} className="text-[#ff5800] underline" target="_blank" rel="noopener noreferrer">{linkMatch[1]}</a>;
                 }
                 return <span key={j}>{part}</span>;
               })}
@@ -385,7 +385,7 @@ export default function AuditView(props: AuditViewProps = {}) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-8 h-8 border-4 border-[#5599f9] border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <div className="w-8 h-8 border-4 border-[#ff5800] border-t-transparent rounded-full animate-spin mx-auto"></div>
           <p className="text-gray-500 mt-4">Loading your audit results...</p>
         </div>
       </div>
@@ -400,7 +400,7 @@ export default function AuditView(props: AuditViewProps = {}) {
           <h1 className="text-xl font-bold text-gray-900 mb-2">Audit Not Found</h1>
           <p className="text-gray-500 mb-6">The audit you're looking for doesn't exist or has been deleted.</p>
           <Link href="/">
-            <Button className="bg-[#5599f9]" data-testid="button-back-home">
+            <Button className="bg-[#ff5800]" data-testid="button-back-home">
               <ArrowLeft className="w-4 h-4 mr-2" />
               Start New Audit
             </Button>
@@ -427,7 +427,7 @@ export default function AuditView(props: AuditViewProps = {}) {
           <h1 className="text-xl font-bold text-gray-900 mb-2">No Detailed Results Available</h1>
           <p className="text-gray-500 mb-6">This audit doesn't have detailed results stored.</p>
           <Link href="/">
-            <Button className="bg-[#5599f9]" data-testid="button-back-home-no-results">
+            <Button className="bg-[#ff5800]" data-testid="button-back-home-no-results">
               <ArrowLeft className="w-4 h-4 mr-2" />
               Start New Audit
             </Button>
@@ -441,8 +441,8 @@ export default function AuditView(props: AuditViewProps = {}) {
 
   const SectionHeader = ({ title, icon: Icon }: { title: string; icon: any }) => (
     <div className="flex items-center gap-3 border-b border-gray-200 pb-4 mb-6">
-      <div className="p-2 bg-[#5599f9]/10 rounded-lg">
-        <Icon className="text-[#5599f9]" size={24} />
+      <div className="p-2 bg-[#ff5800]/10 rounded-lg">
+        <Icon className="text-[#ff5800]" size={24} />
       </div>
       <h2 className="text-2xl font-bold text-[#010400] tracking-tight">{title}</h2>
     </div>
@@ -470,10 +470,10 @@ export default function AuditView(props: AuditViewProps = {}) {
               <X size={24} />
             </button>
 
-            <div className="bg-[#5599f9] p-8 text-center">
+            <div className="bg-[#ff5800] p-8 text-center">
               <FileText className="text-white mx-auto mb-4" size={48} />
               <h2 className="text-2xl font-bold text-white tracking-tight">Unlock Your Full Report</h2>
-              <p className="text-blue-100 mt-2">
+              <p className="text-orange-100 mt-2">
                 See exactly how to fix your technical errors and turn this score from {audit.overallScore} to 80+.
               </p>
             </div>
@@ -486,7 +486,7 @@ export default function AuditView(props: AuditViewProps = {}) {
                     <User className="absolute left-3 top-3 text-gray-400" size={18} />
                     <input
                       type="text"
-                      className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:border-[#5599f9] focus:ring-1 focus:ring-[#5599f9] outline-none"
+                      className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:border-[#ff5800] focus:ring-1 focus:ring-[#ff5800] outline-none"
                       placeholder="John Doe"
                       value={leadName}
                       onChange={(e) => setLeadName(e.target.value)}
@@ -502,7 +502,7 @@ export default function AuditView(props: AuditViewProps = {}) {
                     <Mail className="absolute left-3 top-3 text-gray-400" size={18} />
                     <input
                       type="email"
-                      className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:border-[#5599f9] focus:ring-1 focus:ring-[#5599f9] outline-none"
+                      className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:border-[#ff5800] focus:ring-1 focus:ring-[#ff5800] outline-none"
                       placeholder="john@company.com"
                       value={leadEmail}
                       onChange={(e) => setLeadEmail(e.target.value)}
@@ -518,7 +518,7 @@ export default function AuditView(props: AuditViewProps = {}) {
                     <Phone className="absolute left-3 top-3 text-gray-400" size={18} />
                     <input
                       type="tel"
-                      className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:border-[#5599f9] focus:ring-1 focus:ring-[#5599f9] outline-none"
+                      className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:border-[#ff5800] focus:ring-1 focus:ring-[#ff5800] outline-none"
                       placeholder="(555) 123-4567"
                       value={leadPhone}
                       onChange={(e) => setLeadPhone(e.target.value)}
@@ -531,7 +531,7 @@ export default function AuditView(props: AuditViewProps = {}) {
                 <button
                   type="submit"
                   disabled={leadMutation.isPending}
-                  className="w-full bg-[#5599f9] hover:bg-[#4a8ce8] text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 mt-4 disabled:opacity-50"
+                  className="w-full bg-[#ff5800] hover:bg-[#e04f00] text-white font-bold py-4 rounded-xl shadow-lg shadow-orange-500/20 transition-all flex items-center justify-center gap-2 mt-4 disabled:opacity-50"
                   data-testid="button-submit-lead"
                 >
                   {leadMutation.isPending ? (
@@ -560,7 +560,7 @@ export default function AuditView(props: AuditViewProps = {}) {
             <>
               <button 
                 onClick={handlePrintReport}
-                className="flex items-center gap-2 hover:text-[#5599f9] transition-colors text-sm font-medium"
+                className="flex items-center gap-2 hover:text-[#ff5800] transition-colors text-sm font-medium"
                 data-testid="button-print-report"
               >
                 <Printer size={16} /> Print
@@ -568,7 +568,7 @@ export default function AuditView(props: AuditViewProps = {}) {
               <div className="w-px h-4 bg-gray-700"></div>
               <button 
                 onClick={handlePrintReport}
-                className="flex items-center gap-2 hover:text-[#5599f9] transition-colors text-sm font-bold"
+                className="flex items-center gap-2 hover:text-[#ff5800] transition-colors text-sm font-bold"
                 data-testid="button-download-pdf"
               >
                 <Download size={16} /> Download PDF
@@ -577,7 +577,7 @@ export default function AuditView(props: AuditViewProps = {}) {
               <button 
                 onClick={handleShare}
                 disabled={shareMutation.isPending}
-                className="flex items-center gap-2 hover:text-[#5599f9] transition-colors text-sm font-medium disabled:opacity-50"
+                className="flex items-center gap-2 hover:text-[#ff5800] transition-colors text-sm font-medium disabled:opacity-50"
                 data-testid="button-share-audit"
               >
                 {shareMutation.isPending ? (
@@ -593,7 +593,7 @@ export default function AuditView(props: AuditViewProps = {}) {
             </>
           )}
           <Link href="/">
-            <span className="flex items-center gap-2 hover:text-[#5599f9] transition-colors text-sm font-medium cursor-pointer" data-testid="link-new-audit">
+            <span className="flex items-center gap-2 hover:text-[#ff5800] transition-colors text-sm font-medium cursor-pointer" data-testid="link-new-audit">
               <ArrowLeft size={16} /> New Audit
             </span>
           </Link>
@@ -605,14 +605,14 @@ export default function AuditView(props: AuditViewProps = {}) {
         
         {/* 1. Header / Cover */}
         <header className="bg-[#010400] text-white p-12 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-[#5599f9] rounded-full mix-blend-multiply opacity-20 transform translate-x-1/2 -translate-y-1/2 blur-3xl"></div>
+          <div className="absolute top-0 right-0 w-64 h-64 bg-[#ff5800] rounded-full mix-blend-multiply opacity-20 transform translate-x-1/2 -translate-y-1/2 blur-3xl"></div>
           <div className="absolute bottom-0 left-0 w-48 h-48 bg-[#ffb41c] rounded-full mix-blend-multiply opacity-20 transform -translate-x-1/2 translate-y-1/2 blur-3xl"></div>
 
           <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-8">
             <div className="space-y-6">
               <div className="flex items-center gap-3">
-                <img src={logoIcon} alt="Rossman Media" className="h-10 w-10 rounded-md" />
-                <img src={logoFull} alt="ROSSMAN MEDIA" className="h-8 invert" />
+                <img src={logoIcon} alt="Motivent Marketing" className="h-10 w-10 rounded-md" />
+                <img src={logoFull} alt="Motivent Marketing" className="h-8 invert" />
               </div>
               <div>
                 <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-2" data-testid="full-report-title">AI Visibility Audit</h1>
@@ -708,7 +708,7 @@ export default function AuditView(props: AuditViewProps = {}) {
           {!isReportUnlocked && (
             <div className="absolute inset-0 z-40 flex items-start justify-center pt-32 no-print">
               <div className="bg-white rounded-2xl p-8 shadow-2xl max-w-md mx-4 text-center border border-gray-200">
-                <div className="w-16 h-16 bg-[#5599f9] rounded-full flex items-center justify-center mx-auto mb-6">
+                <div className="w-16 h-16 bg-[#ff5800] rounded-full flex items-center justify-center mx-auto mb-6">
                   <Lock className="text-white" size={32} />
                 </div>
                 <h3 className="text-2xl font-bold text-[#010400] mb-3">Unlock Your Full Report</h3>
@@ -717,7 +717,7 @@ export default function AuditView(props: AuditViewProps = {}) {
                 </p>
                 <button
                   onClick={() => setShowLeadForm(true)}
-                  className="w-full bg-[#5599f9] hover:bg-[#4a8ce8] text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2"
+                  className="w-full bg-[#ff5800] hover:bg-[#e04f00] text-white font-bold py-4 rounded-xl shadow-lg shadow-orange-500/20 transition-all flex items-center justify-center gap-2"
                   data-testid="button-unlock-report"
                 >
                   Unlock Full Report <ArrowRight size={20} />
@@ -734,7 +734,7 @@ export default function AuditView(props: AuditViewProps = {}) {
               <p className="mb-4 text-gray-600">We simulated the following user queries to test brand presence across AI platforms.</p>
               <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-6">
                 <p className="text-sm text-gray-700">
-                  <span className="font-bold text-[#5599f9]">How to read this:</span> These are generic questions users might ask AI—your brand name is <span className="font-medium">not included</span> in the prompt. 
+                  <span className="font-bold text-[#ff5800]">How to read this:</span> These are generic questions users might ask AI—your brand name is <span className="font-medium">not included</span> in the prompt. 
                   If AI doesn't recommend you here, it means you're invisible to organic AI-assisted discovery, even if AI knows about your brand when asked directly.
                 </p>
               </div>
@@ -747,24 +747,24 @@ export default function AuditView(props: AuditViewProps = {}) {
                     onClick={() => setPromptLogTab("chatgpt")}
                     className={`flex-1 py-4 text-sm font-bold tracking-widest uppercase transition-all flex items-center justify-center gap-2 ${
                       promptLogTab === "chatgpt"
-                        ? "bg-gray-50 text-[#010400] border-b-2 border-[#5599f9]"
+                        ? "bg-gray-50 text-[#010400] border-b-2 border-[#ff5800]"
                         : "bg-white text-gray-400 hover:text-gray-600 hover:bg-gray-50"
                     }`}
                     data-testid="button-tab-chatgpt"
                   >
-                    <Cpu size={16} className={promptLogTab === "chatgpt" ? "text-[#5599f9]" : ""} /> ChatGPT
+                    <Cpu size={16} className={promptLogTab === "chatgpt" ? "text-[#ff5800]" : ""} /> ChatGPT
                   </button>
                   <button
                     type="button"
                     onClick={() => setPromptLogTab("google")}
                     className={`flex-1 py-4 text-sm font-bold tracking-widest uppercase transition-all flex items-center justify-center gap-2 ${
                       promptLogTab === "google"
-                        ? "bg-gray-50 text-[#010400] border-b-2 border-[#5599f9]"
+                        ? "bg-gray-50 text-[#010400] border-b-2 border-[#ff5800]"
                         : "bg-white text-gray-400 hover:text-gray-600 hover:bg-gray-50"
                     }`}
                     data-testid="button-tab-google"
                   >
-                    <Globe size={16} className={promptLogTab === "google" ? "text-[#5599f9]" : ""} /> Google AI
+                    <Globe size={16} className={promptLogTab === "google" ? "text-[#ff5800]" : ""} /> Google AI
                   </button>
                 </div>
 
@@ -805,7 +805,7 @@ export default function AuditView(props: AuditViewProps = {}) {
                               {response.length > 150 && (
                                 <button
                                   onClick={() => toggleRowExpansion(rowKey)}
-                                  className="text-xs font-medium text-[#5599f9] hover:text-[#4a8ce8] flex items-center gap-1 mt-2"
+                                  className="text-xs font-medium text-[#ff5800] hover:text-[#e04f00] flex items-center gap-1 mt-2"
                                   data-testid={`button-expand-response-${idx}-${promptLogTab}`}
                                 >
                                   {isExpanded ? (
@@ -834,7 +834,7 @@ export default function AuditView(props: AuditViewProps = {}) {
               <p className="mb-4 text-gray-600 text-sm">We simulated the following user queries to test brand presence across AI platforms.</p>
               <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 mb-6">
                 <p className="text-xs text-gray-700">
-                  <span className="font-bold text-[#5599f9]">How to read this:</span> These are generic questions users might ask AI—your brand name is not included in the prompt. 
+                  <span className="font-bold text-[#ff5800]">How to read this:</span> These are generic questions users might ask AI—your brand name is not included in the prompt. 
                   If AI doesn't recommend you here, it means you're invisible to organic AI-assisted discovery.
                 </p>
               </div>
@@ -852,7 +852,7 @@ export default function AuditView(props: AuditViewProps = {}) {
                     {/* ChatGPT Response */}
                     <div className="p-4 border-b border-gray-100">
                       <div className="flex items-center gap-2 mb-2">
-                        <Cpu size={14} className="text-[#5599f9]" />
+                        <Cpu size={14} className="text-[#ff5800]" />
                         <span className="text-xs font-bold uppercase tracking-wider text-gray-500">ChatGPT Response</span>
                         <span className="ml-auto">
                           {result.chatgpt.found ? (
@@ -1013,11 +1013,11 @@ export default function AuditView(props: AuditViewProps = {}) {
         {/* 5. Footer */}
         <footer className="p-12 bg-gray-50 border-t border-gray-200 text-center">
           <div className="flex items-center justify-center gap-3 mb-4">
-            <img src={logoIcon} alt="Rossman Media" className="h-8 w-8 rounded-md" />
-            <img src={logoFull} alt="ROSSMAN MEDIA" className="h-6" />
+            <img src={logoIcon} alt="Motivent Marketing" className="h-8 w-8 rounded-md" />
+            <img src={logoFull} alt="Motivent Marketing" className="h-6" />
           </div>
           <p className="text-gray-500 text-sm">
-            Prepared by ROSSMAN MEDIA | AI Visibility Audit Report
+            Prepared by Motivent Marketing | AI Visibility Audit Report
           </p>
           <p className="text-gray-400 text-xs mt-2">
             Audit ID: {audit.id} | Generated: {currentDate}

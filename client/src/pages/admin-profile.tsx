@@ -133,7 +133,7 @@ export default function AdminProfile() {
               )}
               <Button
                 type="submit"
-                className="bg-[#5599f9] hover:bg-[#4488e8]"
+                className="bg-[#ff5800] hover:bg-[#e04f00]"
                 disabled={updateProfileMutation.isPending}
                 data-testid="button-save-profile"
               >
@@ -201,7 +201,7 @@ export default function AdminProfile() {
               )}
               <Button
                 type="submit"
-                className="bg-[#5599f9] hover:bg-[#4488e8]"
+                className="bg-[#ff5800] hover:bg-[#e04f00]"
                 disabled={changePasswordMutation.isPending}
                 data-testid="button-change-password"
               >

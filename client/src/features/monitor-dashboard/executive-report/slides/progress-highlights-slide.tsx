@@ -73,9 +73,9 @@ export function ProgressHighlightsSlide({
       previous: previousPeriod.visibilityRate,
       format: (v: number) => `${v}%`,
       icon: Eye,
-      iconColor: "text-[#5599f9]",
-      iconBg: "bg-blue-50",
-      borderColor: "#5599f9",
+      iconColor: "text-[#ff5800]",
+      iconBg: "bg-orange-50",
+      borderColor: "#ff5800",
     },
     {
       label: "Citation Rate",

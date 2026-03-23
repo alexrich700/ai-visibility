@@ -223,7 +223,7 @@ export default function Admin() {
 
       {isLoading ? (
         <div className="text-center py-12">
-          <div className="w-8 h-8 border-4 border-[#5599f9] border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <div className="w-8 h-8 border-4 border-[#ff5800] border-t-transparent rounded-full animate-spin mx-auto"></div>
           <p className="text-gray-500 mt-4">Loading audits...</p>
         </div>
       ) : audits.length === 0 ? (
@@ -400,7 +400,7 @@ export default function Admin() {
                         key={item}
                         variant={currentPage === item ? "default" : "outline"}
                         size="sm"
-                        className={currentPage === item ? "bg-[#5599f9] hover:bg-[#4488e8] text-white" : ""}
+                        className={currentPage === item ? "bg-[#ff5800] hover:bg-[#e04f00] text-white" : ""}
                         onClick={() => setCurrentPage(item as number)}
                         data-testid={`button-page-${item}`}
                       >
@@ -435,7 +435,7 @@ export default function Admin() {
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-[#5599f9]" />
+              <Building2 className="w-5 h-5 text-[#ff5800]" />
               Audit Details
             </DialogTitle>
           </DialogHeader>
@@ -527,7 +527,7 @@ export default function Admin() {
                 <div className="border-t border-gray-200 pt-4">
                   <Link href={`/admin/audit/${selectedAudit.id}`}>
                     <Button
-                      className="w-full bg-[#5599f9] hover:bg-[#4488e8] text-white font-bold"
+                      className="w-full bg-[#ff5800] hover:bg-[#e04f00] text-white font-bold"
                       data-testid="button-view-full-audit"
                     >
                       <FileText className="w-4 h-4 mr-2" />

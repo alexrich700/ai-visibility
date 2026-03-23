@@ -27,8 +27,8 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import type { AuditResults, PromptResult } from "@shared/schema";
-import logoFull from "@assets/RMG-Logo-Black-1920w_(1)_1765741951083.webp";
-import logoIcon from "@assets/images_1765741951084.png";
+import logoFull from "@assets/Motivent_Logo_-_Primary_1774297429560.png";
+import logoIcon from "@assets/Motivent_Logo_-_Tertiary_1774297439930.png";
 
 interface AuditWithLead {
   id: number;
@@ -107,7 +107,7 @@ export default function AdminAuditView() {
             
             return (
               <div key={i} className="flex gap-2 ml-2">
-                <span className="font-bold text-[#5599f9] shrink-0">{number}.</span>
+                <span className="font-bold text-[#ff5800] shrink-0">{number}.</span>
                 <p className="text-gray-700">
                   {parts.map((part, j) => {
                     if (part.startsWith('**') && part.endsWith('**')) {
@@ -115,7 +115,7 @@ export default function AdminAuditView() {
                     }
                     const linkMatch = part.match(/\[([^\]]+)\]\(([^)]+)\)/);
                     if (linkMatch) {
-                      return <a key={j} href={linkMatch[2]} className="text-[#5599f9] underline" target="_blank" rel="noopener noreferrer">{linkMatch[1]}</a>;
+                      return <a key={j} href={linkMatch[2]} className="text-[#ff5800] underline" target="_blank" rel="noopener noreferrer">{linkMatch[1]}</a>;
                     }
                     return <span key={j}>{part}</span>;
                   })}
@@ -130,7 +130,7 @@ export default function AdminAuditView() {
             
             return (
               <div key={i} className="flex gap-2 ml-2">
-                <span className="text-[#5599f9] shrink-0">-</span>
+                <span className="text-[#ff5800] shrink-0">-</span>
                 <p className="text-gray-700">
                   {parts.map((part, j) => {
                     if (part.startsWith('**') && part.endsWith('**')) {
@@ -138,7 +138,7 @@ export default function AdminAuditView() {
                     }
                     const linkMatch = part.match(/\[([^\]]+)\]\(([^)]+)\)/);
                     if (linkMatch) {
-                      return <a key={j} href={linkMatch[2]} className="text-[#5599f9] underline" target="_blank" rel="noopener noreferrer">{linkMatch[1]}</a>;
+                      return <a key={j} href={linkMatch[2]} className="text-[#ff5800] underline" target="_blank" rel="noopener noreferrer">{linkMatch[1]}</a>;
                     }
                     return <span key={j}>{part}</span>;
                   })}
@@ -157,7 +157,7 @@ export default function AdminAuditView() {
                 }
                 const linkMatch = part.match(/\[([^\]]+)\]\(([^)]+)\)/);
                 if (linkMatch) {
-                  return <a key={j} href={linkMatch[2]} className="text-[#5599f9] underline" target="_blank" rel="noopener noreferrer">{linkMatch[1]}</a>;
+                  return <a key={j} href={linkMatch[2]} className="text-[#ff5800] underline" target="_blank" rel="noopener noreferrer">{linkMatch[1]}</a>;
                 }
                 return <span key={j}>{part}</span>;
               })}
@@ -198,7 +198,7 @@ export default function AdminAuditView() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-8 h-8 border-4 border-[#5599f9] border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <div className="w-8 h-8 border-4 border-[#ff5800] border-t-transparent rounded-full animate-spin mx-auto"></div>
           <p className="text-gray-500 mt-4">Loading audit details...</p>
         </div>
       </div>
@@ -213,7 +213,7 @@ export default function AdminAuditView() {
           <h1 className="text-xl font-bold text-gray-900 mb-2">Audit Not Found</h1>
           <p className="text-gray-500 mb-6">The audit you're looking for doesn't exist or has been deleted.</p>
           <Link href="/admin">
-            <Button className="bg-[#5599f9]" data-testid="button-back-admin">
+            <Button className="bg-[#ff5800]" data-testid="button-back-admin">
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Admin
             </Button>
@@ -241,7 +241,7 @@ export default function AdminAuditView() {
           <h1 className="text-xl font-bold text-gray-900 mb-2">No Detailed Results Available</h1>
           <p className="text-gray-500 mb-6">This audit doesn't have detailed results stored.</p>
           <Link href="/admin">
-            <Button className="bg-[#5599f9]" data-testid="button-back-admin-no-results">
+            <Button className="bg-[#ff5800]" data-testid="button-back-admin-no-results">
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Admin
             </Button>
@@ -255,8 +255,8 @@ export default function AdminAuditView() {
 
   const SectionHeader = ({ title, icon: Icon }: { title: string; icon: any }) => (
     <div className="flex items-center gap-3 border-b border-gray-200 pb-4 mb-6">
-      <div className="p-2 bg-[#5599f9]/10 rounded-lg">
-        <Icon className="text-[#5599f9]" size={24} />
+      <div className="p-2 bg-[#ff5800]/10 rounded-lg">
+        <Icon className="text-[#ff5800]" size={24} />
       </div>
       <h2 className="text-2xl font-bold text-[#010400] tracking-tight">{title}</h2>
     </div>
@@ -279,7 +279,7 @@ export default function AdminAuditView() {
         <div className="flex items-center gap-3">
           <button 
             onClick={handlePrintReport}
-            className="flex items-center gap-2 hover:text-[#5599f9] transition-colors text-sm font-medium"
+            className="flex items-center gap-2 hover:text-[#ff5800] transition-colors text-sm font-medium"
             data-testid="button-print-report"
           >
             <Printer size={16} /> Print
@@ -287,14 +287,14 @@ export default function AdminAuditView() {
           <div className="w-px h-4 bg-gray-700"></div>
           <button 
             onClick={handlePrintReport}
-            className="flex items-center gap-2 hover:text-[#5599f9] transition-colors text-sm font-bold"
+            className="flex items-center gap-2 hover:text-[#ff5800] transition-colors text-sm font-bold"
             data-testid="button-download-pdf"
           >
             <Download size={16} /> Download PDF
           </button>
           <div className="w-px h-4 bg-gray-700"></div>
           <Link href="/admin">
-            <span className="flex items-center gap-2 hover:text-[#5599f9] transition-colors text-sm font-medium cursor-pointer" data-testid="link-back-admin">
+            <span className="flex items-center gap-2 hover:text-[#ff5800] transition-colors text-sm font-medium cursor-pointer" data-testid="link-back-admin">
               <ArrowLeft size={16} /> Back to Admin
             </span>
           </Link>
@@ -306,14 +306,14 @@ export default function AdminAuditView() {
         
         {/* 1. Header / Cover */}
         <header className="bg-[#010400] text-white p-12 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-[#5599f9] rounded-full mix-blend-multiply opacity-20 transform translate-x-1/2 -translate-y-1/2 blur-3xl"></div>
+          <div className="absolute top-0 right-0 w-64 h-64 bg-[#ff5800] rounded-full mix-blend-multiply opacity-20 transform translate-x-1/2 -translate-y-1/2 blur-3xl"></div>
           <div className="absolute bottom-0 left-0 w-48 h-48 bg-[#ffb41c] rounded-full mix-blend-multiply opacity-20 transform -translate-x-1/2 translate-y-1/2 blur-3xl"></div>
 
           <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-8">
             <div className="space-y-6">
               <div className="flex items-center gap-3">
-                <img src={logoIcon} alt="Rossman Media" className="h-10 w-10 rounded-md" />
-                <img src={logoFull} alt="ROSSMAN MEDIA" className="h-8 invert" />
+                <img src={logoIcon} alt="Motivent Marketing" className="h-10 w-10 rounded-md" />
+                <img src={logoFull} alt="Motivent Marketing" className="h-8 invert" />
               </div>
               <div>
                 <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-2" data-testid="full-report-title">AI Visibility Audit</h1>
@@ -322,7 +322,7 @@ export default function AdminAuditView() {
             </div>
             
             <div className="text-right space-y-2">
-              <div className="inline-block bg-[#5599f9] text-white text-xs font-bold px-3 py-1 rounded uppercase tracking-wider mb-2">
+              <div className="inline-block bg-[#ff5800] text-white text-xs font-bold px-3 py-1 rounded uppercase tracking-wider mb-2">
                 Admin View
               </div>
               <p className="text-sm text-gray-400 font-mono">
@@ -344,9 +344,9 @@ export default function AdminAuditView() {
               </div>
               <span className="text-gray-800">{audit.lead.name}</span>
               <span className="text-gray-500">|</span>
-              <a href={`mailto:${audit.lead.email}`} className="text-[#5599f9] hover:underline">{audit.lead.email}</a>
+              <a href={`mailto:${audit.lead.email}`} className="text-[#ff5800] hover:underline">{audit.lead.email}</a>
               <span className="text-gray-500">|</span>
-              <a href={`tel:${audit.lead.phone}`} className="text-[#5599f9] hover:underline">{audit.lead.phone}</a>
+              <a href={`tel:${audit.lead.phone}`} className="text-[#ff5800] hover:underline">{audit.lead.phone}</a>
             </div>
           </div>
         )}
@@ -424,7 +424,7 @@ export default function AdminAuditView() {
           <p className="mb-4 text-gray-600">We simulated the following user queries to test brand presence across AI platforms.</p>
           <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-6">
             <p className="text-sm text-gray-700">
-              <span className="font-bold text-[#5599f9]">How to read this:</span> These are generic questions users might ask AI—your brand name is <span className="font-medium">not included</span> in the prompt. 
+              <span className="font-bold text-[#ff5800]">How to read this:</span> These are generic questions users might ask AI—your brand name is <span className="font-medium">not included</span> in the prompt. 
               If AI doesn't recommend you here, it means you're invisible to organic AI-assisted discovery, even if AI knows about your brand when asked directly.
             </p>
           </div>
@@ -437,24 +437,24 @@ export default function AdminAuditView() {
                 onClick={() => setPromptLogTab("chatgpt")}
                 className={`flex-1 py-4 text-sm font-bold tracking-widest uppercase transition-all flex items-center justify-center gap-2 ${
                   promptLogTab === "chatgpt"
-                    ? "bg-gray-50 text-[#010400] border-b-2 border-[#5599f9]"
+                    ? "bg-gray-50 text-[#010400] border-b-2 border-[#ff5800]"
                     : "bg-white text-gray-400 hover:text-gray-600 hover:bg-gray-50"
                 }`}
                 data-testid="button-tab-chatgpt-admin"
               >
-                <Cpu size={16} className={promptLogTab === "chatgpt" ? "text-[#5599f9]" : ""} /> ChatGPT
+                <Cpu size={16} className={promptLogTab === "chatgpt" ? "text-[#ff5800]" : ""} /> ChatGPT
               </button>
               <button
                 type="button"
                 onClick={() => setPromptLogTab("google")}
                 className={`flex-1 py-4 text-sm font-bold tracking-widest uppercase transition-all flex items-center justify-center gap-2 ${
                   promptLogTab === "google"
-                    ? "bg-gray-50 text-[#010400] border-b-2 border-[#5599f9]"
+                    ? "bg-gray-50 text-[#010400] border-b-2 border-[#ff5800]"
                     : "bg-white text-gray-400 hover:text-gray-600 hover:bg-gray-50"
                 }`}
                 data-testid="button-tab-google-admin"
               >
-                <Globe size={16} className={promptLogTab === "google" ? "text-[#5599f9]" : ""} /> Google AI
+                <Globe size={16} className={promptLogTab === "google" ? "text-[#ff5800]" : ""} /> Google AI
               </button>
             </div>
 
@@ -495,7 +495,7 @@ export default function AdminAuditView() {
                           {response.length > 150 && (
                             <button
                               onClick={() => toggleRowExpansion(rowKey)}
-                              className="text-xs font-medium text-[#5599f9] hover:text-[#4a8ce8] flex items-center gap-1 mt-2 no-print"
+                              className="text-xs font-medium text-[#ff5800] hover:text-[#e04f00] flex items-center gap-1 mt-2 no-print"
                               data-testid={`button-expand-response-${idx}-${promptLogTab}`}
                             >
                               {isExpanded ? (
@@ -618,11 +618,11 @@ export default function AdminAuditView() {
         {/* 5. Footer */}
         <footer className="p-12 bg-gray-50 border-t border-gray-200 text-center">
           <div className="flex items-center justify-center gap-3 mb-4">
-            <img src={logoIcon} alt="Rossman Media" className="h-8 w-8 rounded-md" />
-            <img src={logoFull} alt="ROSSMAN MEDIA" className="h-6" />
+            <img src={logoIcon} alt="Motivent Marketing" className="h-8 w-8 rounded-md" />
+            <img src={logoFull} alt="Motivent Marketing" className="h-6" />
           </div>
           <p className="text-gray-500 text-sm">
-            Prepared by ROSSMAN MEDIA | AI Visibility Audit Report
+            Prepared by Motivent Marketing | AI Visibility Audit Report
           </p>
           <p className="text-gray-400 text-xs mt-2">
             Audit ID: {audit.id} | Generated: {currentDate}

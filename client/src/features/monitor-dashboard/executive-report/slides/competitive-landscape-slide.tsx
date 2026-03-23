@@ -12,7 +12,7 @@ interface CompetitiveLandscapeSlideProps {
   mode?: PresentationMode;
 }
 
-const COLORS = ["#5599f9", "#ffb41c", "#22c55e", "#ef4444", "#8b5cf6", "#ec4899"];
+const COLORS = ["#ff5800", "#ffb41c", "#22c55e", "#ef4444", "#8b5cf6", "#ec4899"];
 
 export function CompetitiveLandscapeSlide({
   shareOfVoice,
@@ -49,7 +49,7 @@ export function CompetitiveLandscapeSlide({
                       {shareOfVoice.map((entry, index) => (
                         <Cell
                           key={entry.name}
-                          fill={entry.name.toLowerCase() === businessName.toLowerCase() ? "#5599f9" : COLORS[(index % (COLORS.length - 1)) + 1]}
+                          fill={entry.name.toLowerCase() === businessName.toLowerCase() ? "#ff5800" : COLORS[(index % (COLORS.length - 1)) + 1]}
                         />
                       ))}
                     </Bar>

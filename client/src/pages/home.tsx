@@ -20,8 +20,8 @@ import {
 } from "lucide-react";
 import type { AuditRequest, AuditResults } from "@shared/schema";
 import { LEAD_GEN_TOTAL_PROMPTS } from "@shared/audit-constants";
-import logoFull from "@assets/RMG-Logo-Black-1920w_(1)_1765741951083.webp";
-import logoIcon from "@assets/images_1765741951084.png";
+import logoFull from "@assets/Motivent_Logo_-_Primary_1774297429560.png";
+import logoIcon from "@assets/Motivent_Logo_-_Tertiary_1774297439930.png";
 
 type Step = "input" | "scanning";
 
@@ -264,8 +264,8 @@ export default function Home() {
 
   const Branding = () => (
     <div className="flex items-center gap-3">
-      <img src={logoIcon} alt="Rossman Media" className="h-8 w-8 rounded-md" />
-      <img src={logoFull} alt="ROSSMAN MEDIA" className="h-6" />
+      <img src={logoIcon} alt="Motivent Marketing" className="h-8 w-8 rounded-md" />
+      <img src={logoFull} alt="Motivent Marketing" className="h-6" />
     </div>
   );
 
@@ -275,7 +275,7 @@ export default function Home() {
 
   if (step === "input") {
     return (
-      <div className="min-h-screen bg-white flex flex-col font-sans text-[#010400] selection:bg-[#5599f9] selection:text-white">
+      <div className="min-h-screen bg-white flex flex-col font-sans text-[#010400] selection:bg-[#ff5800] selection:text-white">
         <div className="bg-[#010400] text-white text-center py-2.5 px-4">
           <p className="text-sm font-medium tracking-wide" data-testid="text-urgency-banner">
             <Zap size={14} className="inline mr-1.5 text-[#ffb41c]" />
@@ -288,7 +288,7 @@ export default function Home() {
           <button
             type="button"
             onClick={scrollToForm}
-            className="hidden sm:inline-flex items-center gap-2 bg-[#5599f9] hover:bg-[#4a8ce8] text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors"
+            className="hidden sm:inline-flex items-center gap-2 bg-[#ff5800] hover:bg-[#e04f00] text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors"
             data-testid="button-header-cta"
           >
             Get My Free AI Audit <ArrowRight size={16} />
@@ -304,7 +304,7 @@ export default function Home() {
                   data-testid="text-headline"
                 >
                   Is AI Recommending Your Business{" "}
-                  <span className="text-[#5599f9]">Or Your Competitors?</span>
+                  <span className="text-[#ff5800]">Or Your Competitors?</span>
                 </h1>
                 <p className="text-lg md:text-xl text-gray-500 leading-relaxed max-w-2xl mx-auto" data-testid="text-subheadline">
                   If you aren't visible on ChatGPT and Google AI, you are losing customers every single day.
@@ -312,15 +312,15 @@ export default function Home() {
 
                 <div className="flex flex-wrap items-center justify-center gap-5 pt-2">
                   <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-full px-4 py-2">
-                    <Eye size={16} className="text-[#5599f9]" />
+                    <Eye size={16} className="text-[#ff5800]" />
                     <span className="text-sm text-[#010400] font-medium" data-testid="text-benefit-1">See exactly what AI says about you</span>
                   </div>
                   <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-full px-4 py-2">
-                    <Target size={16} className="text-[#5599f9]" />
+                    <Target size={16} className="text-[#ff5800]" />
                     <span className="text-sm text-[#010400] font-medium" data-testid="text-benefit-2">Uncover gaps in your AI strategy</span>
                   </div>
                   <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-full px-4 py-2">
-                    <BarChart3 size={16} className="text-[#5599f9]" />
+                    <BarChart3 size={16} className="text-[#ff5800]" />
                     <span className="text-sm text-[#010400] font-medium" data-testid="text-benefit-3">Outrank competitors in AI search</span>
                   </div>
                 </div>
@@ -345,24 +345,24 @@ export default function Home() {
                           onClick={() => setScope("local")}
                           className={`flex-1 py-3.5 text-sm font-bold tracking-widest uppercase transition-all flex items-center justify-center gap-2 ${
                             scope === "local"
-                              ? "bg-white text-[#010400] border-b-2 border-[#5599f9]"
+                              ? "bg-white text-[#010400] border-b-2 border-[#ff5800]"
                               : "bg-gray-50 text-gray-400 hover:text-gray-600"
                           }`}
                           data-testid="button-scope-local"
                         >
-                          <MapPin size={15} className={scope === "local" ? "text-[#5599f9]" : ""} /> Local
+                          <MapPin size={15} className={scope === "local" ? "text-[#ff5800]" : ""} /> Local
                         </button>
                         <button
                           type="button"
                           onClick={() => setScope("national")}
                           className={`flex-1 py-3.5 text-sm font-bold tracking-widest uppercase transition-all flex items-center justify-center gap-2 ${
                             scope === "national"
-                              ? "bg-white text-[#010400] border-b-2 border-[#5599f9]"
+                              ? "bg-white text-[#010400] border-b-2 border-[#ff5800]"
                               : "bg-gray-50 text-gray-400 hover:text-gray-600"
                           }`}
                           data-testid="button-scope-national"
                         >
-                          <Globe size={15} className={scope === "national" ? "text-[#5599f9]" : ""} /> National
+                          <Globe size={15} className={scope === "national" ? "text-[#ff5800]" : ""} /> National
                         </button>
                       </div>
 
@@ -376,12 +376,12 @@ export default function Home() {
 
                         <div className="group relative">
                           <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                            <Building2 className="text-gray-400 group-focus-within:text-[#5599f9] transition-colors" size={18} />
+                            <Building2 className="text-gray-400 group-focus-within:text-[#ff5800] transition-colors" size={18} />
                           </div>
                           <input
                             type="text"
                             placeholder="Business Name"
-                            className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 focus:border-[#5599f9] focus:ring-1 focus:ring-[#5599f9] outline-none transition-all font-medium rounded-lg text-sm"
+                            className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 focus:border-[#ff5800] focus:ring-1 focus:ring-[#ff5800] outline-none transition-all font-medium rounded-lg text-sm"
                             value={businessName}
                             onChange={(e) => setBusinessName(e.target.value)}
                             data-testid="input-business-name"
@@ -391,12 +391,12 @@ export default function Home() {
 
                         <div className="group relative">
                           <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                            <Layout className="text-gray-400 group-focus-within:text-[#5599f9] transition-colors" size={18} />
+                            <Layout className="text-gray-400 group-focus-within:text-[#ff5800] transition-colors" size={18} />
                           </div>
                           <input
                             type="text"
-                            placeholder="Website (e.g. rossmanmedia.com)"
-                            className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 focus:border-[#5599f9] focus:ring-1 focus:ring-[#5599f9] outline-none transition-all font-medium rounded-lg text-sm"
+                            placeholder="Website (e.g. motiventmarketing.com)"
+                            className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 focus:border-[#ff5800] focus:ring-1 focus:ring-[#ff5800] outline-none transition-all font-medium rounded-lg text-sm"
                             value={url}
                             onChange={(e) => setUrl(e.target.value)}
                             data-testid="input-url"
@@ -406,12 +406,12 @@ export default function Home() {
 
                         <div className="group relative">
                           <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                            <Search className="text-gray-400 group-focus-within:text-[#5599f9] transition-colors" size={18} />
+                            <Search className="text-gray-400 group-focus-within:text-[#ff5800] transition-colors" size={18} />
                           </div>
                           <input
                             type="text"
                             placeholder="Main Service (e.g. Plumber, SEO Agency)"
-                            className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 focus:border-[#5599f9] focus:ring-1 focus:ring-[#5599f9] outline-none transition-all font-medium rounded-lg text-sm"
+                            className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 focus:border-[#ff5800] focus:ring-1 focus:ring-[#ff5800] outline-none transition-all font-medium rounded-lg text-sm"
                             value={keyword}
                             onChange={(e) => setKeyword(e.target.value)}
                             data-testid="input-keyword"
@@ -422,12 +422,12 @@ export default function Home() {
                         {scope === "local" && (
                           <div className="group relative">
                             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                              <MapPin className="text-gray-400 group-focus-within:text-[#5599f9] transition-colors" size={18} />
+                              <MapPin className="text-gray-400 group-focus-within:text-[#ff5800] transition-colors" size={18} />
                             </div>
                             <input
                               type="text"
                               placeholder="Target City (e.g. Dallas, TX)"
-                              className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 focus:border-[#5599f9] focus:ring-1 focus:ring-[#5599f9] outline-none transition-all font-medium rounded-lg text-sm"
+                              className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 focus:border-[#ff5800] focus:ring-1 focus:ring-[#ff5800] outline-none transition-all font-medium rounded-lg text-sm"
                               value={city}
                               onChange={(e) => setCity(e.target.value)}
                               data-testid="input-city"
@@ -438,7 +438,7 @@ export default function Home() {
 
                         <button
                           type="submit"
-                          className="w-full bg-[#5599f9] hover:bg-[#4a8ce8] text-white text-base font-bold tracking-wide py-4 uppercase transition-all transform active:scale-[0.99] flex items-center justify-center gap-2 mt-2 rounded-lg shadow-lg shadow-blue-500/20 disabled:opacity-50"
+                          className="w-full bg-[#ff5800] hover:bg-[#e04f00] text-white text-base font-bold tracking-wide py-4 uppercase transition-all transform active:scale-[0.99] flex items-center justify-center gap-2 mt-2 rounded-lg shadow-lg shadow-orange-500/20 disabled:opacity-50"
                           data-testid="button-start-audit"
                           disabled={isSubmitting}
                         >
@@ -467,7 +467,7 @@ export default function Home() {
           <section className="bg-gray-50 border-t border-gray-100 py-16 md:py-20 px-4">
             <div className="max-w-4xl mx-auto">
               <div className="text-center mb-12">
-                <p className="text-sm font-bold text-[#5599f9] uppercase tracking-widest mb-3" data-testid="text-how-it-works-label">How It Works</p>
+                <p className="text-sm font-bold text-[#ff5800] uppercase tracking-widest mb-3" data-testid="text-how-it-works-label">How It Works</p>
                 <h2 className="text-3xl md:text-4xl font-bold text-[#010400] tracking-tight" data-testid="text-how-it-works-title">
                   Your AI Visibility Report in 3 Steps
                 </h2>
@@ -475,12 +475,12 @@ export default function Home() {
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 <div className="text-center space-y-4">
-                  <div className="w-14 h-14 rounded-2xl bg-[#5599f9]/10 flex items-center justify-center mx-auto">
-                    <Layout size={24} className="text-[#5599f9]" />
+                  <div className="w-14 h-14 rounded-2xl bg-[#ff5800]/10 flex items-center justify-center mx-auto">
+                    <Layout size={24} className="text-[#ff5800]" />
                   </div>
                   <div className="space-y-2">
                     <div className="flex items-center justify-center gap-2">
-                      <span className="text-xs font-bold text-[#5599f9] bg-[#5599f9]/10 px-2 py-0.5 rounded-full">1</span>
+                      <span className="text-xs font-bold text-[#ff5800] bg-[#ff5800]/10 px-2 py-0.5 rounded-full">1</span>
                       <h3 className="font-bold text-[#010400]" data-testid="text-step-1-title">Enter Your URL</h3>
                     </div>
                     <p className="text-gray-500 text-sm leading-relaxed" data-testid="text-step-1-desc">
@@ -558,7 +558,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={scrollToForm}
-                className="inline-flex items-center gap-2 bg-[#5599f9] hover:bg-[#4a8ce8] text-white font-bold text-base px-8 py-4 rounded-lg transition-colors shadow-lg shadow-blue-500/30"
+                className="inline-flex items-center gap-2 bg-[#ff5800] hover:bg-[#e04f00] text-white font-bold text-base px-8 py-4 rounded-lg transition-colors shadow-lg shadow-orange-500/30"
                 data-testid="button-bottom-cta"
               >
                 Get My Free AI Audit <ArrowRight size={18} />
@@ -570,7 +570,7 @@ export default function Home() {
           <footer className="bg-white border-t border-gray-100 py-8 px-4">
             <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
               <Branding />
-              <p className="text-xs text-gray-400">Developed by Rossman Media Group's growth team.</p>
+              <p className="text-xs text-gray-400">Developed by Motivent Marketing's growth team.</p>
             </div>
           </footer>
         </main>
@@ -584,7 +584,7 @@ export default function Home() {
         <div className="text-center space-y-6">
           <div className="relative w-24 h-24 mx-auto">
             <div className="absolute inset-0 border-2 border-gray-100 rounded-full"></div>
-            <div className="absolute inset-0 border-2 border-[#5599f9] rounded-full border-t-transparent animate-spin"></div>
+            <div className="absolute inset-0 border-2 border-[#ff5800] rounded-full border-t-transparent animate-spin"></div>
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="w-3 h-3 bg-[#ffb41c] transform rotate-45 animate-pulse"></div>
             </div>
@@ -607,7 +607,7 @@ export default function Home() {
           </div>
           <div className="bg-gray-100 h-1.5 w-full overflow-hidden rounded-full">
             <div
-              className="bg-[#5599f9] h-full transition-all duration-300 ease-out rounded-full"
+              className="bg-[#ff5800] h-full transition-all duration-300 ease-out rounded-full"
               style={{ width: `${scanProgress}%` }}
             ></div>
           </div>

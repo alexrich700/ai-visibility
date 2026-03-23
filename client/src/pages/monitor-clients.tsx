@@ -106,7 +106,7 @@ export default function MonitorClients() {
         </div>
         <Button
           onClick={() => navigate("/monitor/setup")}
-          className="bg-[#5599f9] hover:bg-[#4488e8]"
+          className="bg-[#ff5800] hover:bg-[#e04f00]"
           data-testid="button-add-client"
         >
           <Plus className="w-4 h-4 mr-2" />
@@ -116,7 +116,7 @@ export default function MonitorClients() {
 
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-8 h-8 animate-spin text-[#5599f9]" />
+          <Loader2 className="w-8 h-8 animate-spin text-[#ff5800]" />
         </div>
       ) : clients.length === 0 ? (
         <Card className="border border-gray-200 shadow-sm">
@@ -130,7 +130,7 @@ export default function MonitorClients() {
             </p>
             <Button
               onClick={() => navigate("/monitor/setup")}
-              className="bg-[#5599f9] hover:bg-[#4488e8]"
+              className="bg-[#ff5800] hover:bg-[#e04f00]"
               data-testid="button-add-first-client"
             >
               <Plus className="w-4 h-4 mr-2" />

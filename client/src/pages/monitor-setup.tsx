@@ -13,7 +13,7 @@ import {
   Building2, Globe, MapPin, Briefcase, Clock, ArrowRight, ArrowLeft,
   Plus, Trash2, Edit2, Check, X, Loader2, Sparkles, FileText, Zap
 } from "lucide-react";
-import logoIcon from "@assets/images_1765741951084.png";
+import logoIcon from "@assets/Motivent_Logo_-_Primary_1774297429560.png";
 
 interface GroupItem {
   id: string;
@@ -781,7 +781,7 @@ export default function MonitorSetup() {
   const currentGroupPrompts = prompts.filter(p => p.groupId === activeGroupTab);
 
   return (
-    <div className="bg-gray-50 selection:bg-[#5599f9] selection:text-white h-full">
+    <div className="bg-gray-50 selection:bg-[#ff5800] selection:text-white h-full">
       {/* Progress Steps */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-4xl mx-auto px-6 py-4">
@@ -795,7 +795,7 @@ export default function MonitorSetup() {
               <div key={step.key} className="flex items-center">
                 <div className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
                   currentStep === step.key 
-                    ? "bg-[#5599f9] text-white" 
+                    ? "bg-[#ff5800] text-white" 
                     : arr.findIndex(s => s.key === currentStep) > index
                       ? "bg-green-100 text-green-700"
                       : "bg-gray-100 text-gray-500"
@@ -823,7 +823,7 @@ export default function MonitorSetup() {
           <Card className="shadow-2xl shadow-blue-900/5">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-                <Building2 className="w-6 h-6 text-[#5599f9]" />
+                <Building2 className="w-6 h-6 text-[#ff5800]" />
                 Business Information
               </CardTitle>
               <p className="text-gray-500">Tell us about your business so we can monitor its AI visibility</p>
@@ -835,13 +835,13 @@ export default function MonitorSetup() {
                     Business Name *
                   </Label>
                   <div className="relative group">
-                    <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-[#5599f9] transition-colors" />
+                    <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-[#ff5800] transition-colors" />
                     <Input
                       id="businessName"
                       value={businessName}
                       onChange={(e) => setBusinessName(e.target.value)}
                       placeholder="Acme HVAC Services"
-                      className="pl-12 bg-gray-50 border-gray-200 focus:border-[#5599f9] focus:ring-[#5599f9]"
+                      className="pl-12 bg-gray-50 border-gray-200 focus:border-[#ff5800] focus:ring-[#ff5800]"
                       data-testid="input-business-name"
                     />
                   </div>
@@ -851,13 +851,13 @@ export default function MonitorSetup() {
                     Website Domain *
                   </Label>
                   <div className="relative group">
-                    <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-[#5599f9] transition-colors" />
+                    <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-[#ff5800] transition-colors" />
                     <Input
                       id="domain"
                       value={domain}
                       onChange={(e) => setDomain(e.target.value)}
                       placeholder="acmehvac.com"
-                      className="pl-12 bg-gray-50 border-gray-200 focus:border-[#5599f9] focus:ring-[#5599f9]"
+                      className="pl-12 bg-gray-50 border-gray-200 focus:border-[#ff5800] focus:ring-[#ff5800]"
                       data-testid="input-domain"
                     />
                   </div>
@@ -876,7 +876,7 @@ export default function MonitorSetup() {
                         <Badge 
                           key={category} 
                           variant="secondary" 
-                          className="bg-[#5599f9] text-white hover:bg-[#4488e8] px-3 py-1"
+                          className="bg-[#ff5800] text-white hover:bg-[#e04f00] px-3 py-1"
                         >
                           {category}
                           <button 
@@ -893,14 +893,14 @@ export default function MonitorSetup() {
                   {/* Input for adding new categories */}
                   <div className="flex gap-2">
                     <div className="relative group flex-1">
-                      <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-[#5599f9] transition-colors" />
+                      <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-[#ff5800] transition-colors" />
                       <Input
                         id="primaryCategories"
                         value={newCategoryInput}
                         onChange={(e) => setNewCategoryInput(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addCategory())}
                         placeholder={primaryCategories.length > 0 ? "Add another category..." : "Plumbing, HVAC, Electrical, etc."}
-                        className="pl-12 bg-gray-50 border-gray-200 focus:border-[#5599f9] focus:ring-[#5599f9]"
+                        className="pl-12 bg-gray-50 border-gray-200 focus:border-[#ff5800] focus:ring-[#ff5800]"
                         data-testid="input-primary-categories"
                       />
                     </div>
@@ -929,12 +929,12 @@ export default function MonitorSetup() {
                     onClick={() => setScope("local")}
                     className={`flex-1 p-4 rounded-xl border-2 transition-all ${
                       scope === "local"
-                        ? "border-[#5599f9] bg-blue-50"
+                        ? "border-[#ff5800] bg-orange-50"
                         : "border-gray-200 hover:border-gray-300"
                     }`}
                     data-testid="button-scope-local"
                   >
-                    <MapPin className={`w-6 h-6 mx-auto mb-2 ${scope === "local" ? "text-[#5599f9]" : "text-gray-400"}`} />
+                    <MapPin className={`w-6 h-6 mx-auto mb-2 ${scope === "local" ? "text-[#ff5800]" : "text-gray-400"}`} />
                     <div className="font-bold">Local</div>
                     <div className="text-sm text-gray-500">Specific city or region</div>
                   </button>
@@ -943,12 +943,12 @@ export default function MonitorSetup() {
                     onClick={() => setScope("national")}
                     className={`flex-1 p-4 rounded-xl border-2 transition-all ${
                       scope === "national"
-                        ? "border-[#5599f9] bg-blue-50"
+                        ? "border-[#ff5800] bg-orange-50"
                         : "border-gray-200 hover:border-gray-300"
                     }`}
                     data-testid="button-scope-national"
                   >
-                    <Globe className={`w-6 h-6 mx-auto mb-2 ${scope === "national" ? "text-[#5599f9]" : "text-gray-400"}`} />
+                    <Globe className={`w-6 h-6 mx-auto mb-2 ${scope === "national" ? "text-[#ff5800]" : "text-gray-400"}`} />
                     <div className="font-bold">National</div>
                     <div className="text-sm text-gray-500">Serve entire country</div>
                   </button>
@@ -986,14 +986,14 @@ export default function MonitorSetup() {
                     {/* Input for adding new cities */}
                     <div className="flex gap-2">
                       <div className="relative group flex-1">
-                        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-[#5599f9] transition-colors" />
+                        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-[#ff5800] transition-colors" />
                         <Input
                           id="cities"
                           value={newCityInput}
                           onChange={(e) => setNewCityInput(e.target.value)}
                           onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addCity())}
                           placeholder={cities.length > 0 ? "Add another city..." : "Minneapolis, MN"}
-                          className="pl-12 bg-gray-50 border-gray-200 focus:border-[#5599f9] focus:ring-[#5599f9]"
+                          className="pl-12 bg-gray-50 border-gray-200 focus:border-[#ff5800] focus:ring-[#ff5800]"
                           data-testid="input-cities"
                         />
                       </div>
@@ -1024,7 +1024,7 @@ export default function MonitorSetup() {
                   <select
                     value={checkFrequencyDays}
                     onChange={(e) => setCheckFrequencyDays(Number(e.target.value))}
-                    className="flex-1 px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:border-[#5599f9] focus:ring-[#5599f9] focus:outline-none"
+                    className="flex-1 px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:border-[#ff5800] focus:ring-[#ff5800] focus:outline-none"
                     data-testid="select-frequency"
                   >
                     <option value={7}>Every 7 days</option>
@@ -1053,7 +1053,7 @@ export default function MonitorSetup() {
             <CardContent>
               {isLoadingGroups ? (
                 <div className="flex flex-col items-center justify-center py-12">
-                  <Loader2 className="w-8 h-8 text-[#5599f9] animate-spin mb-4" />
+                  <Loader2 className="w-8 h-8 text-[#ff5800] animate-spin mb-4" />
                   <p className="text-gray-500">Generating service groups with AI...</p>
                 </div>
               ) : (
@@ -1063,7 +1063,7 @@ export default function MonitorSetup() {
                       key={group.id}
                       className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${
                         group.isActive
-                          ? "border-[#5599f9] bg-blue-50"
+                          ? "border-[#ff5800] bg-orange-50"
                           : "border-gray-200 bg-gray-50 opacity-60"
                       }`}
                     >
@@ -1071,7 +1071,7 @@ export default function MonitorSetup() {
                         onClick={() => toggleGroupActive(group.id)}
                         className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${
                           group.isActive
-                            ? "bg-[#5599f9] border-[#5599f9] text-white"
+                            ? "bg-[#ff5800] border-[#ff5800] text-white"
                             : "border-gray-300 bg-white"
                         }`}
                         data-testid={`toggle-group-${group.id}`}
@@ -1161,7 +1161,7 @@ export default function MonitorSetup() {
           <Card className="shadow-2xl shadow-blue-900/5">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-                <FileText className="w-6 h-6 text-[#5599f9]" />
+                <FileText className="w-6 h-6 text-[#ff5800]" />
                 Review Prompts
               </CardTitle>
               <p className="text-gray-500">
@@ -1171,7 +1171,7 @@ export default function MonitorSetup() {
             <CardContent>
               {isLoadingPrompts ? (
                 <div className="flex flex-col items-center justify-center py-12">
-                  <Loader2 className="w-8 h-8 text-[#5599f9] animate-spin mb-4" />
+                  <Loader2 className="w-8 h-8 text-[#ff5800] animate-spin mb-4" />
                   <p className="text-gray-500">Generating prompts with AI...</p>
                 </div>
               ) : (
@@ -1203,7 +1203,7 @@ export default function MonitorSetup() {
                               <textarea
                                 autoFocus
                                 defaultValue={prompt.text}
-                                className="w-full p-2 border border-gray-200 rounded-lg focus:border-[#5599f9] focus:ring-[#5599f9] focus:outline-none"
+                                className="w-full p-2 border border-gray-200 rounded-lg focus:border-[#ff5800] focus:ring-[#ff5800] focus:outline-none"
                                 rows={3}
                                 onKeyDown={(e) => {
                                   if (e.key === "Escape") cancelPromptEdit(prompt.id);
@@ -1284,12 +1284,12 @@ export default function MonitorSetup() {
               <div className="max-w-md mx-auto space-y-6">
                 <div className="relative h-3 bg-gray-200 rounded-full overflow-hidden">
                   <div
-                    className="absolute left-0 top-0 h-full bg-gradient-to-r from-[#5599f9] to-[#ffb41c] transition-all duration-500"
+                    className="absolute left-0 top-0 h-full bg-gradient-to-r from-[#ff5800] to-[#ffb41c] transition-all duration-500"
                     style={{ width: `${scanProgress}%` }}
                   />
                 </div>
                 <div className="text-center space-y-2">
-                  <div className="text-4xl font-bold text-[#5599f9]" data-testid="text-scan-progress">{scanProgress}%</div>
+                  <div className="text-4xl font-bold text-[#ff5800]" data-testid="text-scan-progress">{scanProgress}%</div>
                   <div className="text-lg font-medium text-gray-700" data-testid="text-scan-status">{scanStatus}</div>
                   {scanSubStatus && (
                     <div className="text-sm text-gray-500 truncate max-w-full" data-testid="text-scan-substatus">
@@ -1304,7 +1304,7 @@ export default function MonitorSetup() {
                 </div>
                 {isScanning && (
                   <div className="flex justify-center">
-                    <Loader2 className="w-8 h-8 text-[#5599f9] animate-spin" />
+                    <Loader2 className="w-8 h-8 text-[#ff5800] animate-spin" />
                   </div>
                 )}
               </div>
@@ -1331,7 +1331,7 @@ export default function MonitorSetup() {
                 (currentStep === "groups" && isLoadingGroups) ||
                 (currentStep === "prompts" && isLoadingPrompts)
               }
-              className="flex items-center gap-2 bg-[#5599f9] hover:bg-[#4488e8] text-white"
+              className="flex items-center gap-2 bg-[#ff5800] hover:bg-[#e04f00] text-white"
               data-testid="button-next-step"
             >
               {currentStep === "prompts" ? "Start Monitoring" : "Next"}

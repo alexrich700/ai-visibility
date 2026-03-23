@@ -85,12 +85,12 @@ export function PresentationModeDialog({ open, onClose, onStart, data }: Present
                   onClick={() => handleModeChange(opt.mode)}
                   className={`p-4 rounded-xl border-2 text-left transition-all ${
                     isSelected
-                      ? "border-[#5599f9] bg-[#5599f9]/5"
+                      ? "border-[#ff5800] bg-[#ff5800]/5"
                       : "border-gray-200 hover:border-gray-300 bg-white"
                   }`}
                 >
-                  <opt.icon className={`w-6 h-6 mb-3 ${isSelected ? "text-[#5599f9]" : "text-gray-400"}`} />
-                  <h3 className={`font-semibold text-sm ${isSelected ? "text-[#5599f9]" : "text-gray-900"}`}>
+                  <opt.icon className={`w-6 h-6 mb-3 ${isSelected ? "text-[#ff5800]" : "text-gray-400"}`} />
+                  <h3 className={`font-semibold text-sm ${isSelected ? "text-[#ff5800]" : "text-gray-900"}`}>
                     {opt.title}
                   </h3>
                   <p className="text-xs text-gray-500 mt-1">{opt.description}</p>
@@ -132,7 +132,7 @@ export function PresentationModeDialog({ open, onClose, onStart, data }: Present
           <Button
             onClick={handleStart}
             disabled={enabledCount === 0}
-            className="w-full bg-[#5599f9] hover:bg-[#4488e8] text-white"
+            className="w-full bg-[#ff5800] hover:bg-[#e04f00] text-white"
           >
             Start Presentation
           </Button>

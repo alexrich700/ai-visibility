@@ -20,8 +20,8 @@ export function VisibilityTrendSlide({ sessionChartData, slideNumber, totalSlide
               <AreaChart data={sessionChartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="reportOverallGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#5599f9" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#5599f9" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#ff5800" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#ff5800" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -36,7 +36,7 @@ export function VisibilityTrendSlide({ sessionChartData, slideNumber, totalSlide
                   type="monotone"
                   dataKey="overall"
                   name="Overall"
-                  stroke="#5599f9"
+                  stroke="#ff5800"
                   strokeWidth={3}
                   fill="url(#reportOverallGradient)"
                 />
@@ -44,7 +44,7 @@ export function VisibilityTrendSlide({ sessionChartData, slideNumber, totalSlide
                   type="monotone"
                   dataKey="chatgpt"
                   name="ChatGPT"
-                  stroke="#5599f9"
+                  stroke="#ff5800"
                   strokeWidth={1.5}
                   strokeDasharray="5 5"
                   fill="none"

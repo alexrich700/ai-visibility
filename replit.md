@@ -1,7 +1,7 @@
 # AI Visibility Audit Tool
 
 ## Overview
-The AI Visibility Audit Tool for ROSSMAN MEDIA assesses business visibility across major AI platforms (ChatGPT, Gemini, Perplexity). It generates visibility scores, conducts competitor analysis, and provides actionable recommendations to enhance business presence in AI search results, identify competitive advantages, and improve digital marketing strategies. The tool features a React frontend, Express backend, and PostgreSQL database.
+The AI Visibility Audit Tool for Motivent Marketing assesses business visibility across major AI platforms (ChatGPT, Gemini, Perplexity). It generates visibility scores, conducts competitor analysis, and provides actionable recommendations to enhance business presence in AI search results, identify competitive advantages, and improve digital marketing strategies. The tool features a React frontend, Express backend, and PostgreSQL database.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.

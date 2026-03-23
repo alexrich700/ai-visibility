@@ -47,7 +47,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, getSessionAwareQueryFn, queryClient } from "@/lib/queryClient";
-import logoIcon from "@assets/images_1765741951084.png";
+import logoIcon from "@assets/Motivent_Logo_-_Primary_1774297429560.png";
 import type { MonitoringClient, MonitoringGroup, MonitoringPrompt, CheckSession } from "@shared/schema";
 
 interface GroupWithPrompts extends MonitoringGroup {
@@ -362,7 +362,7 @@ export default function MonitorSettings() {
   if (isAuthLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-[#5599f9] animate-spin" />
+        <Loader2 className="w-8 h-8 text-[#ff5800] animate-spin" />
       </div>
     );
   }

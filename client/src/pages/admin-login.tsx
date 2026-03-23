@@ -79,7 +79,7 @@ export default function AdminLogin() {
         {authView === "login" && (
           <>
             <div className="text-center mb-8">
-              <div className="w-16 h-16 bg-[#5599f9] rounded-xl flex items-center justify-center mx-auto mb-4">
+              <div className="w-16 h-16 bg-[#ff5800] rounded-xl flex items-center justify-center mx-auto mb-4">
                 <Lock className="w-8 h-8 text-white" />
               </div>
               <h1 className="text-2xl font-bold tracking-tight text-gray-900">Admin Portal</h1>
@@ -95,7 +95,7 @@ export default function AdminLogin() {
                   placeholder="admin@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="bg-gray-50 border-gray-200 focus:border-[#5599f9] focus:ring-[#5599f9]"
+                  className="bg-gray-50 border-gray-200 focus:border-[#ff5800] focus:ring-[#ff5800]"
                   data-testid="input-admin-email"
                   required
                 />
@@ -108,7 +108,7 @@ export default function AdminLogin() {
                   placeholder="Your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="bg-gray-50 border-gray-200 focus:border-[#5599f9] focus:ring-[#5599f9]"
+                  className="bg-gray-50 border-gray-200 focus:border-[#ff5800] focus:ring-[#ff5800]"
                   data-testid="input-admin-password"
                   required
                 />
@@ -118,7 +118,7 @@ export default function AdminLogin() {
               )}
               <Button
                 type="submit"
-                className="w-full bg-[#5599f9] hover:bg-[#4488e8] text-white font-bold rounded-xl py-4"
+                className="w-full bg-[#ff5800] hover:bg-[#e04f00] text-white font-bold rounded-xl py-4"
                 disabled={loginMutation.isPending}
                 data-testid="button-admin-login"
               >
@@ -132,7 +132,7 @@ export default function AdminLogin() {
                 setAuthView("forgot-password");
                 setLoginError("");
               }}
-              className="w-full mt-4 text-sm text-[#5599f9] hover:text-[#4488e8] transition-colors"
+              className="w-full mt-4 text-sm text-[#ff5800] hover:text-[#e04f00] transition-colors"
               data-testid="link-forgot-password"
             >
               Forgot your password?
@@ -143,7 +143,7 @@ export default function AdminLogin() {
         {authView === "forgot-password" && (
           <>
             <div className="text-center mb-8">
-              <div className="w-16 h-16 bg-[#5599f9] rounded-xl flex items-center justify-center mx-auto mb-4">
+              <div className="w-16 h-16 bg-[#ff5800] rounded-xl flex items-center justify-center mx-auto mb-4">
                 <KeyRound className="w-8 h-8 text-white" />
               </div>
               <h1 className="text-2xl font-bold tracking-tight text-gray-900">Reset Password</h1>
@@ -159,7 +159,7 @@ export default function AdminLogin() {
                   placeholder="admin@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="bg-gray-50 border-gray-200 focus:border-[#5599f9] focus:ring-[#5599f9]"
+                  className="bg-gray-50 border-gray-200 focus:border-[#ff5800] focus:ring-[#ff5800]"
                   data-testid="input-reset-email"
                   required
                 />
@@ -169,7 +169,7 @@ export default function AdminLogin() {
               )}
               <Button
                 type="submit"
-                className="w-full bg-[#5599f9] hover:bg-[#4488e8] text-white font-bold rounded-xl py-4"
+                className="w-full bg-[#ff5800] hover:bg-[#e04f00] text-white font-bold rounded-xl py-4"
                 disabled={forgotPasswordMutation.isPending}
                 data-testid="button-send-reset"
               >
@@ -209,7 +209,7 @@ export default function AdminLogin() {
                 setAuthView("login");
                 setEmail("");
               }}
-              className="w-full bg-[#5599f9] hover:bg-[#4488e8] text-white font-bold rounded-xl py-4"
+              className="w-full bg-[#ff5800] hover:bg-[#e04f00] text-white font-bold rounded-xl py-4"
               data-testid="button-back-login"
             >
               Back to Sign In

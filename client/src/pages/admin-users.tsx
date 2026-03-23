@@ -105,7 +105,7 @@ export default function AdminUsers() {
         </div>
         <Button
           onClick={() => setInviteOpen(true)}
-          className="bg-[#5599f9] hover:bg-[#4488e8]"
+          className="bg-[#ff5800] hover:bg-[#e04f00]"
           data-testid="button-invite-user"
         >
           <Plus className="w-4 h-4 mr-2" />
@@ -238,7 +238,7 @@ export default function AdminUsers() {
               </Button>
               <Button
                 type="submit"
-                className="bg-[#5599f9] hover:bg-[#4488e8]"
+                className="bg-[#ff5800] hover:bg-[#e04f00]"
                 disabled={inviteMutation.isPending}
                 data-testid="button-confirm-invite"
               >

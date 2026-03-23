@@ -250,7 +250,7 @@ export function ExecutiveReportOverlay({ data, mode, enabledSlides, onClose }: E
   return (
     <div className="fixed inset-0 z-50 bg-gray-100">
       {/* Persistent gradient bar */}
-      <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#5599f9] to-[#ffb41c] z-20" />
+      <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#ff5800] to-[#ffb41c] z-20" />
 
       <AnimatePresence mode="wait">
         <motion.div

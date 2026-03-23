@@ -63,7 +63,7 @@ export function OpportunityGapSlide({
                     dataKey="value"
                     stroke="none"
                   >
-                    <Cell fill="#5599f9" />
+                    <Cell fill="#ff5800" />
                     <Cell fill="#e5e7eb" />
                   </Pie>
                 </PieChart>

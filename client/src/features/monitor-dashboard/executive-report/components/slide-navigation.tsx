@@ -79,7 +79,7 @@ export function SlideNavigation({ currentSlide, totalSlides, slideLabels, onPrev
               onMouseEnter={() => setHoveredDot(i)}
               onMouseLeave={() => setHoveredDot(null)}
               className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
-                i === currentSlide ? "bg-[#5599f9] w-6" : "bg-gray-300 w-2 hover:bg-gray-400"
+                i === currentSlide ? "bg-[#ff5800] w-6" : "bg-gray-300 w-2 hover:bg-gray-400"
               }`}
               aria-label={`Go to slide ${i + 1}${slideLabels?.[i] ? `: ${slideLabels[i]}` : ""}`}
             />

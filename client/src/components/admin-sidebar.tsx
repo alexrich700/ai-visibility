@@ -21,7 +21,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { FileText, Monitor, Users, User, LogOut, ChevronUp, ExternalLink } from "lucide-react";
-import logoIcon from "@assets/images_1765741951084.png";
+import logoIcon from "@assets/Motivent_Logo_-_Tertiary_1774297439930.png";
 
 const mainNav = [
   { title: "Audit Submissions", url: "/admin", icon: FileText },

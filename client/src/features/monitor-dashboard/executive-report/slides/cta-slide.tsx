@@ -1,6 +1,6 @@
 import { Search, FileText, Globe } from "lucide-react";
 import { SlideLayout } from "../components/slide-layout";
-import logoFull from "@assets/RMG-Logo-Black-1920w_(1)_1765741951083.webp";
+import logoFull from "@assets/Motivent_Logo_-_Primary_1774297429560.png";
 
 interface CtaSlideProps {
   businessName: string;
@@ -64,11 +64,11 @@ export function CtaSlide({ businessName, slideNumber, totalSlides }: CtaSlidePro
           <div key={phase.phase} className="bg-gray-50 rounded-2xl border border-gray-200 p-6 flex flex-col">
             {/* Phase header */}
             <div className="flex items-center gap-3 mb-1">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#5599f9] to-[#ffb41c] flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#ff5800] to-[#ffb41c] flex items-center justify-center">
                 <phase.icon className="w-5 h-5 text-white" />
               </div>
               <div>
-                <p className="text-xs font-bold uppercase tracking-widest text-[#5599f9]">{phase.phase}</p>
+                <p className="text-xs font-bold uppercase tracking-widest text-[#ff5800]">{phase.phase}</p>
                 <h3 className="text-base font-bold text-gray-900 leading-tight">{phase.title}</h3>
               </div>
             </div>
@@ -78,7 +78,7 @@ export function CtaSlide({ businessName, slideNumber, totalSlides }: CtaSlidePro
             <div className="space-y-3 flex-1">
               {phase.items.map((item, i) => (
                 <div key={i} className="flex items-start gap-2.5">
-                  <div className="w-1.5 h-1.5 rounded-full bg-[#5599f9] mt-1.5 flex-shrink-0" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#ff5800] mt-1.5 flex-shrink-0" />
                   <p className="text-sm text-gray-600 leading-relaxed">{item}</p>
                 </div>
               ))}
@@ -89,7 +89,7 @@ export function CtaSlide({ businessName, slideNumber, totalSlides }: CtaSlidePro
 
       {/* Footer CTA */}
       <div className="mt-6">
-        <div className="bg-gradient-to-r from-[#5599f9] to-[#ffb41c] rounded-2xl p-6">
+        <div className="bg-gradient-to-r from-[#ff5800] to-[#ffb41c] rounded-2xl p-6">
           <div className="flex items-center justify-center gap-4">
             <img src={logoFull} alt="Logo" className="h-7 object-contain brightness-0 invert" />
             <div className="w-px h-7 bg-white/30" />

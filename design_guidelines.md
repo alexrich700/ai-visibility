@@ -6,13 +6,14 @@
 ## Brand Identity
 
 ### Logo & Branding
-- **Company Name**: ROSSMAN MEDIA
-- **Logo**: Blue/yellow abstract geometric design (8x8 rounded square, blue background with yellow diagonal stripe)
-- **Typography**: Bold "ROSSMAN" + light weight "MEDIA", 2xl size, tight tracking
+- **Company Name**: Motivent Marketing
+- **Logo**: Orange/yellow abstract geometric design (8x8 rounded square)
+- **Typography**: Montserrat font family, bold weight
 
 ### Brand Color Palette
 ```
-Primary Blue: #5599f9
+Primary Orange: #ff5800 (Willpower Orange)
+Destructive Red: #ff0006 (Tech Red)
 Accent Yellow: #ffb41c
 Black: #010400
 White: #fff
@@ -20,6 +21,7 @@ Gray Scale: gray-50, gray-100, gray-200, gray-400, gray-500
 ```
 
 ## Typography System
+- **Font Family**: Montserrat (primary), system sans-serif fallback
 - **Headings**: Bold, ultra-tight tracking (`tracking-tighter`)
 - **H1**: 5xl to 7xl, bold weight
 - **Body**: Light to medium weights for hierarchy
@@ -41,19 +43,19 @@ Use Tailwind's standard spacing: `p-4, p-6, p-8` for padding; `gap-2, gap-3, gap
 **Badges**
 - Rounded-md, uppercase, xs text, bold
 - 3px horizontal padding, 1px vertical
-- Types: neutral (gray), success (blue), warning (yellow), danger (white/red border)
+- Types: neutral (gray), success (orange), warning (yellow), danger (white/red border)
 
 **Buttons**
-- Primary: Blue background (#5599f9), hover darker, white text, bold
+- Primary: Orange background (#ff5800), hover darker (#e04f00), white text, bold
 - Full rounded-xl corners, py-4 padding
-- Blue shadow on hover: `shadow-lg shadow-blue-500/20`
+- Orange shadow on hover: `shadow-lg shadow-orange-500/20`
 - Icons paired with arrow-right
 
 **Input Fields**
 - Background: gray-50
-- Border: gray-200, focus shifts to blue with ring
+- Border: gray-200, focus shifts to orange with ring
 - Rounded-lg corners, pl-12 for icon space
-- Icon positioning: absolute left-3, gray-400, transitions to blue on focus
+- Icon positioning: absolute left-3, gray-400, transitions to orange on focus
 
 ### Page Sections
 
@@ -70,7 +72,7 @@ Use Tailwind's standard spacing: `p-4, p-6, p-8` for padding; `gap-2, gap-3, gap
 
 **Form Container**
 - Tab navigation at top (border-b design)
-- Active tab: gray-50 background, blue bottom border (2px)
+- Active tab: gray-50 background, orange bottom border (2px)
 - Input grid: md:grid-cols-2 for side-by-side fields
 - Grouped inputs with icon prefixes
 
@@ -89,7 +91,7 @@ Use Tailwind's standard spacing: `p-4, p-6, p-8` for padding; `gap-2, gap-3, gap
 **Modal Overlays**
 - Full-screen backdrop: `bg-[#010400]/80` with blur
 - White rounded-2xl container, max-w-lg
-- Blue header section with icon
+- Orange header section with icon
 - Form in white section below
 - X button: absolute top-right
 
@@ -98,7 +100,7 @@ Use Tailwind's standard spacing: `p-4, p-6, p-8` for padding; `gap-2, gap-3, gap
 **Transitions**
 - Use `transition-all` or `transition-colors`
 - Subtle hover states: opacity or background changes
-- Focus states: border color shift to blue with ring
+- Focus states: border color shift to orange with ring
 
 **Animations**
 - Fade-in/zoom-in for modals: `animate-in fade-in zoom-in-95`
@@ -108,19 +110,19 @@ Use Tailwind's standard spacing: `p-4, p-6, p-8` for padding; `gap-2, gap-3, gap
 ## Component Styling Patterns
 
 **Focus States**
-- Blue ring and border on form inputs
+- Orange ring and border on form inputs
 - Group focus-within for icon color transitions
 
 **Icon Treatment**
 - Size 16-20 for inline, 24+ for standalone
-- Gray-400 default, blue on active/focus
+- Gray-400 default, orange on active/focus
 - Lucide React icon library
 
 **Selection**
-- Custom selection colors: `selection:bg-[#5599f9] selection:text-white`
+- Custom selection colors: `selection:bg-[#ff5800] selection:text-white`
 
 ## Accessibility
-- Proper focus indicators with blue rings
+- Proper focus indicators with orange rings
 - Icon + text pairings for clarity
 - High contrast text (black on white primary)
 - Required field validation

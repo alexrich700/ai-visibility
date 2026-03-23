@@ -42,7 +42,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
-import logoIcon from "@assets/images_1765741951084.png";
+import logoIcon from "@assets/Motivent_Logo_-_Tertiary_1774297439930.png";
 import type { MonitoringClient, MonitoringGroup, CheckSession, CheckResult } from "@shared/schema";
 import { ExecutiveReportOverlay } from "@/features/monitor-dashboard/executive-report/executive-report-overlay";
 import { PresentationModeDialog } from "@/features/monitor-dashboard/executive-report/components/presentation-mode-dialog";
@@ -147,7 +147,7 @@ interface CompetitorTrendsResponse {
 }
 
 const COLORS = {
-  primary: "#5599f9",
+  primary: "#ff5800",
   accent: "#ffb41c",
   success: "#22c55e",
   danger: "#ef4444",
@@ -979,7 +979,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-[#5599f9] animate-spin" />
+        <Loader2 className="w-8 h-8 text-[#ff5800] animate-spin" />
       </div>
     );
   }
@@ -1029,12 +1029,12 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
 
   // Colors for group/competitor lines
   const trendLineColors = [
-    "#5599f9", "#ffb41c", "#22c55e", "#ef4444", "#8b5cf6", 
+    "#ff5800", "#ffb41c", "#22c55e", "#ef4444", "#8b5cf6", 
     "#ec4899", "#14b8a6", "#f97316", "#6366f1", "#84cc16"
   ];
 
   return (
-    <div className="bg-gray-50 selection:bg-[#5599f9] selection:text-white h-full overflow-auto">
+    <div className="bg-gray-50 selection:bg-[#ff5800] selection:text-white h-full overflow-auto">
       {/* Toolbar */}
       <div className="bg-white border-b border-gray-200 px-6 py-3">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -1130,10 +1130,10 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
 
       {/* Scanning Progress Overlay */}
       {isScanning && (
-        <div className="bg-gradient-to-r from-[#5599f9]/10 to-[#ffb41c]/10 border-b border-[#5599f9]/20">
+        <div className="bg-gradient-to-r from-[#ff5800]/10 to-[#ffb41c]/10 border-b border-[#ff5800]/20">
           <div className="max-w-7xl mx-auto px-6 py-4">
             <div className="flex items-center gap-4">
-              <Loader2 className="w-5 h-5 text-[#5599f9] animate-spin" />
+              <Loader2 className="w-5 h-5 text-[#ff5800] animate-spin" />
               <div className="flex-1">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-sm font-medium text-gray-900">{scanStatus}</span>
@@ -1141,7 +1141,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
                 </div>
                 <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                   <div 
-                    className="h-full bg-gradient-to-r from-[#5599f9] to-[#ffb41c] transition-all duration-300"
+                    className="h-full bg-gradient-to-r from-[#ff5800] to-[#ffb41c] transition-all duration-300"
                     style={{ width: `${scanProgress}%` }}
                   />
                 </div>
@@ -1158,11 +1158,11 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
       <main className="max-w-7xl mx-auto px-6 py-8 space-y-8">
         {/* Multi-city info banner */}
         {client.cities && client.cities.length > 1 && (
-          <Card className="bg-gradient-to-r from-[#5599f9]/5 to-[#ffb41c]/5 border-[#5599f9]/20">
+          <Card className="bg-gradient-to-r from-[#ff5800]/5 to-[#ffb41c]/5 border-[#ff5800]/20">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <Target className="w-5 h-5 text-[#5599f9]" />
+                  <Target className="w-5 h-5 text-[#ff5800]" />
                   <div>
                     <p className="text-sm font-medium text-gray-700">
                       Multi-location business: Tracking visibility across {client.cities.length} cities
@@ -1251,11 +1251,11 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
                     <MetricInfo tooltip={METRIC_TOOLTIPS.visibilityRate} id="visibility-rate" />
                   </p>
                   <div className="flex items-baseline gap-2 mt-2">
-                    <span className="text-4xl font-bold text-[#5599f9]">{visibilityRate}%</span>
+                    <span className="text-4xl font-bold text-[#ff5800]">{visibilityRate}%</span>
                   </div>
                   <p className="text-sm text-gray-500 mt-1">{foundCount} of {totalExposures} platform checks</p>
                 </div>
-                <Eye className="w-8 h-8 text-[#5599f9]" />
+                <Eye className="w-8 h-8 text-[#ff5800]" />
               </div>
             </CardContent>
           </Card>
@@ -1469,17 +1469,17 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-[#5599f9]" />
+                    <div className="w-3 h-3 rounded-full bg-[#ff5800]" />
                     <span className="font-medium text-gray-900">ChatGPT</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-2xl font-bold text-[#5599f9]">{chatgptVisibility}%</span>
+                    <span className="text-2xl font-bold text-[#ff5800]">{chatgptVisibility}%</span>
                     <span className="text-sm text-gray-500">({chatgptFoundCount}/{promptCount})</span>
                   </div>
                 </div>
                 <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
                   <div 
-                    className="h-full bg-[#5599f9] rounded-full transition-all"
+                    className="h-full bg-[#ff5800] rounded-full transition-all"
                     style={{ width: `${chatgptVisibility}%` }}
                   />
                 </div>
@@ -1543,7 +1543,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
                           href={`https://${citation.domain}`} 
                           target="_blank" 
                           rel="noopener noreferrer"
-                          className="text-sm text-[#5599f9] hover:underline truncate"
+                          className="text-sm text-[#ff5800] hover:underline truncate"
                           data-testid={`link-citation-${index}`}
                         >
                           {citation.domain}
@@ -1598,7 +1598,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
           <Card className="shadow-2xl shadow-blue-900/5">
             <CardHeader className="pb-2">
               <div className="flex items-center gap-2">
-                <Building2 className="w-4 h-4 text-[#5599f9]" />
+                <Building2 className="w-4 h-4 text-[#ff5800]" />
                 <CardTitle className="text-sm font-bold tracking-tight flex items-center">
                   Competitor Visibility
                   <MetricInfo tooltip={METRIC_TOOLTIPS.competitorVisibility} id="competitor-visibility" />
@@ -2025,7 +2025,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <CardTitle className="text-lg font-bold tracking-tight flex items-center gap-2">
-                    <Building2 className="h-5 w-5 text-[#5599f9]" />
+                    <Building2 className="h-5 w-5 text-[#ff5800]" />
                     Brand Sentiment Analysis
                   </CardTitle>
                   <p className="text-sm text-gray-500 mt-1">

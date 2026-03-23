@@ -75,7 +75,7 @@ export default function AdminResetPassword() {
 
           <Button 
             onClick={() => setLocation("/admin")}
-            className="w-full bg-[#5599f9] hover:bg-[#4488e8] text-white font-bold rounded-xl py-4"
+            className="w-full bg-[#ff5800] hover:bg-[#e04f00] text-white font-bold rounded-xl py-4"
             data-testid="button-go-login"
           >
             Go to Login
@@ -99,7 +99,7 @@ export default function AdminResetPassword() {
 
           <Button 
             onClick={() => setLocation("/admin")}
-            className="w-full bg-[#5599f9] hover:bg-[#4488e8] text-white font-bold rounded-xl py-4"
+            className="w-full bg-[#ff5800] hover:bg-[#e04f00] text-white font-bold rounded-xl py-4"
             data-testid="button-go-login"
           >
             Sign In
@@ -113,7 +113,7 @@ export default function AdminResetPassword() {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-md p-8 bg-white rounded-xl border border-gray-200 shadow-2xl shadow-blue-900/5">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-[#5599f9] rounded-xl flex items-center justify-center mx-auto mb-4">
+          <div className="w-16 h-16 bg-[#ff5800] rounded-xl flex items-center justify-center mx-auto mb-4">
             <Lock className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">Set New Password</h1>
@@ -129,7 +129,7 @@ export default function AdminResetPassword() {
               placeholder="At least 8 characters"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="bg-gray-50 border-gray-200 focus:border-[#5599f9] focus:ring-[#5599f9]"
+              className="bg-gray-50 border-gray-200 focus:border-[#ff5800] focus:ring-[#ff5800]"
               data-testid="input-new-password"
               required
               minLength={8}
@@ -143,7 +143,7 @@ export default function AdminResetPassword() {
               placeholder="Confirm your password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="bg-gray-50 border-gray-200 focus:border-[#5599f9] focus:ring-[#5599f9]"
+              className="bg-gray-50 border-gray-200 focus:border-[#ff5800] focus:ring-[#ff5800]"
               data-testid="input-confirm-password"
               required
             />
@@ -153,7 +153,7 @@ export default function AdminResetPassword() {
           )}
           <Button 
             type="submit" 
-            className="w-full bg-[#5599f9] hover:bg-[#4488e8] text-white font-bold rounded-xl py-4"
+            className="w-full bg-[#ff5800] hover:bg-[#e04f00] text-white font-bold rounded-xl py-4"
             disabled={resetMutation.isPending}
             data-testid="button-reset-password"
           >

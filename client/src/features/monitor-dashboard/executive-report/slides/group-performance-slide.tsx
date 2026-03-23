@@ -9,7 +9,7 @@ interface GroupPerformanceSlideProps {
   mode?: PresentationMode;
 }
 
-const COLORS = ["#5599f9", "#ffb41c", "#22c55e", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316", "#6366f1"];
+const COLORS = ["#ff5800", "#ffb41c", "#22c55e", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316", "#6366f1"];
 
 export function GroupPerformanceSlide({ groupBarData, slideNumber, totalSlides, mode }: GroupPerformanceSlideProps) {
   const sortedData = [...groupBarData].sort((a, b) => b.visibility - a.visibility);

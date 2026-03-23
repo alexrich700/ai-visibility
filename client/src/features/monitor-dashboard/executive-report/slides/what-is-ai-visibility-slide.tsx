@@ -33,8 +33,8 @@ export function WhatIsAiVisibilitySlide({ slideNumber, totalSlides }: WhatIsAiVi
           </div>
 
           {/* The New Model */}
-          <div className="p-8 rounded-2xl border-2 border-[#5599f9]/30 bg-blue-50/30">
-            <p className="text-xs font-bold uppercase tracking-widest text-[#5599f9] mb-4">The New Model</p>
+          <div className="p-8 rounded-2xl border-2 border-[#ff5800]/30 bg-orange-50/30">
+            <p className="text-xs font-bold uppercase tracking-widest text-[#ff5800] mb-4">The New Model</p>
             <h3 className="text-xl font-bold text-gray-900 mb-6">
               Retrieve <span className="text-gray-300 mx-1">&rarr;</span> Synthesize <span className="text-gray-300 mx-1">&rarr;</span> Generate
             </h3>
@@ -44,8 +44,8 @@ export function WhatIsAiVisibilitySlide({ slideNumber, totalSlides }: WhatIsAiVi
               <p>Cites brands it trusts</p>
               <p>User may never click at all</p>
             </div>
-            <div className="mt-6 pt-4 border-t border-[#5599f9]/20">
-              <p className="text-sm text-gray-500">Success metric: <span className="font-semibold text-[#5599f9]">influence</span></p>
+            <div className="mt-6 pt-4 border-t border-[#ff5800]/20">
+              <p className="text-sm text-gray-500">Success metric: <span className="font-semibold text-[#ff5800]">influence</span></p>
             </div>
           </div>
         </div>
