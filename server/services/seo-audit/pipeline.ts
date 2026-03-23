@@ -361,10 +361,13 @@ class SEOAuditPipeline extends EventEmitter {
 
     this.serpResults = await batchOrganicSerp(serpPairs);
 
+    const clientDomain = extractDomain(audit.businessUrl);
     const competitors = (audit.competitors as Array<{ domain?: string; name?: string }>) || [];
     const competitorDomains = competitors
       .map(c => c.domain)
       .filter((d): d is string => !!d);
+
+    const crawlPageUrls = this.crawlPages.map(p => p.url);
 
     for (let i = 0; i < this.serpResults.length; i++) {
       const result = this.serpResults[i];
@@ -372,14 +375,26 @@ class SEOAuditPipeline extends EventEmitter {
       if (!keyword || !result) continue;
 
       let clientRank: number | null = null;
+      let existingPageUrl: string | null = null;
+      let inAiOverview = false;
       const competitorRanks: Record<string, number | null> = {};
 
       for (const item of result.items) {
+        if (item.type === 'ai_overview') {
+          inAiOverview = true;
+          continue;
+        }
+
         if (!item.url) continue;
         const itemDomain = extractDomain(item.url);
-        if (itemDomain === extractDomain(audit.businessUrl)) {
-          clientRank = item.rank_absolute;
+
+        if (itemDomain === clientDomain) {
+          if (clientRank === null) {
+            clientRank = item.rank_absolute;
+            existingPageUrl = item.url;
+          }
         }
+
         for (const cd of competitorDomains) {
           if (itemDomain === cd && !competitorRanks[cd]) {
             competitorRanks[cd] = item.rank_absolute;
@@ -387,8 +402,22 @@ class SEOAuditPipeline extends EventEmitter {
         }
       }
 
+      if (!existingPageUrl) {
+        const matchedCrawlPage = crawlPageUrls.find(url => {
+          const normalizedUrl = url.toLowerCase();
+          const kwSlug = keyword.keyword.toLowerCase().replace(/\s+/g, '-');
+          return normalizedUrl.includes(kwSlug) ||
+            (keyword.targetService && normalizedUrl.includes(keyword.targetService.toLowerCase().replace(/\s+/g, '-')));
+        });
+        if (matchedCrawlPage) {
+          existingPageUrl = matchedCrawlPage;
+        }
+      }
+
       await storage.updateAuditKeyword(keyword.id, {
         currentOrganicRank: clientRank,
+        existingPageUrl,
+        inAiOverview,
         competitorRanks,
       });
     }

@@ -10,5 +10,6 @@ router.use("/audit", auditRoutes);
 router.use("/leads", leadsRoutes);
 router.use("/admin", adminRoutes);
 router.use("/seo-audits", seoAuditRoutes);
+router.use("/seo-audit", seoAuditRoutes);
 
 export default router;
