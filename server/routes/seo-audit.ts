@@ -409,9 +409,17 @@ async function getSectionData(
       };
     }
     case 'geo_visibility': {
+      const geoData = audit.geoVisibilityData as Record<string, unknown> | null;
       return {
-        message: 'GEO/AI Visibility data delegates to existing monitoring engine',
-        auditId,
+        aiVisibilityScore: audit.aiVisibilityScore,
+        totalChecked: geoData?.totalChecked ?? 0,
+        chatGptVisibility: geoData?.chatGptVisibility ?? 0,
+        geminiVisibility: geoData?.geminiVisibility ?? 0,
+        overallVisibility: geoData?.overallVisibility ?? 0,
+        foundInChatGpt: geoData?.foundInChatGpt ?? 0,
+        foundInGemini: geoData?.foundInGemini ?? 0,
+        citedInChatGpt: geoData?.citedInChatGpt ?? 0,
+        citedInGemini: geoData?.citedInGemini ?? 0,
       };
     }
     case 'rankings': {

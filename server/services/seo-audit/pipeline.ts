@@ -500,6 +500,7 @@ class SEOAuditPipeline extends EventEmitter {
       }
     } catch (e) {
       console.error(`[Pipeline] Geo grid failed:`, e);
+      throw e;
     }
 
     if (this.geoGridStageResults.length > 0) {
