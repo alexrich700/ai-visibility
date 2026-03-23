@@ -7,7 +7,18 @@ import {
   InsertCheckGroupMetric, InsertCheckCompetitorMetric, InsertScanJob,
   MonitoringClient, MonitoringGroup, MonitoringPrompt, CheckResult, CheckSession,
   CheckGroupMetric, CheckCompetitorMetric, ScanJob, ClientSession as DbClientSession, AdminSession as DbAdminSession,
-  adminUsers, InsertAdminUser, AdminUser
+  adminUsers, InsertAdminUser, AdminUser,
+  seoAudits, InsertSeoAudit, SeoAudit,
+  auditKeywords, InsertAuditKeyword, AuditKeyword,
+  auditGeoGrids, InsertAuditGeoGrid, AuditGeoGrid,
+  auditGeoGridPoints, InsertAuditGeoGridPoint, AuditGeoGridPoint,
+  auditTechnicalFindings, InsertAuditTechnicalFinding, AuditTechnicalFinding,
+  auditCompetitors, InsertAuditCompetitor, AuditCompetitor,
+  auditContentGaps, InsertAuditContentGap, AuditContentGap,
+  auditReviews, InsertAuditReview, AuditReview,
+  auditDeliverables, InsertAuditDeliverable, AuditDeliverable,
+  auditPpcForecast, InsertAuditPpcForecast, AuditPpcForecast,
+  auditStageLog, InsertAuditStageLog, AuditStageLog,
 } from "@shared/schema";
 import { eq, desc, and, lte, lt, isNull, or, isNotNull, gte, asc, inArray, sql } from "drizzle-orm";
 
@@ -135,6 +146,54 @@ export interface IStorage {
   getAdminSessionByToken(token: string): Promise<DbAdminSession | undefined>;
   deleteAdminSession(token: string): Promise<void>;
   deleteExpiredAdminSessions(): Promise<number>;
+
+  // SEO Audit operations
+  createSeoAudit(audit: InsertSeoAudit): Promise<SeoAudit>;
+  getSeoAuditById(id: number): Promise<SeoAudit | undefined>;
+  getSeoAuditByMagicLink(token: string): Promise<SeoAudit | undefined>;
+  getSeoAudits(options?: { status?: string; limit?: number; offset?: number }): Promise<SeoAudit[]>;
+  updateSeoAudit(id: number, data: Partial<InsertSeoAudit>): Promise<SeoAudit | undefined>;
+  deleteSeoAudit(id: number): Promise<void>;
+
+  // Audit Keywords
+  createAuditKeywords(keywords: InsertAuditKeyword[]): Promise<AuditKeyword[]>;
+  getAuditKeywordsByAuditId(auditId: number): Promise<AuditKeyword[]>;
+  deleteAuditKeywordsByAuditId(auditId: number): Promise<void>;
+
+  // Audit Geo Grids
+  createAuditGeoGrid(grid: InsertAuditGeoGrid): Promise<AuditGeoGrid>;
+  getAuditGeoGridsByAuditId(auditId: number): Promise<AuditGeoGrid[]>;
+  createAuditGeoGridPoints(points: InsertAuditGeoGridPoint[]): Promise<AuditGeoGridPoint[]>;
+  getAuditGeoGridPointsByGridId(gridId: number): Promise<AuditGeoGridPoint[]>;
+
+  // Audit Technical Findings
+  createAuditTechnicalFindings(findings: InsertAuditTechnicalFinding[]): Promise<AuditTechnicalFinding[]>;
+  getAuditTechnicalFindingsByAuditId(auditId: number): Promise<AuditTechnicalFinding[]>;
+
+  // Audit Competitors
+  createAuditCompetitors(competitors: InsertAuditCompetitor[]): Promise<AuditCompetitor[]>;
+  getAuditCompetitorsByAuditId(auditId: number): Promise<AuditCompetitor[]>;
+
+  // Audit Content Gaps
+  createAuditContentGaps(gaps: InsertAuditContentGap[]): Promise<AuditContentGap[]>;
+  getAuditContentGapsByAuditId(auditId: number): Promise<AuditContentGap[]>;
+
+  // Audit Reviews
+  createAuditReviews(reviews: InsertAuditReview[]): Promise<AuditReview[]>;
+  getAuditReviewsByAuditId(auditId: number): Promise<AuditReview[]>;
+
+  // Audit Deliverables
+  createAuditDeliverables(deliverables: InsertAuditDeliverable[]): Promise<AuditDeliverable[]>;
+  getAuditDeliverablesByAuditId(auditId: number): Promise<AuditDeliverable[]>;
+
+  // Audit PPC Forecast
+  createAuditPpcForecasts(forecasts: InsertAuditPpcForecast[]): Promise<AuditPpcForecast[]>;
+  getAuditPpcForecastsByAuditId(auditId: number): Promise<AuditPpcForecast[]>;
+
+  // Audit Stage Log
+  createAuditStageLog(log: InsertAuditStageLog): Promise<AuditStageLog>;
+  getAuditStageLogsByAuditId(auditId: number): Promise<AuditStageLog[]>;
+  updateAuditStageLog(id: number, data: Partial<InsertAuditStageLog & { completedAt?: Date }>): Promise<AuditStageLog | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -927,6 +986,174 @@ export class DatabaseStorage implements IStorage {
       .where(lte(adminSessions.expiresAt, new Date()))
       .returning();
     return result.length;
+  }
+
+  // ============================================
+  // SEO AUDIT OPERATIONS
+  // ============================================
+
+  async createSeoAudit(auditData: InsertSeoAudit): Promise<SeoAudit> {
+    const [audit] = await db.insert(seoAudits).values(auditData).returning();
+    return audit;
+  }
+
+  async getSeoAuditById(id: number): Promise<SeoAudit | undefined> {
+    const [audit] = await db.select().from(seoAudits).where(eq(seoAudits.id, id));
+    return audit;
+  }
+
+  async getSeoAuditByMagicLink(token: string): Promise<SeoAudit | undefined> {
+    const [audit] = await db.select().from(seoAudits).where(eq(seoAudits.magicLinkToken, token));
+    return audit;
+  }
+
+  async getSeoAudits(options?: { status?: string; limit?: number; offset?: number }): Promise<SeoAudit[]> {
+    const conditions: ReturnType<typeof eq>[] = [];
+    if (options?.status) {
+      conditions.push(eq(seoAudits.status, options.status) as any);
+    }
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    return await db.select().from(seoAudits)
+      .where(whereClause)
+      .orderBy(desc(seoAudits.createdAt))
+      .limit(options?.limit || 100)
+      .offset(options?.offset || 0);
+  }
+
+  async updateSeoAudit(id: number, data: Partial<InsertSeoAudit>): Promise<SeoAudit | undefined> {
+    const [audit] = await db
+      .update(seoAudits)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(seoAudits.id, id))
+      .returning();
+    return audit;
+  }
+
+  async deleteSeoAudit(id: number): Promise<void> {
+    await db.transaction(async (tx) => {
+      const grids = await tx.select({ id: auditGeoGrids.id }).from(auditGeoGrids).where(eq(auditGeoGrids.auditId, id));
+      if (grids.length > 0) {
+        await tx.delete(auditGeoGridPoints).where(inArray(auditGeoGridPoints.gridId, grids.map(g => g.id)));
+      }
+      await tx.delete(auditGeoGrids).where(eq(auditGeoGrids.auditId, id));
+      await tx.delete(auditKeywords).where(eq(auditKeywords.auditId, id));
+      await tx.delete(auditTechnicalFindings).where(eq(auditTechnicalFindings.auditId, id));
+      await tx.delete(auditCompetitors).where(eq(auditCompetitors.auditId, id));
+      await tx.delete(auditContentGaps).where(eq(auditContentGaps.auditId, id));
+      await tx.delete(auditReviews).where(eq(auditReviews.auditId, id));
+      await tx.delete(auditDeliverables).where(eq(auditDeliverables.auditId, id));
+      await tx.delete(auditPpcForecast).where(eq(auditPpcForecast.auditId, id));
+      await tx.delete(auditStageLog).where(eq(auditStageLog.auditId, id));
+      await tx.delete(seoAudits).where(eq(seoAudits.id, id));
+    });
+  }
+
+  async createAuditKeywords(keywords: InsertAuditKeyword[]): Promise<AuditKeyword[]> {
+    if (keywords.length === 0) return [];
+    return await db.insert(auditKeywords).values(keywords).returning();
+  }
+
+  async getAuditKeywordsByAuditId(auditId: number): Promise<AuditKeyword[]> {
+    return await db.select().from(auditKeywords).where(eq(auditKeywords.auditId, auditId));
+  }
+
+  async deleteAuditKeywordsByAuditId(auditId: number): Promise<void> {
+    await db.delete(auditKeywords).where(eq(auditKeywords.auditId, auditId));
+  }
+
+  async createAuditGeoGrid(grid: InsertAuditGeoGrid): Promise<AuditGeoGrid> {
+    const [result] = await db.insert(auditGeoGrids).values(grid).returning();
+    return result;
+  }
+
+  async getAuditGeoGridsByAuditId(auditId: number): Promise<AuditGeoGrid[]> {
+    return await db.select().from(auditGeoGrids).where(eq(auditGeoGrids.auditId, auditId));
+  }
+
+  async createAuditGeoGridPoints(points: InsertAuditGeoGridPoint[]): Promise<AuditGeoGridPoint[]> {
+    if (points.length === 0) return [];
+    return await db.insert(auditGeoGridPoints).values(points).returning();
+  }
+
+  async getAuditGeoGridPointsByGridId(gridId: number): Promise<AuditGeoGridPoint[]> {
+    return await db.select().from(auditGeoGridPoints).where(eq(auditGeoGridPoints.gridId, gridId));
+  }
+
+  async createAuditTechnicalFindings(findings: InsertAuditTechnicalFinding[]): Promise<AuditTechnicalFinding[]> {
+    if (findings.length === 0) return [];
+    return await db.insert(auditTechnicalFindings).values(findings).returning();
+  }
+
+  async getAuditTechnicalFindingsByAuditId(auditId: number): Promise<AuditTechnicalFinding[]> {
+    return await db.select().from(auditTechnicalFindings).where(eq(auditTechnicalFindings.auditId, auditId));
+  }
+
+  async createAuditCompetitors(competitors: InsertAuditCompetitor[]): Promise<AuditCompetitor[]> {
+    if (competitors.length === 0) return [];
+    return await db.insert(auditCompetitors).values(competitors).returning();
+  }
+
+  async getAuditCompetitorsByAuditId(auditId: number): Promise<AuditCompetitor[]> {
+    return await db.select().from(auditCompetitors).where(eq(auditCompetitors.auditId, auditId));
+  }
+
+  async createAuditContentGaps(gaps: InsertAuditContentGap[]): Promise<AuditContentGap[]> {
+    if (gaps.length === 0) return [];
+    return await db.insert(auditContentGaps).values(gaps).returning();
+  }
+
+  async getAuditContentGapsByAuditId(auditId: number): Promise<AuditContentGap[]> {
+    return await db.select().from(auditContentGaps).where(eq(auditContentGaps.auditId, auditId));
+  }
+
+  async createAuditReviews(reviews: InsertAuditReview[]): Promise<AuditReview[]> {
+    if (reviews.length === 0) return [];
+    return await db.insert(auditReviews).values(reviews).returning();
+  }
+
+  async getAuditReviewsByAuditId(auditId: number): Promise<AuditReview[]> {
+    return await db.select().from(auditReviews).where(eq(auditReviews.auditId, auditId));
+  }
+
+  async createAuditDeliverables(deliverables: InsertAuditDeliverable[]): Promise<AuditDeliverable[]> {
+    if (deliverables.length === 0) return [];
+    return await db.insert(auditDeliverables).values(deliverables).returning();
+  }
+
+  async getAuditDeliverablesByAuditId(auditId: number): Promise<AuditDeliverable[]> {
+    return await db.select().from(auditDeliverables)
+      .where(eq(auditDeliverables.auditId, auditId))
+      .orderBy(asc(auditDeliverables.phase), asc(auditDeliverables.sortOrder));
+  }
+
+  async createAuditPpcForecasts(forecasts: InsertAuditPpcForecast[]): Promise<AuditPpcForecast[]> {
+    if (forecasts.length === 0) return [];
+    return await db.insert(auditPpcForecast).values(forecasts).returning();
+  }
+
+  async getAuditPpcForecastsByAuditId(auditId: number): Promise<AuditPpcForecast[]> {
+    return await db.select().from(auditPpcForecast).where(eq(auditPpcForecast.auditId, auditId));
+  }
+
+  async createAuditStageLog(logData: InsertAuditStageLog): Promise<AuditStageLog> {
+    const [result] = await db.insert(auditStageLog).values(logData).returning();
+    return result;
+  }
+
+  async getAuditStageLogsByAuditId(auditId: number): Promise<AuditStageLog[]> {
+    return await db.select().from(auditStageLog)
+      .where(eq(auditStageLog.auditId, auditId))
+      .orderBy(asc(auditStageLog.startedAt));
+  }
+
+  async updateAuditStageLog(id: number, data: Partial<InsertAuditStageLog & { completedAt?: Date }>): Promise<AuditStageLog | undefined> {
+    const [result] = await db
+      .update(auditStageLog)
+      .set(data)
+      .where(eq(auditStageLog.id, id))
+      .returning();
+    return result;
   }
 }
 

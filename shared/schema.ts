@@ -1,4 +1,4 @@
-import { pgTable, text, varchar, integer, jsonb, timestamp, boolean, serial, real, index } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, jsonb, timestamp, boolean, serial, real, index, decimal } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -577,3 +577,293 @@ export const groupSuggestionSchema = z.object({
 });
 
 export type GroupSuggestion = z.infer<typeof groupSuggestionSchema>;
+
+// ============================================
+// SEO AUDIT TABLES
+// ============================================
+
+export const SEO_AUDIT_STATUS = {
+  DRAFT: 'draft',
+  CONFIGURING: 'configuring',
+  QUEUED: 'queued',
+  RUNNING: 'running',
+  COMPLETED: 'completed',
+  FAILED: 'failed',
+} as const;
+export type SeoAuditStatus = typeof SEO_AUDIT_STATUS[keyof typeof SEO_AUDIT_STATUS];
+
+export const seoAudits = pgTable("seo_audits", {
+  id: serial("id").primaryKey(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  status: text("status").notNull().default('draft'),
+  currentStage: text("current_stage"),
+  businessName: text("business_name").notNull(),
+  businessUrl: text("business_url").notNull(),
+  businessAddress: text("business_address"),
+  businessLat: real("business_lat"),
+  businessLng: real("business_lng"),
+  businessType: text("business_type").notNull().default('local'),
+  industry: text("industry"),
+  serviceAreaCities: jsonb("service_area_cities").default([]),
+  services: jsonb("services").default([]),
+  geoGridKeywords: jsonb("geo_grid_keywords").default([]),
+  geoGridSize: integer("geo_grid_size").default(13),
+  geoGridSpacingMiles: real("geo_grid_spacing_miles").default(1.0),
+  competitors: jsonb("competitors").default([]),
+  marketPositionScore: integer("market_position_score"),
+  siteHealthGrade: text("site_health_grade"),
+  shareOfLocalVoice: real("share_of_local_voice"),
+  averageGridRank: real("average_grid_rank"),
+  totalKeywordGaps: integer("total_keyword_gaps"),
+  totalContentGaps: integer("total_content_gaps"),
+  totalDeliverables: integer("total_deliverables"),
+  estimatedTotalHours: real("estimated_total_hours"),
+  estimatedMonthlyInvestment: real("estimated_monthly_investment"),
+  executiveNarrative: text("executive_narrative"),
+  crawlTaskId: text("crawl_task_id"),
+  createdBy: integer("created_by"),
+  magicLinkToken: text("magic_link_token").unique(),
+  organizationId: integer("organization_id"),
+}, (table) => ({
+  statusIdx: index("seo_audits_status_idx").on(table.status),
+  magicLinkIdx: index("seo_audits_magic_link_idx").on(table.magicLinkToken),
+}));
+
+export const insertSeoAuditSchema = createInsertSchema(seoAudits).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertSeoAudit = z.infer<typeof insertSeoAuditSchema>;
+export type SeoAudit = typeof seoAudits.$inferSelect;
+
+export const auditKeywords = pgTable("audit_keywords", {
+  id: serial("id").primaryKey(),
+  auditId: integer("audit_id").references(() => seoAudits.id, { onDelete: "cascade" }).notNull(),
+  keyword: text("keyword").notNull(),
+  searchVolume: integer("search_volume"),
+  cpc: real("cpc"),
+  competitionLevel: text("competition_level"),
+  seasonalTrends: jsonb("seasonal_trends"),
+  intent: text("intent"),
+  pageType: text("page_type"),
+  targetCity: text("target_city"),
+  targetService: text("target_service"),
+  existingPageUrl: text("existing_page_url"),
+  currentOrganicRank: integer("current_organic_rank"),
+  currentLocalPackRank: integer("current_local_pack_rank"),
+  inAiOverview: boolean("in_ai_overview").default(false),
+  competitorRanks: jsonb("competitor_ranks").default({}),
+  priority: text("priority").default('medium'),
+}, (table) => ({
+  auditIdIdx: index("audit_keywords_audit_id_idx").on(table.auditId),
+}));
+
+export const insertAuditKeywordSchema = createInsertSchema(auditKeywords).omit({
+  id: true,
+});
+
+export type InsertAuditKeyword = z.infer<typeof insertAuditKeywordSchema>;
+export type AuditKeyword = typeof auditKeywords.$inferSelect;
+
+export const auditGeoGrids = pgTable("audit_geo_grids", {
+  id: serial("id").primaryKey(),
+  auditId: integer("audit_id").references(() => seoAudits.id, { onDelete: "cascade" }).notNull(),
+  keyword: text("keyword").notNull(),
+  gridSize: integer("grid_size").notNull(),
+  spacingMiles: real("spacing_miles").notNull(),
+  centerLat: real("center_lat").notNull(),
+  centerLng: real("center_lng").notNull(),
+  clientSolv: real("client_solv"),
+  clientAvgRank: real("client_avg_rank"),
+  competitorSolv: real("competitor_solv"),
+  competitorName: text("competitor_name"),
+  competitorAvgRank: real("competitor_avg_rank"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  auditIdIdx: index("audit_geo_grids_audit_id_idx").on(table.auditId),
+}));
+
+export const insertAuditGeoGridSchema = createInsertSchema(auditGeoGrids).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertAuditGeoGrid = z.infer<typeof insertAuditGeoGridSchema>;
+export type AuditGeoGrid = typeof auditGeoGrids.$inferSelect;
+
+export const auditGeoGridPoints = pgTable("audit_geo_grid_points", {
+  id: serial("id").primaryKey(),
+  gridId: integer("grid_id").references(() => auditGeoGrids.id, { onDelete: "cascade" }).notNull(),
+  gridRow: integer("grid_row").notNull(),
+  gridCol: integer("grid_col").notNull(),
+  lat: real("lat").notNull(),
+  lng: real("lng").notNull(),
+  clientRank: integer("client_rank"),
+  competitorRank: integer("competitor_rank"),
+  localPackResults: jsonb("local_pack_results").default([]),
+}, (table) => ({
+  gridIdIdx: index("audit_geo_grid_points_grid_id_idx").on(table.gridId),
+}));
+
+export const insertAuditGeoGridPointSchema = createInsertSchema(auditGeoGridPoints).omit({
+  id: true,
+});
+
+export type InsertAuditGeoGridPoint = z.infer<typeof insertAuditGeoGridPointSchema>;
+export type AuditGeoGridPoint = typeof auditGeoGridPoints.$inferSelect;
+
+export const auditTechnicalFindings = pgTable("audit_technical_findings", {
+  id: serial("id").primaryKey(),
+  auditId: integer("audit_id").references(() => seoAudits.id, { onDelete: "cascade" }).notNull(),
+  category: text("category").notNull(),
+  checkName: text("check_name").notNull(),
+  status: text("status").notNull(),
+  value: text("value"),
+  threshold: text("threshold"),
+  description: text("description"),
+  impact: text("impact"),
+}, (table) => ({
+  auditIdIdx: index("audit_technical_findings_audit_id_idx").on(table.auditId),
+}));
+
+export const insertAuditTechnicalFindingSchema = createInsertSchema(auditTechnicalFindings).omit({
+  id: true,
+});
+
+export type InsertAuditTechnicalFinding = z.infer<typeof insertAuditTechnicalFindingSchema>;
+export type AuditTechnicalFinding = typeof auditTechnicalFindings.$inferSelect;
+
+export const auditCompetitors = pgTable("audit_competitors", {
+  id: serial("id").primaryKey(),
+  auditId: integer("audit_id").references(() => seoAudits.id, { onDelete: "cascade" }).notNull(),
+  domain: text("domain").notNull(),
+  businessName: text("business_name"),
+  domainRating: integer("domain_rating"),
+  totalOrganicKeywords: integer("total_organic_keywords"),
+  monthlyOrganicTraffic: integer("monthly_organic_traffic"),
+  referringDomains: integer("referring_domains"),
+  googleReviewCount: integer("google_review_count"),
+  googleReviewRating: real("google_review_rating"),
+  backlinkSummary: jsonb("backlink_summary"),
+  topBacklinks: jsonb("top_backlinks").default([]),
+}, (table) => ({
+  auditIdIdx: index("audit_competitors_audit_id_idx").on(table.auditId),
+}));
+
+export const insertAuditCompetitorSchema = createInsertSchema(auditCompetitors).omit({
+  id: true,
+});
+
+export type InsertAuditCompetitor = z.infer<typeof insertAuditCompetitorSchema>;
+export type AuditCompetitor = typeof auditCompetitors.$inferSelect;
+
+export const auditContentGaps = pgTable("audit_content_gaps", {
+  id: serial("id").primaryKey(),
+  auditId: integer("audit_id").references(() => seoAudits.id, { onDelete: "cascade" }).notNull(),
+  gapType: text("gap_type").notNull(),
+  targetKeyword: text("target_keyword"),
+  targetCity: text("target_city"),
+  targetService: text("target_service"),
+  searchVolume: integer("search_volume"),
+  priority: text("priority").default('medium'),
+  estimatedHours: real("estimated_hours"),
+  status: text("status").default('missing'),
+}, (table) => ({
+  auditIdIdx: index("audit_content_gaps_audit_id_idx").on(table.auditId),
+}));
+
+export const insertAuditContentGapSchema = createInsertSchema(auditContentGaps).omit({
+  id: true,
+});
+
+export type InsertAuditContentGap = z.infer<typeof insertAuditContentGapSchema>;
+export type AuditContentGap = typeof auditContentGaps.$inferSelect;
+
+export const auditReviews = pgTable("audit_reviews", {
+  id: serial("id").primaryKey(),
+  auditId: integer("audit_id").references(() => seoAudits.id, { onDelete: "cascade" }).notNull(),
+  entityType: text("entity_type").notNull(),
+  entityName: text("entity_name").notNull(),
+  platform: text("platform").notNull(),
+  reviewCount: integer("review_count"),
+  averageRating: real("average_rating"),
+  mostRecentReviewDate: timestamp("most_recent_review_date"),
+  monthlyVelocity: real("monthly_velocity"),
+  sentimentSummary: jsonb("sentiment_summary"),
+}, (table) => ({
+  auditIdIdx: index("audit_reviews_audit_id_idx").on(table.auditId),
+}));
+
+export const insertAuditReviewSchema = createInsertSchema(auditReviews).omit({
+  id: true,
+});
+
+export type InsertAuditReview = z.infer<typeof insertAuditReviewSchema>;
+export type AuditReview = typeof auditReviews.$inferSelect;
+
+export const auditDeliverables = pgTable("audit_deliverables", {
+  id: serial("id").primaryKey(),
+  auditId: integer("audit_id").references(() => seoAudits.id, { onDelete: "cascade" }).notNull(),
+  phase: integer("phase").notNull(),
+  category: text("category").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  estimatedHours: real("estimated_hours").notNull(),
+  priority: text("priority").default('medium'),
+  sortOrder: integer("sort_order").default(0),
+}, (table) => ({
+  auditIdIdx: index("audit_deliverables_audit_id_idx").on(table.auditId),
+}));
+
+export const insertAuditDeliverableSchema = createInsertSchema(auditDeliverables).omit({
+  id: true,
+});
+
+export type InsertAuditDeliverable = z.infer<typeof insertAuditDeliverableSchema>;
+export type AuditDeliverable = typeof auditDeliverables.$inferSelect;
+
+export const auditPpcForecast = pgTable("audit_ppc_forecast", {
+  id: serial("id").primaryKey(),
+  auditId: integer("audit_id").references(() => seoAudits.id, { onDelete: "cascade" }).notNull(),
+  keyword: text("keyword").notNull(),
+  geoTarget: text("geo_target"),
+  estimatedClicks: real("estimated_clicks"),
+  estimatedImpressions: real("estimated_impressions"),
+  estimatedCpc: real("estimated_cpc"),
+  estimatedCost: real("estimated_cost"),
+  estimatedConversions: real("estimated_conversions"),
+  forecastPeriodDays: integer("forecast_period_days").default(90),
+}, (table) => ({
+  auditIdIdx: index("audit_ppc_forecast_audit_id_idx").on(table.auditId),
+}));
+
+export const insertAuditPpcForecastSchema = createInsertSchema(auditPpcForecast).omit({
+  id: true,
+});
+
+export type InsertAuditPpcForecast = z.infer<typeof insertAuditPpcForecastSchema>;
+export type AuditPpcForecast = typeof auditPpcForecast.$inferSelect;
+
+export const auditStageLog = pgTable("audit_stage_log", {
+  id: serial("id").primaryKey(),
+  auditId: integer("audit_id").references(() => seoAudits.id, { onDelete: "cascade" }).notNull(),
+  stage: text("stage").notNull(),
+  status: text("status").notNull(),
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+  errorMessage: text("error_message"),
+  metadata: jsonb("metadata").default({}),
+}, (table) => ({
+  auditIdIdx: index("audit_stage_log_audit_id_idx").on(table.auditId),
+}));
+
+export const insertAuditStageLogSchema = createInsertSchema(auditStageLog).omit({
+  id: true,
+  startedAt: true,
+});
+
+export type InsertAuditStageLog = z.infer<typeof insertAuditStageLogSchema>;
+export type AuditStageLog = typeof auditStageLog.$inferSelect;

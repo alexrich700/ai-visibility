@@ -55,6 +55,33 @@ The tool captures `webSearchQueries` and `groundingSupports` from Gemini to unde
 -   **Enhanced Negative Sentiment Display**: Detailed display of negative feedback snippets with platform attribution.
 -   **Scan History Management**: Admin-only feature in Settings page to view and delete individual scan sessions. Supports city-based filtering and confirmation dialogs. Backend endpoints: `DELETE /api/monitoring/sessions/:sessionId` (single) and `DELETE /api/monitoring/clients/:clientId/sessions?date=YYYY-MM-DD&city=` (bulk by date/city). Deletion cascades through check_results, check_group_metrics, check_competitor_metrics, and nullifies scan_jobs references.
 
+### SEO Audit Pipeline (Task #2+)
+A comprehensive 10-section SEO audit system with a 12-stage data pipeline, designed for 50 concurrent audits.
+
+**Database Tables** (11 new tables in `shared/schema.ts`):
+- `seo_audits` — Master audit record with business info, scores, and narrative
+- `audit_keywords` — Keyword research data with rankings, CPC, search volume
+- `audit_geo_grids` / `audit_geo_grid_points` — Geo Grid (SoLV) map data
+- `audit_technical_findings` — Site health checks (speed, mobile, on-page, crawlability)
+- `audit_competitors` — Competitor profiles with domain rating, backlinks, reviews
+- `audit_content_gaps` — Missing pages/content opportunities
+- `audit_reviews` — Google review health data
+- `audit_deliverables` — Action plan line items by phase
+- `audit_ppc_forecast` — Google Ads forecast data (stubbed)
+- `audit_stage_log` — Pipeline stage progress tracking
+
+**Service Layer** (`server/services/seo-audit/`):
+- `dataforseo.ts` — DataForSEO API: organic SERP, Maps SERP, Geo Grid, site crawl, backlinks
+- `pagespeed.ts` — Google PageSpeed Insights + technical check scoring engine
+- `google-places.ts` — Google Places API: search, details, reviews, geocoding
+- `keyword-planner.ts` — Google Ads Keyword Planner (stubbed, requires OAuth)
+- `llm.ts` — Anthropic LLM: keyword classification, page scoring, review analysis, narrative generation
+- `queue.ts` — In-memory audit job queue with priority, concurrency control, rate limiting
+
+**Storage** (`server/storage.ts`): IStorage interface extended with full CRUD for all 11 tables.
+
+**External API Keys Needed**: `DATAFORSEO_LOGIN`, `DATAFORSEO_PASSWORD`, `GOOGLE_PSI_API_KEY`, `GOOGLE_PLACES_API_KEY`, `GOOGLE_ADS_*` (5 vars, for Keyword Planner)
+
 ### Data Layer
 -   **ORM**: Drizzle ORM with PostgreSQL.
 -   **Schema**: Defined in `shared/schema.ts`.
