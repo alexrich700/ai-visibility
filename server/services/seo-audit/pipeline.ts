@@ -115,12 +115,15 @@ class SEOAuditPipeline extends EventEmitter {
     const audit = await storage.getSeoAuditById(auditId);
     if (!audit) throw new Error(`Audit ${auditId} not found`);
 
+    await this.cleanupPriorRunData(auditId);
+
     await storage.updateSeoAudit(auditId, {
       status: 'running',
       currentStage: 'intake',
     });
 
     const totalStages = PIPELINE_STAGES.length;
+    let hadStageErrors = false;
 
     for (let i = 0; i < PIPELINE_STAGES.length; i++) {
       const stageName = PIPELINE_STAGES[i];
@@ -153,6 +156,7 @@ class SEOAuditPipeline extends EventEmitter {
           timestamp: Date.now(),
         } satisfies PipelineEvent);
       } catch (error) {
+        hadStageErrors = true;
         const errorMsg = error instanceof Error ? error.message : String(error);
         console.error(`[Pipeline] Stage ${stageName} failed for audit ${auditId}:`, errorMsg);
 
@@ -169,7 +173,7 @@ class SEOAuditPipeline extends EventEmitter {
     }
 
     await storage.updateSeoAudit(auditId, {
-      status: 'completed',
+      status: hadStageErrors ? 'completed_with_errors' : 'completed',
       currentStage: null,
     });
 
@@ -196,6 +200,34 @@ class SEOAuditPipeline extends EventEmitter {
       case 'scoping_engine': return this.stageScopingEngine(audit);
       case 'report_generation': return this.stageReportGeneration(audit);
     }
+  }
+
+  private async cleanupPriorRunData(auditId: number): Promise<void> {
+    await Promise.all([
+      storage.deleteAuditKeywordsByAuditId(auditId),
+      storage.deleteAuditGeoGridsByAuditId(auditId),
+      storage.deleteAuditTechnicalFindingsByAuditId(auditId),
+      storage.deleteAuditCompetitorsByAuditId(auditId),
+      storage.deleteAuditContentGapsByAuditId(auditId),
+      storage.deleteAuditReviewsByAuditId(auditId),
+      storage.deleteAuditDeliverablesByAuditId(auditId),
+      storage.deleteAuditPpcForecastsByAuditId(auditId),
+      storage.deleteAuditStageLogsByAuditId(auditId),
+    ]);
+
+    await storage.updateSeoAudit(auditId, {
+      siteHealthGrade: null,
+      shareOfLocalVoice: null,
+      averageGridRank: null,
+      totalKeywordGaps: null,
+      totalContentGaps: null,
+      totalDeliverables: null,
+      estimatedTotalHours: null,
+      estimatedMonthlyInvestment: null,
+      aiVisibilityScore: null,
+      geoVisibilityData: null,
+      executiveNarrative: null,
+    });
   }
 
   private async stageIntake(audit: SeoAudit): Promise<void> {
