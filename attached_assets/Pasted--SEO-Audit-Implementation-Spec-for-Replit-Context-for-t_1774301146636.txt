@@ -1,0 +1,1940 @@
+# SEO Audit — Implementation Spec for Replit
+
+## Context for the AI Agent
+
+You are building a new "SEO Audit" tab/experience within an existing Node.js + React application hosted on Replit. The app currently has a GEO (Generative Engine Optimization) AI Visibility tool that evaluates businesses against ChatGPT/Gemini/OpenAI. That stays as-is. This spec adds a comprehensive SEO audit pipeline that feeds a client-facing dashboard.
+
+**Existing app capabilities to preserve:**
+- GEO visibility engine (Gemini + OpenAI prompt generation and evaluation per service category)
+- Magic-link sharing (token-based URLs for client read-only access)
+- Supabase for data storage
+- User authentication for specialists (backend admin)
+
+**What's new:**
+- Full SEO audit pipeline (10 dashboard sections)
+- Google Ads Keyword Planner API integration (keyword research + PPC forecasting)
+- DataForSEO API integration (SERP rankings, Maps geo grids, site crawl, backlinks)
+- Google PageSpeed Insights API (Core Web Vitals)
+- Google Places API (reviews, ratings)
+- Interactive geo grid map (Leaflet.js)
+- Present Mode (fullscreen slide-by-slide navigation)
+- Specialist-facing onboarding wizard for audit configuration
+
+---
+
+## Tech Stack
+
+- **Frontend:** React (existing) + Leaflet.js (new, for maps) + Recharts or Chart.js (new, for charts)
+- **Backend:** Node.js (existing) + Express (existing)
+- **Database:** Supabase (existing)
+- **Auth:** Existing specialist auth + magic-link tokens for client view
+- **APIs:** Google Ads API, DataForSEO REST API, Google PageSpeed Insights API, Google Places API, Anthropic API (Haiku + Sonnet), OpenAI API (existing), Gemini API (existing)
+
+---
+
+## Database Schema (Supabase)
+
+```sql
+-- Core audit record
+CREATE TABLE seo_audits (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  status TEXT DEFAULT 'draft', -- draft | configuring | running | completed | failed
+  current_stage TEXT,
+
+  -- Business info
+  business_name TEXT NOT NULL,
+  business_url TEXT NOT NULL,
+  business_address TEXT,
+  business_lat DECIMAL(10, 7),
+  business_lng DECIMAL(10, 7),
+  business_type TEXT DEFAULT 'local', -- local | national
+  industry TEXT,
+
+  -- Config (set during onboarding)
+  service_area_cities JSONB DEFAULT '[]', -- [{name, state, lat, lng, population}]
+  services JSONB DEFAULT '[]', -- [{name, category, keywords: []}]
+  geo_grid_keywords JSONB DEFAULT '[]', -- max 10, [{keyword, volume}]
+  geo_grid_size INTEGER DEFAULT 13, -- 7, 13, or 15
+  geo_grid_spacing_miles DECIMAL DEFAULT 1.0,
+  competitors JSONB DEFAULT '[]', -- [{name, url, domain}] max 3
+
+  -- Computed summary (populated after pipeline completes)
+  market_position_score INTEGER, -- 0-100 composite
+  site_health_grade TEXT, -- A-F
+  share_of_local_voice DECIMAL,
+  average_grid_rank DECIMAL,
+  total_keyword_gaps INTEGER,
+  total_content_gaps INTEGER,
+  total_deliverables INTEGER,
+  estimated_total_hours DECIMAL,
+  estimated_monthly_investment DECIMAL,
+
+  -- Access
+  created_by UUID REFERENCES auth.users(id),
+  magic_link_token TEXT UNIQUE,
+
+  -- Org
+  organization_id UUID
+);
+
+-- Keyword research results
+CREATE TABLE audit_keywords (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  audit_id UUID REFERENCES seo_audits(id) ON DELETE CASCADE,
+  keyword TEXT NOT NULL,
+  search_volume INTEGER,
+  cpc DECIMAL,
+  competition_level TEXT, -- LOW | MEDIUM | HIGH
+  seasonal_trends JSONB, -- 12 monthly values
+  intent TEXT, -- transactional | informational | navigational | comparison
+  page_type TEXT, -- service | city | subcity | comparison | resource | faq
+  target_city TEXT,
+  target_service TEXT,
+  existing_page_url TEXT, -- null if gap
+  current_organic_rank INTEGER, -- null if not ranking
+  current_local_pack_rank INTEGER,
+  in_ai_overview BOOLEAN DEFAULT FALSE,
+  competitor_ranks JSONB DEFAULT '{}', -- {domain: rank}
+  priority TEXT DEFAULT 'medium' -- high | medium | low
+);
+
+-- Geo grid results
+CREATE TABLE audit_geo_grids (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  audit_id UUID REFERENCES seo_audits(id) ON DELETE CASCADE,
+  keyword TEXT NOT NULL,
+  grid_size INTEGER NOT NULL,
+  spacing_miles DECIMAL NOT NULL,
+  center_lat DECIMAL(10, 7) NOT NULL,
+  center_lng DECIMAL(10, 7) NOT NULL,
+
+  -- Computed metrics
+  client_solv DECIMAL, -- share of local voice %
+  client_avg_rank DECIMAL,
+  competitor_solv DECIMAL, -- top competitor
+  competitor_name TEXT,
+  competitor_avg_rank DECIMAL,
+
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Individual grid point results
+CREATE TABLE audit_geo_grid_points (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  grid_id UUID REFERENCES audit_geo_grids(id) ON DELETE CASCADE,
+  grid_row INTEGER NOT NULL,
+  grid_col INTEGER NOT NULL,
+  lat DECIMAL(10, 7) NOT NULL,
+  lng DECIMAL(10, 7) NOT NULL,
+
+  client_rank INTEGER, -- null if not in top 20
+  competitor_rank INTEGER, -- top competitor's rank at this point
+
+  -- Full local pack results at this point (top 20)
+  local_pack_results JSONB DEFAULT '[]'
+  -- [{rank, business_name, place_id, rating, review_count, domain}]
+);
+
+-- Technical audit findings
+CREATE TABLE audit_technical_findings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  audit_id UUID REFERENCES seo_audits(id) ON DELETE CASCADE,
+  category TEXT NOT NULL, -- speed | mobile | crawlability | schema | onpage | security
+  check_name TEXT NOT NULL,
+  status TEXT NOT NULL, -- pass | fail | warning
+  value TEXT, -- actual measured value
+  threshold TEXT, -- expected value
+  description TEXT,
+  impact TEXT -- high | medium | low
+);
+
+-- Competitive intelligence
+CREATE TABLE audit_competitors (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  audit_id UUID REFERENCES seo_audits(id) ON DELETE CASCADE,
+  domain TEXT NOT NULL,
+  business_name TEXT,
+  domain_rating INTEGER,
+  total_organic_keywords INTEGER,
+  monthly_organic_traffic INTEGER,
+  referring_domains INTEGER,
+  google_review_count INTEGER,
+  google_review_rating DECIMAL,
+  backlink_summary JSONB, -- {high_authority: N, medium: N, low: N}
+  top_backlinks JSONB DEFAULT '[]' -- [{url, domain_rating, anchor}] top 10
+);
+
+-- Content gap analysis
+CREATE TABLE audit_content_gaps (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  audit_id UUID REFERENCES seo_audits(id) ON DELETE CASCADE,
+  gap_type TEXT NOT NULL, -- service_page | city_page | subcity_page | comparison | resource
+  target_keyword TEXT,
+  target_city TEXT,
+  target_service TEXT,
+  search_volume INTEGER,
+  priority TEXT DEFAULT 'medium',
+  estimated_hours DECIMAL,
+  status TEXT DEFAULT 'missing' -- missing | needs_optimization | exists
+);
+
+-- Review health data
+CREATE TABLE audit_reviews (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  audit_id UUID REFERENCES seo_audits(id) ON DELETE CASCADE,
+  entity_type TEXT NOT NULL, -- client | competitor
+  entity_name TEXT NOT NULL,
+  platform TEXT NOT NULL, -- google | yelp | bbb | angi
+  review_count INTEGER,
+  average_rating DECIMAL,
+  most_recent_review_date DATE,
+  monthly_velocity DECIMAL, -- avg reviews per month
+  sentiment_summary JSONB -- {positive_themes: [], negative_themes: []}
+);
+
+-- Deliverables / scoping
+CREATE TABLE audit_deliverables (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  audit_id UUID REFERENCES seo_audits(id) ON DELETE CASCADE,
+  phase INTEGER NOT NULL, -- 1, 2, or 3
+  category TEXT NOT NULL, -- technical | content | geo_pages | backlinks | gbp | reviews
+  title TEXT NOT NULL,
+  description TEXT,
+  estimated_hours DECIMAL NOT NULL,
+  priority TEXT DEFAULT 'medium', -- high | medium | low
+  sort_order INTEGER DEFAULT 0
+);
+
+-- Google Ads forecast data
+CREATE TABLE audit_ppc_forecast (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  audit_id UUID REFERENCES seo_audits(id) ON DELETE CASCADE,
+  keyword TEXT NOT NULL,
+  geo_target TEXT,
+  estimated_clicks DECIMAL,
+  estimated_impressions DECIMAL,
+  estimated_cpc DECIMAL,
+  estimated_cost DECIMAL,
+  estimated_conversions DECIMAL,
+  forecast_period_days INTEGER DEFAULT 90
+);
+
+-- Pipeline stage tracking
+CREATE TABLE audit_stage_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  audit_id UUID REFERENCES seo_audits(id) ON DELETE CASCADE,
+  stage TEXT NOT NULL,
+  status TEXT NOT NULL, -- started | completed | failed
+  started_at TIMESTAMPTZ DEFAULT NOW(),
+  completed_at TIMESTAMPTZ,
+  error_message TEXT,
+  metadata JSONB DEFAULT '{}'
+);
+```
+
+---
+
+## API Integration Layer
+
+### Google Ads Keyword Planner API
+
+```javascript
+// server/services/googleAdsKeywordPlanner.js
+
+const { GoogleAdsApi } = require('google-ads-api');
+// OR use direct REST: const { google } = require('googleapis');
+
+const GOOGLE_ADS_CONFIG = {
+  client_id: process.env.GOOGLE_ADS_CLIENT_ID,
+  client_secret: process.env.GOOGLE_ADS_CLIENT_SECRET,
+  developer_token: process.env.GOOGLE_ADS_DEVELOPER_TOKEN,
+  refresh_token: process.env.GOOGLE_ADS_REFRESH_TOKEN,
+  customer_id: process.env.GOOGLE_ADS_CUSTOMER_ID, // MCC account ID
+};
+
+/**
+ * Step 1: Generate keyword ideas from seed keywords + URL
+ * Returns keyword suggestions with volumes, CPC, competition
+ */
+async function generateKeywordIdeas({ seedKeywords, url, geoTargetId, languageId = 1000 }) {
+  // geoTargetId examples:
+  //   Austin, TX = 1013611
+  //   Denver, CO = 1013325
+  //   Use GeoTargetConstantService to look up by city name
+
+  // POST to GoogleAdsService.SearchStream or KeywordPlanService
+  // Resource: keyword_plan_idea
+  //
+  // Parameters:
+  //   keyword_seed: { keywords: seedKeywords }
+  //   url_seed: { url: url }  (optional, extracts keywords from page)
+  //   geo_target_constants: [`geoTargetConstants/${geoTargetId}`]
+  //   language: `languageConstants/${languageId}`
+  //   keyword_plan_network: GOOGLE_SEARCH  (not search partners)
+  //   include_adult_keywords: false
+
+  // Returns array of:
+  // {
+  //   keyword: "roof repair austin",
+  //   avg_monthly_searches: 1200,
+  //   competition: "MEDIUM",
+  //   competition_index: 45,
+  //   low_top_of_page_bid_micros: 3500000,  // $3.50
+  //   high_top_of_page_bid_micros: 12000000, // $12.00
+  //   monthly_search_volumes: [{year, month, monthly_searches}] // 12 months
+  // }
+
+  // IMPLEMENTATION NOTE:
+  // For accounts with low spend, volumes may be bucketed into ranges
+  // (e.g., "1K-10K" instead of "4,200"). If you need precise volumes,
+  // supplement with DataForSEO keyword_data endpoint for those keywords.
+}
+
+/**
+ * Step 2: Get historical metrics for specific keywords in a specific geo
+ */
+async function getHistoricalMetrics({ keywords, geoTargetId }) {
+  // POST to KeywordPlanService.GenerateHistoricalMetrics
+  //
+  // Parameters:
+  //   keywords: keywords (up to 10,000)
+  //   geo_target_constants: [`geoTargetConstants/${geoTargetId}`]
+  //   keyword_plan_network: GOOGLE_SEARCH
+  //
+  // Returns per keyword:
+  // {
+  //   keyword: "roof repair",
+  //   avg_monthly_searches: 1200,
+  //   monthly_search_volumes: [{year: 2026, month: 1, searches: 980}, ...]
+  //   competition: "MEDIUM",
+  //   competition_index: 45,
+  //   average_cpc_micros: 8500000  // $8.50
+  // }
+}
+
+/**
+ * Step 3: Generate PPC forecast for keywords in a geo
+ * This powers the Google Ads Projection section
+ */
+async function generateForecast({ keywords, geoTargetId, dailyBudgetMicros }) {
+  // 1. Create a KeywordPlan (temporary)
+  // 2. Add KeywordPlanCampaign with geo targeting + budget
+  // 3. Add KeywordPlanAdGroup
+  // 4. Add KeywordPlanKeywords (each keyword as BROAD or EXACT)
+  // 5. Call KeywordPlanService.GenerateForecastMetrics
+  //
+  // Returns per keyword:
+  // {
+  //   keyword: "roof repair austin",
+  //   clicks: 145.2,
+  //   impressions: 4320.5,
+  //   average_cpc_micros: 7800000, // $7.80
+  //   cost_micros: 1132560000, // $1,132.56
+  //   conversions: 12.3,
+  //   average_cpm_micros: 262000000
+  // }
+  //
+  // 6. Delete the temporary KeywordPlan after fetching results
+}
+
+/**
+ * Lookup geo target criterion ID by city name
+ */
+async function lookupGeoTarget(cityName, stateName) {
+  // POST to GeoTargetConstantService.SuggestGeoTargetConstants
+  // query: `${cityName}, ${stateName}`
+  // Returns: { resource_name, geo_target_constant: { id, name, country_code, target_type } }
+  // target_type: "City", "DMA Region", "State", etc.
+}
+
+module.exports = { generateKeywordIdeas, getHistoricalMetrics, generateForecast, lookupGeoTarget };
+```
+
+### DataForSEO API
+
+```javascript
+// server/services/dataForSeo.js
+
+const D4SEO_LOGIN = process.env.DATAFORSEO_LOGIN;
+const D4SEO_PASSWORD = process.env.DATAFORSEO_PASSWORD;
+const BASE_URL = 'https://api.dataforseo.com/v3';
+
+const headers = {
+  'Authorization': 'Basic ' + Buffer.from(`${D4SEO_LOGIN}:${D4SEO_PASSWORD}`).toString('base64'),
+  'Content-Type': 'application/json'
+};
+
+// ─── SERP Rankings ───────────────────────────────────────
+
+/**
+ * Get organic SERP results for a keyword + location
+ * Returns top 100 organic results + AI overview data
+ */
+async function getOrganicSerp({ keyword, locationName, languageCode = 'en' }) {
+  // POST /serp/google/organic/task_post
+  // Body: [{
+  //   keyword,
+  //   location_name: locationName,  // e.g., "Austin,Texas,United States"
+  //   language_code: languageCode,
+  //   depth: 100,  // top 100 results
+  //   // This also returns AI overview data if present
+  // }]
+  //
+  // Response includes:
+  //   result.items[] -> organic results with {rank_absolute, url, domain, title, description}
+  //   result.items[] where type == "ai_overview" -> AI overview content and citations
+  //
+  // Cost: $0.002 per task (live mode)
+}
+
+/**
+ * Batch: Get organic rankings for multiple keywords
+ * DataForSEO accepts up to 100 tasks per POST
+ */
+async function batchOrganicSerp(keywordLocationPairs) {
+  // keywordLocationPairs: [{keyword, locationName}]
+  // Chunk into batches of 100
+  // POST each batch to /serp/google/organic/task_post
+  // Use task_get to retrieve results (or use /live endpoint for real-time)
+  //
+  // For near-real-time: use /serp/google/organic/live
+  // Cost: $0.002 per task
+}
+
+// ─── Maps SERP (Geo Grid) ────────────────────────────────
+
+/**
+ * Get Google Maps local pack results at a specific lat/lng
+ */
+async function getMapsSerp({ keyword, lat, lng, languageCode = 'en', depth = 20 }) {
+  // POST /serp/google/maps/live/advanced
+  // Body: [{
+  //   keyword,
+  //   location_coordinate: `${lat},${lng},17z`,  // 17z zoom level
+  //   language_code: languageCode,
+  //   depth,  // number of results to return (top 20)
+  //   // NOTE: do NOT set device, os_type, etc. for standard results
+  // }]
+  //
+  // Response per result:
+  // {
+  //   rank_group, rank_absolute,
+  //   domain, title, url,
+  //   rating: { value, votes_count },
+  //   address, place_id,
+  //   is_claimed, latitude, longitude
+  // }
+  //
+  // Cost: $0.002 per task (live)
+  // Priority queue: $0.0012 per task
+}
+
+/**
+ * Run a full geo grid: multiple points × multiple keywords
+ * Returns structured results for grid visualization
+ */
+async function runGeoGrid({
+  centerLat, centerLng, gridSize, spacingMiles,
+  keywords, clientBusinessName, competitorBusinessName
+}) {
+  // 1. Generate grid coordinates
+  const points = generateGridPoints(centerLat, centerLng, gridSize, spacingMiles);
+  // points = [{lat, lng, row, col}, ...] (e.g., 169 for 13×13)
+
+  // 2. Build API tasks: points × keywords
+  const tasks = [];
+  for (const keyword of keywords) {
+    for (const point of points) {
+      tasks.push({
+        keyword,
+        location_coordinate: `${point.lat},${point.lng},17z`,
+        language_code: 'en',
+        depth: 20,
+        tag: JSON.stringify({ keyword, row: point.row, col: point.col })
+      });
+    }
+  }
+
+  // 3. Batch into groups of 100 and POST
+  // /serp/google/maps/task_post (standard queue, cheapest)
+  // OR /serp/google/maps/live/advanced (real-time, 2x cost)
+  const batches = chunk(tasks, 100);
+  const taskIds = [];
+  for (const batch of batches) {
+    const response = await post(`${BASE_URL}/serp/google/maps/task_post`, batch);
+    taskIds.push(...response.tasks.map(t => t.id));
+  }
+
+  // 4. Poll for results (standard queue takes 5-30 seconds)
+  // GET /serp/google/maps/task_get/{task_id}
+  // Collect all results
+
+  // 5. Parse results into grid structure
+  // For each point, find client rank and competitor rank
+  const gridResults = {};
+  for (const result of allResults) {
+    const { keyword, row, col } = JSON.parse(result.tag);
+    const clientRank = findRank(result.items, clientBusinessName);
+    const competitorRank = findRank(result.items, competitorBusinessName);
+
+    if (!gridResults[keyword]) gridResults[keyword] = [];
+    gridResults[keyword].push({
+      row, col,
+      lat: result.location_coordinate.split(',')[0],
+      lng: result.location_coordinate.split(',')[1],
+      clientRank,     // null if not found in top 20
+      competitorRank, // null if not found in top 20
+      topResults: result.items.slice(0, 5).map(i => ({
+        rank: i.rank_absolute,
+        name: i.title,
+        rating: i.rating?.value,
+        reviews: i.rating?.votes_count,
+        domain: i.domain
+      }))
+    });
+  }
+
+  // 6. Calculate metrics per keyword
+  const metrics = {};
+  for (const [keyword, points] of Object.entries(gridResults)) {
+    const total = points.length;
+    const clientTop3 = points.filter(p => p.clientRank && p.clientRank <= 3).length;
+    const clientRanked = points.filter(p => p.clientRank != null);
+    const compTop3 = points.filter(p => p.competitorRank && p.competitorRank <= 3).length;
+    const compRanked = points.filter(p => p.competitorRank != null);
+
+    metrics[keyword] = {
+      clientSoLV: ((clientTop3 / total) * 100).toFixed(1),
+      clientAvgRank: clientRanked.length > 0
+        ? (clientRanked.reduce((s, p) => s + p.clientRank, 0) / clientRanked.length).toFixed(1)
+        : null,
+      competitorSoLV: ((compTop3 / total) * 100).toFixed(1),
+      competitorAvgRank: compRanked.length > 0
+        ? (compRanked.reduce((s, p) => s + p.competitorRank, 0) / compRanked.length).toFixed(1)
+        : null,
+      totalPoints: total,
+      clientVisiblePoints: clientRanked.length,
+      clientTop3Points: clientTop3
+    };
+  }
+
+  return { gridResults, metrics };
+}
+
+/**
+ * Generate lat/lng grid points centered on a location
+ */
+function generateGridPoints(centerLat, centerLng, gridSize, spacingMiles) {
+  const points = [];
+  const halfGrid = Math.floor(gridSize / 2);
+
+  // Degrees per mile varies by latitude
+  const latDegreesPerMile = 1 / 69.0; // ~69 miles per degree latitude
+  const lngDegreesPerMile = 1 / (69.0 * Math.cos(centerLat * Math.PI / 180));
+
+  for (let row = -halfGrid; row <= halfGrid; row++) {
+    for (let col = -halfGrid; col <= halfGrid; col++) {
+      points.push({
+        lat: parseFloat((centerLat + (row * spacingMiles * latDegreesPerMile)).toFixed(7)),
+        lng: parseFloat((centerLng + (col * spacingMiles * lngDegreesPerMile)).toFixed(7)),
+        row: row + halfGrid, // 0-indexed
+        col: col + halfGrid
+      });
+    }
+  }
+  return points;
+}
+
+function findRank(items, businessName) {
+  if (!items || !businessName) return null;
+  const normalized = businessName.toLowerCase().trim();
+  const match = items.find(item =>
+    item.title && item.title.toLowerCase().includes(normalized)
+  );
+  return match ? match.rank_absolute : null;
+}
+
+// ─── Site Crawl (On-Page API) ────────────────────────────
+
+/**
+ * Start a site crawl and return task ID
+ */
+async function startSiteCrawl({ targetUrl, maxPages = 500 }) {
+  // POST /on_page/task_post
+  // Body: [{
+  //   target: targetUrl,
+  //   max_crawl_pages: maxPages,
+  //   load_resources: true,
+  //   enable_javascript: true,
+  //   enable_browser_rendering: true,
+  //   // This crawls the site and makes data available for subsequent calls
+  // }]
+  // Returns: task_id
+  //
+  // Cost: $0.00015 per page crawled
+}
+
+/**
+ * Get crawl summary (overall site health metrics)
+ */
+async function getCrawlSummary(taskId) {
+  // GET /on_page/summary/{task_id}
+  // Returns:
+  // {
+  //   crawl_progress: "finished",
+  //   pages_count, pages_crawled,
+  //   broken_links_count, broken_pages_count,
+  //   duplicate_title_count, duplicate_description_count,
+  //   duplicate_content_count,
+  //   redirect_count, non_indexable_count,
+  //   pages_with_no_h1, pages_with_no_title,
+  //   pages_with_no_description,
+  //   pages_with_large_page_size,
+  //   is_https, has_robots_txt, has_sitemap,
+  //   ...
+  // }
+}
+
+/**
+ * Get specific page data from crawl
+ */
+async function getCrawlPages(taskId, filters) {
+  // POST /on_page/pages
+  // Can filter by: status_code, resource_type, meta.content, etc.
+  // Returns detailed page-level data:
+  //   url, status_code, title, description, h1, h2s, h3s,
+  //   content_length, word_count, internal_links_count,
+  //   external_links_count, images_count, images_without_alt,
+  //   load_time, encoded_size, cache_control,
+  //   meta.canonical, meta.robots, meta.hreflang,
+  //   schema_types (what schema markup is present)
+}
+
+// ─── Backlinks API ───────────────────────────────────────
+
+/**
+ * Get backlink summary for a domain
+ */
+async function getBacklinkSummary(domain) {
+  // POST /backlinks/summary/live
+  // Body: [{ target: domain, internal_list_limit: 0, backlinks_status_type: "live" }]
+  // Returns:
+  // {
+  //   rank (DataForSEO domain rank),
+  //   backlinks, referring_domains, referring_main_domains,
+  //   broken_backlinks, referring_ips, referring_subnets,
+  //   backlinks_spam_score
+  // }
+}
+
+/**
+ * Get top backlinks for a domain
+ */
+async function getTopBacklinks(domain, limit = 10) {
+  // POST /backlinks/backlinks/live
+  // Body: [{
+  //   target: domain,
+  //   limit: limit,
+  //   order_by: ["rank,desc"],  // highest authority first
+  //   backlinks_status_type: "live",
+  //   filters: [["dofollow", "=", true]]
+  // }]
+  // Returns per backlink:
+  //   { url_from, domain_from, rank, page_from_rank, anchor, first_seen, is_new }
+}
+
+module.exports = {
+  getOrganicSerp, batchOrganicSerp,
+  getMapsSerp, runGeoGrid, generateGridPoints,
+  startSiteCrawl, getCrawlSummary, getCrawlPages,
+  getBacklinkSummary, getTopBacklinks
+};
+```
+
+### Google PageSpeed Insights API
+
+```javascript
+// server/services/pagespeed.js
+
+const PSI_API_KEY = process.env.GOOGLE_PSI_API_KEY; // Optional, increases rate limits
+
+/**
+ * Get Core Web Vitals + Lighthouse audit for a URL
+ * FREE API — no cost per call, 25K/day with API key
+ */
+async function getPageSpeedInsights(url, strategy = 'mobile') {
+  // GET https://www.googleapis.com/pagespeedonline/v5/runPagespeed
+  // Params:
+  //   url: url
+  //   strategy: 'mobile' or 'desktop'
+  //   category: 'performance'  (also: accessibility, seo, best-practices)
+  //   key: PSI_API_KEY
+  //
+  // Returns:
+  // {
+  //   lighthouseResult: {
+  //     categories: { performance: { score: 0.85 } },
+  //     audits: {
+  //       'largest-contentful-paint': { numericValue: 2400 }, // ms
+  //       'interaction-to-next-paint': { numericValue: 180 },
+  //       'cumulative-layout-shift': { numericValue: 0.05 },
+  //       'speed-index': { numericValue: 3200 },
+  //       'total-blocking-time': { numericValue: 150 },
+  //       'first-contentful-paint': { numericValue: 1200 },
+  //       'is-on-https': { score: 1 },  // binary
+  //       'redirects': { score: 1 },
+  //       'viewport': { score: 1 },  // mobile viewport configured
+  //       'document-title': { score: 1 },
+  //       'meta-description': { score: 1 },
+  //       'http-status-code': { score: 1 },
+  //       'robots-txt': { score: 1 },
+  //       'crawlable-anchors': { score: 1 },
+  //       'structured-data': { details: { items: [...] } }
+  //     }
+  //   },
+  //   loadingExperience: {  // CrUX field data (real user data)
+  //     metrics: {
+  //       LARGEST_CONTENTFUL_PAINT_MS: { percentile: 2100, category: "FAST" },
+  //       INTERACTION_TO_NEXT_PAINT: { percentile: 150, category: "FAST" },
+  //       CUMULATIVE_LAYOUT_SHIFT: { percentile: 0.04, category: "FAST" }
+  //     }
+  //   }
+  // }
+}
+
+/**
+ * Run the 37 binary technical checks against PageSpeed + crawl data
+ * Returns findings as pass/fail/warning
+ */
+function runTechnicalChecks(psiData, crawlData) {
+  const findings = [];
+
+  // ── Speed & Performance ──
+  const lcp = psiData.lighthouseResult.audits['largest-contentful-paint'].numericValue;
+  findings.push({
+    category: 'speed',
+    check_name: 'Largest Contentful Paint (LCP)',
+    status: lcp <= 2500 ? 'pass' : lcp <= 4000 ? 'warning' : 'fail',
+    value: `${(lcp / 1000).toFixed(1)}s`,
+    threshold: '≤ 2.5s',
+    impact: lcp > 4000 ? 'high' : 'medium'
+  });
+
+  const inp = psiData.lighthouseResult.audits['interaction-to-next-paint']?.numericValue;
+  findings.push({
+    category: 'speed',
+    check_name: 'Interaction to Next Paint (INP)',
+    status: inp <= 200 ? 'pass' : inp <= 500 ? 'warning' : 'fail',
+    value: `${inp}ms`,
+    threshold: '≤ 200ms',
+    impact: inp > 500 ? 'high' : 'medium'
+  });
+
+  const cls = psiData.lighthouseResult.audits['cumulative-layout-shift'].numericValue;
+  findings.push({
+    category: 'speed',
+    check_name: 'Cumulative Layout Shift (CLS)',
+    status: cls <= 0.1 ? 'pass' : cls <= 0.25 ? 'warning' : 'fail',
+    value: cls.toFixed(3),
+    threshold: '≤ 0.1',
+    impact: cls > 0.25 ? 'high' : 'medium'
+  });
+
+  const perfScore = psiData.lighthouseResult.categories.performance.score * 100;
+  findings.push({
+    category: 'speed',
+    check_name: 'Overall Performance Score',
+    status: perfScore >= 90 ? 'pass' : perfScore >= 50 ? 'warning' : 'fail',
+    value: `${perfScore}/100`,
+    threshold: '≥ 90',
+    impact: perfScore < 50 ? 'high' : 'medium'
+  });
+
+  // ── Security ──
+  findings.push({
+    category: 'security',
+    check_name: 'HTTPS',
+    status: psiData.lighthouseResult.audits['is-on-https']?.score === 1 ? 'pass' : 'fail',
+    value: psiData.lighthouseResult.audits['is-on-https']?.score === 1 ? 'Yes' : 'No',
+    threshold: 'Required',
+    impact: 'high'
+  });
+
+  // ── Crawlability (from DataForSEO crawl) ──
+  if (crawlData) {
+    findings.push({
+      category: 'crawlability',
+      check_name: 'Has robots.txt',
+      status: crawlData.has_robots_txt ? 'pass' : 'fail',
+      value: crawlData.has_robots_txt ? 'Yes' : 'No',
+      threshold: 'Required',
+      impact: 'high'
+    });
+
+    findings.push({
+      category: 'crawlability',
+      check_name: 'Has XML Sitemap',
+      status: crawlData.has_sitemap ? 'pass' : 'fail',
+      value: crawlData.has_sitemap ? 'Yes' : 'No',
+      threshold: 'Required',
+      impact: 'medium'
+    });
+
+    findings.push({
+      category: 'crawlability',
+      check_name: 'Broken Links',
+      status: crawlData.broken_links_count === 0 ? 'pass'
+             : crawlData.broken_links_count <= 5 ? 'warning' : 'fail',
+      value: `${crawlData.broken_links_count} broken links`,
+      threshold: '0',
+      impact: crawlData.broken_links_count > 10 ? 'high' : 'medium'
+    });
+
+    findings.push({
+      category: 'crawlability',
+      check_name: 'Redirect Chains',
+      status: crawlData.redirect_count <= 3 ? 'pass' : 'warning',
+      value: `${crawlData.redirect_count} redirects`,
+      threshold: '≤ 3',
+      impact: 'medium'
+    });
+
+    findings.push({
+      category: 'crawlability',
+      check_name: 'Non-Indexable Pages',
+      status: crawlData.non_indexable_count === 0 ? 'pass' : 'warning',
+      value: `${crawlData.non_indexable_count}`,
+      threshold: '0 unexpected',
+      impact: 'medium'
+    });
+
+    // ── On-Page SEO ──
+    findings.push({
+      category: 'onpage',
+      check_name: 'Pages Missing Title Tags',
+      status: crawlData.pages_with_no_title === 0 ? 'pass' : 'fail',
+      value: `${crawlData.pages_with_no_title}`,
+      threshold: '0',
+      impact: 'high'
+    });
+
+    findings.push({
+      category: 'onpage',
+      check_name: 'Pages Missing Meta Descriptions',
+      status: crawlData.pages_with_no_description === 0 ? 'pass' : 'warning',
+      value: `${crawlData.pages_with_no_description}`,
+      threshold: '0',
+      impact: 'medium'
+    });
+
+    findings.push({
+      category: 'onpage',
+      check_name: 'Pages Missing H1',
+      status: crawlData.pages_with_no_h1 === 0 ? 'pass' : 'fail',
+      value: `${crawlData.pages_with_no_h1}`,
+      threshold: '0',
+      impact: 'high'
+    });
+
+    findings.push({
+      category: 'onpage',
+      check_name: 'Duplicate Titles',
+      status: crawlData.duplicate_title_count === 0 ? 'pass' : 'warning',
+      value: `${crawlData.duplicate_title_count}`,
+      threshold: '0',
+      impact: 'medium'
+    });
+
+    findings.push({
+      category: 'onpage',
+      check_name: 'Duplicate Meta Descriptions',
+      status: crawlData.duplicate_description_count === 0 ? 'pass' : 'warning',
+      value: `${crawlData.duplicate_description_count}`,
+      threshold: '0',
+      impact: 'low'
+    });
+  }
+
+  // ── Schema (from crawl page data) ──
+  // Check if LocalBusiness schema exists on homepage
+  // Check if FAQ schema exists on any page with FAQ content
+  // Check if Service schema exists on service pages
+  // These require parsing the crawl pages data
+
+  return findings;
+}
+
+/**
+ * Calculate letter grade from findings
+ */
+function calculateSiteHealthGrade(findings) {
+  const total = findings.length;
+  const passed = findings.filter(f => f.status === 'pass').length;
+  const ratio = passed / total;
+
+  if (ratio >= 0.9) return 'A';
+  if (ratio >= 0.8) return 'B';
+  if (ratio >= 0.65) return 'C';
+  if (ratio >= 0.5) return 'D';
+  return 'F';
+}
+
+module.exports = { getPageSpeedInsights, runTechnicalChecks, calculateSiteHealthGrade };
+```
+
+### LLM Calls (Haiku + Sonnet)
+
+```javascript
+// server/services/llm.js
+
+const Anthropic = require('@anthropic-ai/sdk');
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+/**
+ * Classify keywords by intent and page type
+ * Uses Haiku for speed and cost ($0.02 per batch of ~200 keywords)
+ */
+async function classifyKeywords(keywords, services, cities) {
+  // Chunk keywords into batches of 200
+  const batches = chunk(keywords, 200);
+  const results = [];
+
+  for (const batch of batches) {
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 4096,
+      temperature: 0,
+      system: `You are a keyword classification engine for local SEO.
+Classify each keyword by search intent and the type of page it should target.
+
+Intent types: transactional, informational, navigational, comparison
+Page types: service_page, city_page, subcity_page, comparison_page, resource_page, faq_page
+
+Return ONLY valid JSON array. No explanation.`,
+      messages: [{
+        role: 'user',
+        content: `Services: ${JSON.stringify(services)}
+Cities: ${JSON.stringify(cities)}
+
+Classify these keywords:
+${JSON.stringify(batch.map(k => k.keyword))}
+
+Return JSON: [{"keyword": "...", "intent": "...", "page_type": "...", "target_service": "...", "target_city": "..."}]`
+      }]
+    });
+
+    results.push(...JSON.parse(response.content[0].text));
+  }
+  return results;
+}
+
+/**
+ * Score an existing page against its target keyword
+ * Uses Haiku with prompt caching (system prompt cached across 30+ calls)
+ */
+async function scorePage(pageUrl, pageContent, targetKeyword, intent) {
+  const response = await client.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 2048,
+    temperature: 0,
+    system: [{
+      type: 'text',
+      text: PAGE_SCORING_RUBRIC, // 23-criteria rubric (static, will be cached)
+      cache_control: { type: 'ephemeral' }
+    }],
+    messages: [{
+      role: 'user',
+      content: `URL: ${pageUrl}
+Target Keyword: ${targetKeyword}
+Intent: ${intent}
+Page Content (truncated to 3000 chars):
+${pageContent.slice(0, 3000)}
+
+Score this page. Return JSON:
+{
+  "total_score": 0-100,
+  "action": "keep|optimize|rewrite|create_new",
+  "estimated_optimization_hours": 0-8,
+  "key_improvements": ["..."],
+  "category_scores": {"relevance": 0-25, "completeness": 0-25, "technical": 0-25, "geo_optimization": 0-25}
+}`
+    }]
+  });
+
+  return JSON.parse(response.content[0].text);
+}
+
+/**
+ * Analyze review sentiment and extract themes
+ */
+async function analyzeReviews(reviews, businessName) {
+  const response = await client.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 1024,
+    temperature: 0,
+    messages: [{
+      role: 'user',
+      content: `Analyze these reviews for ${businessName}. Extract sentiment themes.
+
+Reviews:
+${JSON.stringify(reviews.slice(0, 50))}
+
+Return JSON:
+{
+  "overall_sentiment": "positive|neutral|negative",
+  "positive_themes": ["fast response time", "professional", ...],
+  "negative_themes": ["pricing concerns", ...],
+  "service_mentions": {"roof repair": 12, "roof replacement": 8, ...},
+  "location_mentions": {"Austin": 15, "Round Rock": 3, ...}
+}`
+    }]
+  });
+
+  return JSON.parse(response.content[0].text);
+}
+
+/**
+ * Generate executive narrative for the action plan
+ * Uses Sonnet for higher quality client-facing copy
+ */
+async function generateActionPlanNarrative(auditSummary) {
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-5-20241022',
+    max_tokens: 2048,
+    temperature: 0.3,
+    messages: [{
+      role: 'user',
+      content: `You are writing a brief executive summary for a local business SEO audit.
+The audience is a non-technical business owner. Keep it conversational and focused on business impact.
+
+Audit Summary:
+${JSON.stringify(auditSummary)}
+
+Write 3-4 paragraphs covering:
+1. Current competitive position (use specific competitor names)
+2. The biggest opportunities (revenue framing, not technical)
+3. Recommended investment and expected timeline
+4. One compelling reason to act now
+
+Do NOT use jargon. Frame everything in terms of leads, calls, and revenue.`
+    }]
+  });
+
+  return response.content[0].text;
+}
+
+// Static rubric for page scoring (cached via prompt caching)
+const PAGE_SCORING_RUBRIC = `You are a page quality scoring engine for local SEO.
+
+Score each page on a 100-point rubric across 4 categories (25 points each):
+
+RELEVANCE (25 pts):
+- Title tag contains target keyword (5 pts)
+- H1 contains target keyword (5 pts)
+- Meta description mentions keyword (3 pts)
+- First 100 words mention keyword (4 pts)
+- Content is topically relevant throughout (8 pts)
+
+COMPLETENESS (25 pts):
+- Word count >= 800 (5 pts)
+- Has FAQ section (3 pts)
+- Has answer capsules (120-150 char direct answers after H2s) (5 pts)
+- Includes pricing/cost information (3 pts)
+- Has proof blocks (licenses, years, warranties) (4 pts)
+- Internal links to related pages (5 pts)
+
+TECHNICAL (25 pts):
+- Has LocalBusiness or Service schema (5 pts)
+- Has FAQ schema if FAQ content exists (3 pts)
+- Images have alt text with keyword (3 pts)
+- Proper heading hierarchy (H1>H2>H3) (4 pts)
+- Page loads in < 3 seconds (3 pts)
+- Mobile-friendly layout (4 pts)
+- Has canonical tag (3 pts)
+
+GEO OPTIMIZATION (25 pts):
+- Mentions target city/location in content (5 pts)
+- Has location-specific information (landmarks, neighborhoods) (5 pts)
+- NAP (name, address, phone) visible on page (3 pts)
+- Embedded Google Map (3 pts)
+- Local testimonials or case studies (4 pts)
+- Service area mentioned (5 pts)
+
+Return structured JSON with scores per category and overall.`;
+
+module.exports = { classifyKeywords, scorePage, analyzeReviews, generateActionPlanNarrative };
+```
+
+---
+
+## Pipeline Orchestrator
+
+```javascript
+// server/pipeline/orchestrator.js
+
+const { EventEmitter } = require('events');
+const keywordPlanner = require('../services/googleAdsKeywordPlanner');
+const d4seo = require('../services/dataForSeo');
+const pagespeed = require('../services/pagespeed');
+const llm = require('../services/llm');
+const db = require('../services/supabase');
+
+class AuditPipeline extends EventEmitter {
+  constructor(auditId) {
+    super();
+    this.auditId = auditId;
+    this.audit = null;
+  }
+
+  async run() {
+    this.audit = await db.getAudit(this.auditId);
+
+    const stages = [
+      { name: 'intake',           fn: () => this.stageIntake() },
+      { name: 'technical_audit',  fn: () => this.stageTechnicalAudit() },
+      { name: 'keyword_research', fn: () => this.stageKeywordResearch() },
+      { name: 'serp_rankings',    fn: () => this.stageSerpRankings() },
+      { name: 'geo_grid',         fn: () => this.stageGeoGrid(),         skip: this.audit.business_type === 'national' },
+      { name: 'competitive_intel',fn: () => this.stageCompetitiveIntel() },
+      { name: 'geo_visibility',   fn: () => this.stageGeoVisibility() },
+      { name: 'review_health',    fn: () => this.stageReviewHealth() },
+      { name: 'gap_analysis',     fn: () => this.stageGapAnalysis() },
+      { name: 'content_scoring',  fn: () => this.stageContentScoring() },
+      { name: 'scoping',          fn: () => this.stageScoping() },
+      { name: 'report',           fn: () => this.stageReport() },
+    ];
+
+    for (const stage of stages) {
+      if (stage.skip) {
+        this.emit('stage_skip', stage.name);
+        continue;
+      }
+
+      await db.logStageStart(this.auditId, stage.name);
+      this.emit('stage_start', stage.name);
+
+      try {
+        const result = await stage.fn();
+        await db.logStageComplete(this.auditId, stage.name, result);
+        this.emit('stage_complete', stage.name, result);
+      } catch (error) {
+        await db.logStageError(this.auditId, stage.name, error.message);
+        this.emit('stage_error', stage.name, error);
+        // Continue with degraded data — don't halt pipeline
+      }
+
+      await db.updateAudit(this.auditId, { current_stage: stage.name });
+    }
+
+    await db.updateAudit(this.auditId, { status: 'completed' });
+    this.emit('pipeline_complete');
+  }
+
+  // ── Stage 1: Intake ──────────────────────────────────────
+  async stageIntake() {
+    // 1. Start site crawl (DataForSEO)
+    const crawlTaskId = await d4seo.startSiteCrawl({
+      targetUrl: this.audit.business_url,
+      maxPages: 500
+    });
+
+    // 2. Geocode business address → lat/lng (if not already set)
+    if (!this.audit.business_lat) {
+      const coords = await geocodeAddress(this.audit.business_address);
+      await db.updateAudit(this.auditId, {
+        business_lat: coords.lat,
+        business_lng: coords.lng
+      });
+      this.audit.business_lat = coords.lat;
+      this.audit.business_lng = coords.lng;
+    }
+
+    // 3. Wait for crawl to complete (poll every 5 seconds)
+    let crawlComplete = false;
+    while (!crawlComplete) {
+      const summary = await d4seo.getCrawlSummary(crawlTaskId);
+      if (summary.crawl_progress === 'finished') {
+        crawlComplete = true;
+        await db.updateAudit(this.auditId, { crawl_task_id: crawlTaskId });
+      } else {
+        await sleep(5000);
+      }
+    }
+
+    // 4. Extract page hierarchy from crawl
+    const pages = await d4seo.getCrawlPages(crawlTaskId, { status_code: 200 });
+
+    // 5. If services not yet classified, use Haiku to extract from page titles/content
+    if (this.audit.services.length === 0) {
+      const extractedServices = await llm.extractServicesFromPages(pages);
+      await db.updateAudit(this.auditId, { services: extractedServices });
+      this.audit.services = extractedServices;
+    }
+
+    return { crawlTaskId, pagesFound: pages.length, services: this.audit.services.length };
+  }
+
+  // ── Stage 2: Technical Audit ──────────────────────────────
+  async stageTechnicalAudit() {
+    // 1. Run PageSpeed Insights (mobile + desktop)
+    const [mobileData, desktopData] = await Promise.all([
+      pagespeed.getPageSpeedInsights(this.audit.business_url, 'mobile'),
+      pagespeed.getPageSpeedInsights(this.audit.business_url, 'desktop')
+    ]);
+
+    // 2. Get crawl data
+    const crawlSummary = await d4seo.getCrawlSummary(this.audit.crawl_task_id);
+
+    // 3. Run 37 binary checks
+    const findings = pagespeed.runTechnicalChecks(mobileData, crawlSummary);
+
+    // 4. Calculate grade
+    const grade = pagespeed.calculateSiteHealthGrade(findings);
+
+    // 5. Save to DB
+    await db.bulkInsertTechnicalFindings(this.auditId, findings);
+    await db.updateAudit(this.auditId, { site_health_grade: grade });
+
+    return {
+      grade,
+      total: findings.length,
+      pass: findings.filter(f => f.status === 'pass').length,
+      fail: findings.filter(f => f.status === 'fail').length
+    };
+  }
+
+  // ── Stage 3: Keyword Research (Google Ads Keyword Planner) ──
+  async stageKeywordResearch() {
+    const { services, service_area_cities } = this.audit;
+
+    // 1. Generate seed keywords from services
+    const seedKeywords = services.flatMap(s => s.keywords || [s.name]);
+
+    // 2. Look up geo target IDs for primary city + DMA
+    const primaryCity = service_area_cities[0];
+    const geoTarget = await keywordPlanner.lookupGeoTarget(
+      primaryCity.name, primaryCity.state
+    );
+
+    // 3. Get keyword ideas (DMA-level for broad discovery)
+    const keywordIdeas = await keywordPlanner.generateKeywordIdeas({
+      seedKeywords,
+      url: this.audit.business_url,
+      geoTargetId: geoTarget.id
+    });
+
+    // 4. Get city-specific volumes for top keywords (top 6 cities)
+    const topCities = service_area_cities.slice(0, 6);
+    const topKeywords = keywordIdeas
+      .sort((a, b) => b.avg_monthly_searches - a.avg_monthly_searches)
+      .slice(0, 100)
+      .map(k => k.keyword);
+
+    for (const city of topCities) {
+      const cityGeo = await keywordPlanner.lookupGeoTarget(city.name, city.state);
+      const cityMetrics = await keywordPlanner.getHistoricalMetrics({
+        keywords: topKeywords,
+        geoTargetId: cityGeo.id
+      });
+      // Merge city-specific volumes back into keyword data
+    }
+
+    // 5. Classify keywords via Haiku (intent + page type)
+    const classified = await llm.classifyKeywords(
+      keywordIdeas,
+      services.map(s => s.name),
+      topCities.map(c => c.name)
+    );
+
+    // 6. Match keywords to existing pages from crawl
+    // Compare keyword targets to actual page URLs/titles from crawl data
+
+    // 7. Save to DB
+    await db.bulkInsertKeywords(this.auditId, classified);
+
+    // 8. Generate PPC forecast (powers Google Ads Projection section)
+    const commercialKeywords = classified
+      .filter(k => k.intent === 'transactional')
+      .slice(0, 50);
+
+    const forecast = await keywordPlanner.generateForecast({
+      keywords: commercialKeywords.map(k => k.keyword),
+      geoTargetId: geoTarget.id,
+      dailyBudgetMicros: 100000000 // $100/day default
+    });
+
+    await db.bulkInsertPpcForecast(this.auditId, forecast);
+
+    return {
+      totalKeywords: classified.length,
+      withExistingPages: classified.filter(k => k.existing_page_url).length,
+      gaps: classified.filter(k => !k.existing_page_url).length
+    };
+  }
+
+  // ── Stage 4: SERP Rankings ────────────────────────────────
+  async stageSerpRankings() {
+    const keywords = await db.getAuditKeywords(this.auditId);
+    const highPriority = keywords
+      .sort((a, b) => b.search_volume - a.search_volume)
+      .slice(0, 200); // Top 200 keywords by volume
+
+    // Batch organic SERP checks
+    const serpResults = await d4seo.batchOrganicSerp(
+      highPriority.map(k => ({
+        keyword: k.keyword,
+        locationName: k.target_city
+          ? `${k.target_city},${this.audit.service_area_cities[0]?.state},United States`
+          : `${this.audit.service_area_cities[0]?.name},${this.audit.service_area_cities[0]?.state},United States`
+      }))
+    );
+
+    // Parse: find client rank + competitor ranks + AI overview presence
+    for (const result of serpResults) {
+      const keyword = keywords.find(k => k.keyword === result.keyword);
+      if (!keyword) continue;
+
+      const clientRank = result.items?.find(i =>
+        i.domain?.includes(new URL(this.audit.business_url).hostname)
+      )?.rank_absolute || null;
+
+      const aiOverview = result.items?.find(i => i.type === 'ai_overview');
+
+      const competitorRanks = {};
+      for (const comp of this.audit.competitors) {
+        const rank = result.items?.find(i => i.domain?.includes(comp.domain))?.rank_absolute;
+        if (rank) competitorRanks[comp.domain] = rank;
+      }
+
+      await db.updateKeyword(keyword.id, {
+        current_organic_rank: clientRank,
+        in_ai_overview: !!aiOverview,
+        competitor_ranks: competitorRanks
+      });
+    }
+
+    return { checked: serpResults.length };
+  }
+
+  // ── Stage 5: Geo Grid (skip for national) ─────────────────
+  async stageGeoGrid() {
+    const gridKeywords = this.audit.geo_grid_keywords; // up to 10
+    const { business_lat, business_lng, geo_grid_size, geo_grid_spacing_miles } = this.audit;
+    const topCompetitor = this.audit.competitors[0]; // Primary competitor
+
+    const { gridResults, metrics } = await d4seo.runGeoGrid({
+      centerLat: business_lat,
+      centerLng: business_lng,
+      gridSize: geo_grid_size,
+      spacingMiles: geo_grid_spacing_miles,
+      keywords: gridKeywords.map(k => k.keyword),
+      clientBusinessName: this.audit.business_name,
+      competitorBusinessName: topCompetitor?.name
+    });
+
+    // Save grid data to DB
+    for (const [keyword, points] of Object.entries(gridResults)) {
+      const grid = await db.insertGeoGrid(this.auditId, {
+        keyword,
+        grid_size: geo_grid_size,
+        spacing_miles: geo_grid_spacing_miles,
+        center_lat: business_lat,
+        center_lng: business_lng,
+        client_solv: metrics[keyword].clientSoLV,
+        client_avg_rank: metrics[keyword].clientAvgRank,
+        competitor_solv: metrics[keyword].competitorSoLV,
+        competitor_name: topCompetitor?.name,
+        competitor_avg_rank: metrics[keyword].competitorAvgRank
+      });
+
+      await db.bulkInsertGridPoints(grid.id, points);
+    }
+
+    // Update audit summary with primary keyword SoLV
+    const primaryKeyword = gridKeywords[0]?.keyword;
+    if (primaryKeyword && metrics[primaryKeyword]) {
+      await db.updateAudit(this.auditId, {
+        share_of_local_voice: parseFloat(metrics[primaryKeyword].clientSoLV),
+        average_grid_rank: parseFloat(metrics[primaryKeyword].clientAvgRank)
+      });
+    }
+
+    return {
+      gridsGenerated: Object.keys(gridResults).length,
+      totalPoints: Object.values(gridResults).flat().length
+    };
+  }
+
+  // ── Stage 6: Competitive Intelligence ──────────────────────
+  async stageCompetitiveIntel() {
+    const competitors = this.audit.competitors;
+
+    for (const comp of competitors) {
+      // Get domain metrics
+      const backlinks = await d4seo.getBacklinkSummary(comp.domain);
+      const topLinks = await d4seo.getTopBacklinks(comp.domain, 10);
+
+      // Get Google reviews
+      // (Use Google Places API text search to find their place_id, then get reviews)
+
+      await db.insertCompetitor(this.auditId, {
+        domain: comp.domain,
+        business_name: comp.name,
+        domain_rating: backlinks.rank,
+        referring_domains: backlinks.referring_domains,
+        top_backlinks: topLinks,
+        // ... other fields
+      });
+    }
+
+    // Also get client's own metrics for comparison
+    const clientBacklinks = await d4seo.getBacklinkSummary(
+      new URL(this.audit.business_url).hostname
+    );
+
+    return { competitorsAnalyzed: competitors.length };
+  }
+
+  // ── Stage 7: GEO/AI Visibility ─────────────────────────────
+  async stageGeoVisibility() {
+    // DELEGATE TO EXISTING GEO VISIBILITY ENGINE
+    // The Replit app already has Gemini + OpenAI integration for this.
+    // This stage calls the existing GEO visibility functions.
+    // Just ensure the results are saved in a format the new dashboard can read.
+
+    // Existing implementation handles:
+    // - Generate service category prompts
+    // - Query ChatGPT + Gemini with those prompts
+    // - Evaluate if client appears in responses
+    // - Score visibility per service category
+
+    return { /* existing GEO results */ };
+  }
+
+  // ── Stage 8: Review Health ─────────────────────────────────
+  async stageReviewHealth() {
+    // Google Places API for client + competitors
+    // Extract: review count, rating, most recent review, monthly velocity
+    // Run Haiku sentiment analysis on review text
+
+    return { /* review data */ };
+  }
+
+  // ── Stage 9: Gap Analysis ──────────────────────────────────
+  async stageGapAnalysis() {
+    const keywords = await db.getAuditKeywords(this.auditId);
+    const { services, service_area_cities } = this.audit;
+
+    const gaps = [];
+
+    // Service page gaps: keyword has no matching service page
+    for (const service of services) {
+      const serviceKws = keywords.filter(k =>
+        k.target_service === service.name && k.page_type === 'service_page'
+      );
+      for (const kw of serviceKws) {
+        if (!kw.existing_page_url) {
+          gaps.push({
+            gap_type: 'service_page',
+            target_keyword: kw.keyword,
+            target_service: service.name,
+            search_volume: kw.search_volume,
+            priority: kw.search_volume > 500 ? 'high' : 'medium',
+            estimated_hours: 3, // service page creation
+            status: 'missing'
+          });
+        }
+      }
+    }
+
+    // City page gaps
+    for (const city of service_area_cities) {
+      const cityKws = keywords.filter(k =>
+        k.target_city === city.name && k.page_type === 'city_page'
+      );
+      for (const kw of cityKws) {
+        if (!kw.existing_page_url) {
+          gaps.push({
+            gap_type: 'city_page',
+            target_keyword: kw.keyword,
+            target_city: city.name,
+            search_volume: kw.search_volume,
+            priority: 'high',
+            estimated_hours: 3, // city page template + localization
+            status: 'missing'
+          });
+        }
+      }
+    }
+
+    // Sub-city page gaps (service × city combos)
+    for (const city of service_area_cities) {
+      for (const service of services) {
+        const subCityKws = keywords.filter(k =>
+          k.target_city === city.name &&
+          k.target_service === service.name &&
+          k.page_type === 'subcity_page'
+        );
+        for (const kw of subCityKws) {
+          if (!kw.existing_page_url) {
+            gaps.push({
+              gap_type: 'subcity_page',
+              target_keyword: kw.keyword,
+              target_city: city.name,
+              target_service: service.name,
+              search_volume: kw.search_volume,
+              priority: 'medium',
+              estimated_hours: 0.5, // bulk creation from template
+              status: 'missing'
+            });
+          }
+        }
+      }
+    }
+
+    // Comparison page opportunities
+    // "X vs Y" for top competitors in each service area
+    for (const comp of this.audit.competitors) {
+      gaps.push({
+        gap_type: 'comparison',
+        target_keyword: `${this.audit.business_name} vs ${comp.name}`,
+        search_volume: null, // estimated
+        priority: 'medium',
+        estimated_hours: 2,
+        status: 'missing'
+      });
+    }
+
+    await db.bulkInsertContentGaps(this.auditId, gaps);
+    await db.updateAudit(this.auditId, {
+      total_content_gaps: gaps.length,
+      total_keyword_gaps: keywords.filter(k => !k.existing_page_url).length
+    });
+
+    return { totalGaps: gaps.length };
+  }
+
+  // ── Stage 10: Content Scoring ──────────────────────────────
+  async stageContentScoring() {
+    const keywords = await db.getAuditKeywords(this.auditId);
+    const withPages = keywords.filter(k => k.existing_page_url);
+    const uniquePages = [...new Set(withPages.map(k => k.existing_page_url))];
+
+    for (const pageUrl of uniquePages) {
+      const pageKeyword = withPages.find(k => k.existing_page_url === pageUrl);
+      // Fetch page content (from crawl data or direct fetch)
+      const pageContent = await fetchPageContent(pageUrl);
+
+      const score = await llm.scorePage(
+        pageUrl, pageContent,
+        pageKeyword.keyword, pageKeyword.intent
+      );
+
+      // If score indicates optimization needed, add to content gaps
+      if (score.action === 'optimize' || score.action === 'rewrite') {
+        await db.insertContentGap(this.auditId, {
+          gap_type: 'needs_optimization',
+          target_keyword: pageKeyword.keyword,
+          estimated_hours: score.estimated_optimization_hours,
+          status: 'needs_optimization'
+        });
+      }
+    }
+
+    return { pagesScored: uniquePages.length };
+  }
+
+  // ── Stage 11: Scoping Engine ───────────────────────────────
+  async stageScoping() {
+    const technicalFindings = await db.getTechnicalFindings(this.auditId);
+    const contentGaps = await db.getContentGaps(this.auditId);
+    const failedChecks = technicalFindings.filter(f => f.status === 'fail');
+
+    const deliverables = [];
+    let sortOrder = 0;
+
+    // Phase 1: Technical fixes + quick wins (Month 1-3)
+    for (const finding of failedChecks) {
+      deliverables.push({
+        phase: 1,
+        category: 'technical',
+        title: `Fix: ${finding.check_name}`,
+        description: finding.description,
+        estimated_hours: finding.impact === 'high' ? 2 : 1,
+        priority: finding.impact,
+        sort_order: sortOrder++
+      });
+    }
+
+    // Phase 1: Schema markup
+    deliverables.push({
+      phase: 1,
+      category: 'technical',
+      title: 'Implement LocalBusiness + Service schema across all pages',
+      estimated_hours: 4,
+      priority: 'high',
+      sort_order: sortOrder++
+    });
+
+    // Phase 1: GBP optimization
+    deliverables.push({
+      phase: 1,
+      category: 'gbp',
+      title: 'Google Business Profile full optimization',
+      estimated_hours: 3,
+      priority: 'high',
+      sort_order: sortOrder++
+    });
+
+    // Phase 2: Content build-out (Month 4-6)
+    const servicePageGaps = contentGaps.filter(g => g.gap_type === 'service_page');
+    if (servicePageGaps.length > 0) {
+      deliverables.push({
+        phase: 2,
+        category: 'content',
+        title: `Create ${servicePageGaps.length} service pages`,
+        description: servicePageGaps.map(g => g.target_keyword).join(', '),
+        estimated_hours: servicePageGaps.length * 3,
+        priority: 'high',
+        sort_order: sortOrder++
+      });
+    }
+
+    const cityPageGaps = contentGaps.filter(g => g.gap_type === 'city_page');
+    if (cityPageGaps.length > 0) {
+      deliverables.push({
+        phase: 2,
+        category: 'geo_pages',
+        title: `Create ${cityPageGaps.length} city pages`,
+        description: cityPageGaps.map(g => g.target_city).join(', '),
+        estimated_hours: cityPageGaps.length * 3, // 3 hrs for template, 0.5 for subsequent
+        priority: 'high',
+        sort_order: sortOrder++
+      });
+    }
+
+    // Phase 3: Scale (Month 7-12)
+    const subCityGaps = contentGaps.filter(g => g.gap_type === 'subcity_page');
+    if (subCityGaps.length > 0) {
+      deliverables.push({
+        phase: 3,
+        category: 'geo_pages',
+        title: `Create ${subCityGaps.length} sub-city pages (service × city)`,
+        estimated_hours: subCityGaps.length * 0.5,
+        priority: 'medium',
+        sort_order: sortOrder++
+      });
+    }
+
+    const comparisonGaps = contentGaps.filter(g => g.gap_type === 'comparison');
+    if (comparisonGaps.length > 0) {
+      deliverables.push({
+        phase: 3,
+        category: 'content',
+        title: `Create ${comparisonGaps.length} comparison pages`,
+        estimated_hours: comparisonGaps.length * 2,
+        priority: 'medium',
+        sort_order: sortOrder++
+      });
+    }
+
+    // Link building
+    deliverables.push({
+      phase: 3,
+      category: 'backlinks',
+      title: 'Monthly link building campaign',
+      description: 'Local directories, guest posts, press releases',
+      estimated_hours: 10, // per month
+      priority: 'medium',
+      sort_order: sortOrder++
+    });
+
+    await db.bulkInsertDeliverables(this.auditId, deliverables);
+
+    const totalHours = deliverables.reduce((sum, d) => sum + d.estimated_hours, 0);
+    await db.updateAudit(this.auditId, {
+      total_deliverables: deliverables.length,
+      estimated_total_hours: totalHours
+    });
+
+    return { deliverables: deliverables.length, totalHours };
+  }
+
+  // ── Stage 12: Report Generation ────────────────────────────
+  async stageReport() {
+    // Gather all data for executive narrative
+    const auditSummary = await db.getFullAuditSummary(this.auditId);
+
+    // Generate narrative via Sonnet
+    const narrative = await llm.generateActionPlanNarrative(auditSummary);
+
+    await db.updateAudit(this.auditId, {
+      executive_narrative: narrative,
+      status: 'completed'
+    });
+
+    // Generate magic link if not already set
+    if (!this.audit.magic_link_token) {
+      const token = generateSecureToken();
+      await db.updateAudit(this.auditId, { magic_link_token: token });
+    }
+
+    return { completed: true };
+  }
+}
+
+module.exports = { AuditPipeline };
+```
+
+---
+
+## Frontend Components
+
+### Onboarding Wizard
+
+```jsx
+// client/components/AuditWizard/index.jsx
+
+// Step 1: Business Info
+// - Business name (text input)
+// - Website URL (text input)
+// - Business address (text input with Google Places autocomplete → lat/lng)
+// - Business type: Local / National (radio)
+// - Industry (dropdown: HVAC, Plumbing, Roofing, Legal, Medical, Dental, etc.)
+
+// Step 2: Service Area (local only)
+// - Auto-detect from GBP if possible
+// - Manual: Add cities one by one with state
+// - Or: enter a radius around business address
+// - Display on mini map as cities are added
+
+// Step 3: Services
+// - Auto-detect from site crawl (once crawl completes in background)
+// - Haiku classifies page titles → suggested services
+// - Specialist confirms, adds, removes services
+// - Each service can have custom keywords added
+
+// Step 4: Competitors
+// - Auto-suggest from SERP data (top 3 ranking domains for primary keywords)
+// - Specialist confirms or replaces (max 3)
+// - Input: business name + URL/domain
+
+// Step 5: Geo Grid Configuration (local only)
+// - Keyword selection: ranked by volume, checkboxes, default top 3 checked, max 10
+// - Grid size: 7×7 / 13×13 (default) / 15×15
+// - Spacing: 0.5mi / 1mi (default) / 2mi / 3mi
+// - Show cost estimate: "Est. cost: $0.51 | Est. time: ~3 min"
+// - Show preview: mini map with grid overlay
+
+// Step 6: Review & Run
+// - Summary of all config
+// - Total estimated cost
+// - [Run Audit] button → triggers pipeline
+```
+
+### Geo Grid Map Component
+
+```jsx
+// client/components/GeoGridMap/index.jsx
+
+import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet';
+
+// Props:
+// - gridData: [{row, col, lat, lng, clientRank, competitorRank, topResults}]
+// - metrics: {clientSoLV, clientAvgRank, competitorSoLV, competitorAvgRank}
+// - keywords: string[] (for toggle)
+// - selectedKeyword: string
+// - onKeywordChange: (keyword) => void
+// - competitorName: string
+// - clientName: string
+// - showCompetitor: boolean (toggle)
+
+// Color scale function:
+function getRankColor(rank) {
+  if (rank === null) return '#9CA3AF'; // gray - not found
+  if (rank <= 3)  return '#22C55E'; // green - top 3
+  if (rank <= 7)  return '#EAB308'; // yellow - 4-7
+  if (rank <= 10) return '#F97316'; // orange - 8-10
+  return '#EF4444'; // red - 11-20
+}
+
+// Each grid point: CircleMarker with color based on rank
+// On click: Popup shows full local pack results at that point
+// Header shows: SoLV badge, Avg Rank badge
+// Toggle: Client view / Competitor view / Side-by-side
+
+// Side-by-side mode:
+// Two maps, synced zoom/pan, left = client, right = competitor
+// Each with SoLV badge overlay
+
+// Summary bar below map:
+// "Share of Local Voice: 50.3% (85/169 points) | Avg Rank: 6.4"
+// "Competitor SoLV: 72.8% (123/169 points) | Avg Rank: 3.2"
+```
+
+### Red Sea Grid Component
+
+```jsx
+// client/components/RedSeaGrid/index.jsx
+
+// Props:
+// - data: keyword × city matrix with rankings
+// - cities: string[] (columns, max 6 at a time)
+// - services: string[] (row groups)
+// - currentPage: number (for city pagination)
+// - onPageChange: (page) => void
+
+// Layout:
+// Rows: grouped by service, one row per keyword
+// Columns: cities (6 max, with < > pagination arrows)
+// Cells:
+//   - Green with rank number if ranking top 10
+//   - Yellow with rank if 11-20
+//   - Red "Not Found" if not ranking
+//   - Small gray number = competitor's rank (subtle)
+//
+// Header row: city names
+// Left column: keyword names (grouped under service headings)
+// Summary footer: "Ranking for X of Y keyword-city combinations"
+
+// Pagination: cities shown 6 at a time
+// Default: 6 highest-opportunity cities first (sorted by total search volume)
+```
+
+### Present Mode
+
+```jsx
+// client/components/PresentMode/index.jsx
+
+// Fullscreen overlay, one section at a time
+// Arrow keys or click to navigate
+// Slide counter: "3 / 10"
+// ESC to exit
+// Each section renders as a full-screen "slide"
+//
+// Slide order matches story arc:
+// 1. Competitive Snapshot
+// 2. Geo Grid
+// 3. AI/GEO Visibility
+// 4. Keyword Rankings (Red Sea)
+// 5. Revenue Opportunity + Google Ads Projection
+// 6. Site Health
+// 7. Content Gap Analysis
+// 8. Backlink Summary
+// 9. Review Health
+// 10. Investment & Action Plan
+```
+
+### Dashboard Shell
+
+```jsx
+// client/pages/audit/[auditId].jsx
+
+// Layout: sidebar nav + main content area
+// Sidebar: section links with status indicators
+//   ● Competitive Snapshot
+//   ● Geo Grid (local only)
+//   ● AI/GEO Visibility
+//   ● Keyword Rankings
+//   ● Revenue Opportunity
+//   ● Site Health
+//   ● Content Gaps
+//   ● Backlinks
+//   ● Reviews
+//   ● Action Plan
+//
+// Header:
+//   Client Name | Audit Date | Overall Score
+//   [Share Link] [Present Mode] [Export PDF]
+//
+// Main area: renders selected section component
+//
+// If audit is still running: show progress bar with stage indicators
+// Each completed stage lights up green in a horizontal pipeline view
+
+// Magic link route: /audit/view/[token]
+// Same dashboard, read-only, no sidebar admin features
+```
+
+---
+
+## API Routes
+
+```javascript
+// server/routes/audit.js
+
+// POST /api/audits - Create new audit (specialist only)
+// GET /api/audits - List audits (specialist only)
+// GET /api/audits/:id - Get audit (specialist or magic link)
+// POST /api/audits/:id/configure - Save onboarding config
+// POST /api/audits/:id/run - Start pipeline
+// GET /api/audits/:id/status - Get pipeline progress (SSE or polling)
+// GET /api/audits/:id/sections/:section - Get section data
+//   sections: snapshot | geogrid | geo_visibility | rankings | revenue |
+//             technical | content_gaps | backlinks | reviews | action_plan
+// GET /api/audits/:id/geogrid/:keyword - Get grid data for specific keyword
+// POST /api/audits/:id/share - Generate magic link
+// GET /api/audit/view/:token - Public access via magic link
+
+// Pipeline progress: Use Server-Sent Events (SSE)
+// Client subscribes to /api/audits/:id/events
+// Server emits: stage_start, stage_complete, stage_error, pipeline_complete
+```
+
+---
+
+## Environment Variables
+
+```bash
+# Google Ads API
+GOOGLE_ADS_CLIENT_ID=
+GOOGLE_ADS_CLIENT_SECRET=
+GOOGLE_ADS_DEVELOPER_TOKEN=
+GOOGLE_ADS_REFRESH_TOKEN=
+GOOGLE_ADS_CUSTOMER_ID=  # MCC account ID
+
+# DataForSEO
+DATAFORSEO_LOGIN=
+DATAFORSEO_PASSWORD=
+
+# Anthropic (Haiku + Sonnet)
+ANTHROPIC_API_KEY=
+
+# OpenAI (existing GEO visibility)
+OPENAI_API_KEY=
+
+# Google Gemini (existing GEO visibility)
+GOOGLE_GEMINI_API_KEY=
+
+# Google PageSpeed Insights (optional, increases rate limits)
+GOOGLE_PSI_API_KEY=
+
+# Google Places API
+GOOGLE_PLACES_API_KEY=
+
+# Supabase
+SUPABASE_URL=
+SUPABASE_SERVICE_KEY=
+```
+
+---
+
+## Cost Summary Per Audit
+
+| Component | Cost |
+|-----------|------|
+| Google Ads Keyword Planner API | FREE |
+| Google PageSpeed Insights API | FREE |
+| Google Places API | FREE |
+| DataForSEO SERP (200 keywords) | ~$0.40 |
+| DataForSEO Maps (13×13 × 5kw × 2 entities) | ~$1.02 |
+| DataForSEO On-Page crawl (500 pages) | ~$0.08 |
+| DataForSEO Backlinks (4 domains) | ~$0.16 |
+| Haiku LLM calls | ~$0.25 |
+| Sonnet LLM calls | ~$0.30 |
+| OpenAI + Gemini (existing GEO) | ~$0.25 |
+| **Total per audit** | **~$2.46** |
+
+At 20 audits/month: ~$49/month variable + DataForSEO minimum commitment.

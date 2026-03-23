@@ -1,0 +1,637 @@
+# SEO Audit Pipeline — Architecture v2.1
+
+## What Changed & Why
+
+**Old approach:** 16-tab Excel workbook with educational sales tabs, raw Ahrefs backlink dumps (2000 rows each), and data overload. The audit told the truth but overwhelmed clients.
+
+**New approach:** A story-driven web dashboard on the existing Replit app (Node + React) with magic-link sharing and Present Mode. Built around one narrative: *"Your competitors are winning. Here's how we catch them."* Every section maps to that story arc. Data serves the narrative, not the other way around.
+
+**Key principles:**
+1. Open with competitive pain (geo grids, SERP gaps)
+2. Show the "red sea" (what's missing, visually)
+3. Quantify the opportunity (leads, revenue)
+4. Present the investment (phased deliverables with hours)
+5. Never show more than a client can absorb in one sitting
+
+**Resolved decisions:**
+- Dashboard lives on existing Replit app domain
+- Magic-link sharing (existing token-based access) for client view
+- No white-labeling needed
+- One-time sales tool (not recurring tracking)
+- Google Ads projection stays (powered by Keyword Planner API)
+- GEO visibility section already built (Gemini + OpenAI) — keep as-is
+- Geo grids built with DataForSEO (not Local Viking)
+- Keyword research moves to Google Ads Keyword Planner API
+
+---
+
+## Keyword Research: Google Ads Keyword Planner API
+
+### Why Switch from DataForSEO Keywords
+
+Google Ads Keyword Planner API is the authoritative source for Google search volume data and **costs $0 per API call** (no per-call charges). DataForSEO pulls from this same source with a middleman markup and lag. For a pipeline that also runs Google Ads projections, using Keyword Planner directly means one data source for both SEO keyword research and PPC forecasting.
+
+### What the Keyword Planner API Provides
+
+**GenerateKeywordIdeas endpoint:**
+- Seed with keywords, URLs, or both
+- Filter by geo (city, DMA, zip code, region) using geo target criterion IDs
+- Returns: search volume, CPC, competition level, seasonal trends
+- Up to 250,000 keyword ideas per URL seed
+- Supports language filtering
+
+**GenerateHistoricalMetrics endpoint:**
+- Historical monthly search data for specific keywords
+- Geo-filtered volume (not just national averages)
+- 12-month trend data
+
+**GenerateForecastMetrics endpoint:**
+- Projected clicks, impressions, cost, conversions per keyword
+- Geo-specific CPC estimates
+- This powers the Google Ads Projection section directly
+
+### Practical Implementation for a Local Service Business
+
+**Example: Roofer in Austin, TX servicing 10 surrounding cities**
+
+```
+Step 1: Seed keyword ideas
+  POST GenerateKeywordIdeas
+  - seed_keywords: ["roofer", "roof repair", "roof replacement", "roofing company"]
+  - url_seed: "https://clientsite.com" (optional, pulls from their site)
+  - geo_targets: [Austin DMA criterion ID]
+  - language: "en"
+  → Returns: 100-500 keyword ideas with volumes
+
+Step 2: Get geo-specific volumes for top keywords
+  POST GenerateHistoricalMetrics
+  - keywords: [top 50-100 from step 1]
+  - geo_targets: [Austin city ID]  (then repeat for each service city)
+  → Returns: monthly volumes per keyword per city
+
+Step 3: Run PPC forecast
+  POST GenerateForecastMetrics
+  - keywords: [top commercial-intent keywords]
+  - geo_targets: [service area]
+  - date_range: next 90 days
+  → Returns: clicks, impressions, CPC, conversions, cost
+  → Powers the Google Ads Projection section
+```
+
+**Approach for multi-city businesses:**
+- Option A: One DMA-level call for broad keyword discovery, then city-specific calls for volume data on top keywords
+- Option B: Separate calls per city for full granularity
+- Recommendation: Hybrid — DMA for discovery, top 6 cities individually for volume comparison
+
+### Access Requirements
+
+- Active Google Ads manager account (MCC)
+- Developer token (from API Center in Google Ads)
+- OAuth 2.0 authentication
+- Standard Access level for unlimited operations (Basic = 15,000 ops/day)
+- **No minimum spend requirement** for API access itself
+- Volume data may be bucketed (80 logarithmic ranges) for low-spend accounts — supplement with DataForSEO's proprietary volume metric for precision on lower-volume keywords
+
+### Node.js Implementation
+
+No official Google Ads API client for Node.js. Options:
+1. **`google-ads-api` npm package** — Most popular community library
+2. **Direct REST API calls** — Google's recommended approach for Node.js
+3. Authenticate via OAuth 2.0 with `googleapis` npm package
+
+### What Still Uses DataForSEO
+
+| Data Need | Source |
+|-----------|--------|
+| Keyword ideas + volumes | **Google Ads Keyword Planner API** (FREE) |
+| CPC + forecast data | **Google Ads Keyword Planner API** (FREE) |
+| Organic SERP rankings | DataForSEO SERP API |
+| AI Overview detection | DataForSEO SERP API |
+| Geo grid (Maps SERP) | DataForSEO Maps SERP API |
+| Site crawl + technical | DataForSEO On-Page API |
+| Backlink data | DataForSEO Backlinks API |
+| Core Web Vitals | Google PageSpeed Insights API (FREE) |
+| Reviews + ratings | Google Places API (FREE) |
+| GEO visibility | Existing Gemini + OpenAI implementation (KEEP) |
+
+**Net effect:** Keyword research and PPC projection costs drop to $0. DataForSEO spend decreases ~$0.10-0.20 per audit.
+
+---
+
+## Geo Grid Architecture: DataForSEO Build
+
+### Decision: Build Custom with DataForSEO
+
+**Why not Local Viking:**
+- Local Viking's API is limited/poorly documented — primarily a platform tool, not an API-first product
+- Subscription pricing ($149/month Agency) is expensive for one-time audit grids
+- Can't embed their visualization in your dashboard
+- Credit system is opaque
+
+**Why not Local Falcon:**
+- Better API than Local Viking, but still $50-100/month subscription
+- Fixed grid sizes only (can't do custom spacing)
+- Per-credit pricing ($0.0033/credit) is 5x more expensive than DataForSEO
+
+**Why DataForSEO:**
+- You're already using it for everything else
+- Cheapest per-grid cost by far
+- Full control over grid size, spacing, and visualization
+- Custom Leaflet.js map embedded directly in your dashboard
+- You calculate SoLV and avg rank yourself (simple math)
+
+### Cost Comparison
+
+| Grid Size | Keywords | DataForSEO (Standard) | DataForSEO (Priority) | Local Falcon | Local Viking |
+|-----------|----------|----------------------|----------------------|--------------|-------------|
+| 7×7 (49 pts) | 5 | **$0.15** | $0.29 | $0.81 | ~$5-10 (est.) |
+| 13×13 (169 pts) | 5 | **$0.51** | $1.01 | $2.79 | ~$15-25 (est.) |
+| 13×13 (169 pts) | 3 | **$0.30** | $0.61 | $1.67 | ~$10-15 (est.) |
+
+### Grid Configuration & UI Onboarding Flow
+
+**The Problem:** If a business has 100 keywords, running geo grids for all of them would cost $10-50 per audit and take too long for near-real-time. We need a keyword selection step.
+
+**Recommended Onboarding Flow:**
+
+```
+┌─────────────────────────────────────────────┐
+│  STEP 1: Business Info                       │
+│  ✓ Business name, URL, address               │
+│  ✓ Auto-detect service area from GBP         │
+│                                               │
+│  STEP 2: Services (auto-detected + manual)   │
+│  ✓ Crawl site → extract services via Haiku   │
+│  ✓ Specialist confirms/edits service list     │
+│                                               │
+│  STEP 3: Keyword Research                     │
+│  ✓ Google Ads API → keyword ideas             │
+│  ✓ Auto-categorize: primary vs secondary      │
+│                                               │
+│  STEP 4: Geo Grid Keyword Selection          │
+│  ┌─────────────────────────────────────┐     │
+│  │ Select up to 5 keywords for         │     │
+│  │ geo grid analysis:                  │     │
+│  │                                     │     │
+│  │ SUGGESTED (highest volume):         │     │
+│  │ ☑ "roofer near me" (2,400/mo)      │     │
+│  │ ☑ "roofing company" (1,800/mo)     │     │
+│  │ ☑ "roof repair" (1,200/mo)         │     │
+│  │ ☐ "roof replacement" (880/mo)      │     │
+│  │ ☐ "emergency roof repair" (720/mo) │     │
+│  │ ☐ "roof inspection" (480/mo)       │     │
+│  │                                     │     │
+│  │ ○ Custom keyword: [____________]    │     │
+│  │                                     │     │
+│  │ Grid size: ○ 7×7  ● 13×13  ○ 15×15│     │
+│  │ Spacing: ○ 0.5mi  ● 1mi  ○ 2mi    │     │
+│  │                                     │     │
+│  │ Est. cost: $0.51 | Est. time: ~2min│     │
+│  └─────────────────────────────────────┘     │
+│                                               │
+│  STEP 5: Run Audit [▶ Start]                │
+└─────────────────────────────────────────────┘
+```
+
+**Keyword Selection Logic:**
+1. After keyword research completes (Step 3), auto-rank keywords by search volume
+2. Pre-select top 3 highest-volume keywords (default)
+3. Allow specialist to select up to 5 (hard cap for cost control)
+4. Show estimated cost and processing time before running
+5. For national businesses: skip geo grid entirely
+
+**Grid Defaults:**
+- Local businesses: 13×13 grid, 1 mile spacing (covers ~13 mile radius)
+- Metro businesses: 13×13 grid, 2 mile spacing (covers ~26 mile radius)
+- Rural businesses: 7×7 grid, 3 mile spacing (covers ~21 mile radius)
+- Max: 5 keywords per grid (hard limit in UI)
+
+### Building the Grid: Technical Implementation
+
+**Step 1: Calculate coordinates**
+```javascript
+// Haversine-based grid point calculation
+function generateGridPoints(centerLat, centerLng, gridSize, spacingMiles) {
+  const points = [];
+  const halfGrid = Math.floor(gridSize / 2);
+  const spacingDeg = spacingMiles / 69.0; // rough deg per mile
+  const spacingLngDeg = spacingMiles / (69.0 * Math.cos(centerLat * Math.PI / 180));
+
+  for (let row = -halfGrid; row <= halfGrid; row++) {
+    for (let col = -halfGrid; col <= halfGrid; col++) {
+      points.push({
+        lat: centerLat + (row * spacingDeg),
+        lng: centerLng + (col * spacingLngDeg),
+        row, col
+      });
+    }
+  }
+  return points; // 169 points for 13×13
+}
+```
+
+**Step 2: Batch API calls**
+- DataForSEO accepts up to 100 tasks per POST request
+- For 13×13 (169 points) × 1 keyword: 2 POST requests
+- For 13×13 × 5 keywords: 9 POST requests (can run in parallel)
+- Standard queue: results in ~5-30 seconds
+- Priority queue: results in ~1 minute
+
+**Step 3: Calculate metrics**
+```javascript
+function calculateGridMetrics(results, clientBusinessName) {
+  const totalPoints = results.length;
+  let inTop3 = 0;
+  let totalRank = 0;
+  let rankedPoints = 0;
+
+  results.forEach(point => {
+    const rank = findBusinessRank(point.items, clientBusinessName);
+    point.rank = rank; // null if not found
+    if (rank && rank <= 3) inTop3++;
+    if (rank && rank <= 20) { totalRank += rank; rankedPoints++; }
+  });
+
+  return {
+    shareOfLocalVoice: (inTop3 / totalPoints * 100).toFixed(1), // e.g., "50.3%"
+    averageGridRank: rankedPoints > 0 ? (totalRank / rankedPoints).toFixed(1) : "N/A",
+    visiblePoints: rankedPoints,
+    totalPoints,
+    top3Points: inTop3
+  };
+}
+```
+
+**Step 4: Render with Leaflet.js**
+- Circle markers at each grid point
+- Color scale: Green (#1-3) → Yellow (#4-7) → Orange (#8-10) → Red (#11-20) → Gray (not found)
+- Click a point → popover shows full local pack results at that location
+- Toggle between keywords
+- Show SoLV and Avg Rank as overlay stats
+
+---
+
+## Dashboard Sections (The "Views")
+
+The dashboard follows a presentation story arc. Each section answers one question a business owner cares about.
+
+### Section 1: Competitive Snapshot (First Thing They See)
+
+**What the client sees:**
+- Side-by-side comparison: Client vs 2-3 top competitors
+- Metrics: Domain Rating, organic keywords, monthly traffic, Google reviews (count + rating), GBP completeness
+- Simple bar chart per metric
+- A single "Market Position" score (composite, 0-100)
+- One-line verdict: "You're currently #4 of 4 in your local market for online visibility"
+
+**Data sources:** DataForSEO (`ranked_keywords`, `domain_rank_overview`, `backlinks_summary`) + Google Places API
+
+**LLM usage:** None. Pure data.
+
+---
+
+### Section 2: Geo Grid — Local Map Pack Visibility
+
+**What the client sees:**
+- Interactive Leaflet.js map with color-coded grid points (configurable 7×7 to 15×15)
+- Each point shows ranking position (1-20 or "Not Found")
+- Color scale: Green (#1-3), Yellow (#4-7), Orange (#8-10), Red (#11-20), Gray (Not found)
+- Toggle between up to 5 primary keywords
+- Summary stats: SoLV ("You appear in the 3-pack in 85 of 169 locations — 50.3% Share of Local Voice") + Average Grid Rank
+- Side-by-side: Client grid vs top competitor grid
+
+**Data sources:** DataForSEO Google Maps SERP API (169 points × 3-5 keywords = $0.30-0.51 per grid set)
+
+**LLM usage:** None. Pure data + visualization.
+
+---
+
+### Section 3: AI/GEO Visibility — The New Frontier
+
+**KEEP EXISTING IMPLEMENTATION.** The Replit app already handles GEO visibility via Gemini + OpenAI. It creates service category prompts and evaluates AI responses. No changes needed here beyond integrating the output into the new dashboard layout.
+
+**What the client sees:**
+- AI Search Visibility Score (existing)
+- Google AI Overviews presence (supplement with DataForSEO SERP AI Overview detection)
+- ChatGPT + Gemini recommendation results (existing)
+- Gap list per service category
+
+---
+
+### Section 4: Keyword Rankings & Organic Gaps (The "Red Sea")
+
+**What the client sees:**
+- Grid: Services (rows) × Locations (columns, max 6 with pagination)
+- Each cell: Client's organic ranking OR "Not Found" (red)
+- Competitor rankings as small indicators
+- Filter: Organic rankings / Local pack / AI overview presence
+- Summary: "You rank in the top 10 for 4 of 72 target keyword combinations"
+
+**Data sources:** DataForSEO SERP API + Google Ads Keyword Planner (volumes)
+
+**Design rule:** Max 6 columns. First view = 6 highest-opportunity cities.
+
+---
+
+### Section 5: Revenue Opportunity + Google Ads Projection
+
+**What the client sees:**
+- **SEO Opportunity:** Total addressable volume → estimated clicks → leads → revenue
+- **Google Ads Projection:** Forecast from Keyword Planner API — clicks, impressions, CPC, estimated conversions, estimated cost
+- ROI comparison: SEO investment vs Google Ads spend for same keywords
+- Bar chart: "Current captured traffic" vs "Available traffic"
+
+**Data sources:**
+- Google Ads Keyword Planner API: `GenerateForecastMetrics` (FREE) — this replaces the old manual Google Ads Projection tab
+- CTR curves + industry conversion rates for SEO projection
+
+**LLM usage:** None. Pure math.
+
+---
+
+### Section 6: Site Health — Technical Audit
+
+**What the client sees:**
+- Overall Site Health Score (A-F letter grade)
+- 6 category cards with grades: Speed, Mobile, Crawlability, Schema, On-Page SEO, Security
+- Each card: Grade + one-sentence summary + issue count
+- Expandable detail for implementation team
+
+**Data sources:** Google PageSpeed Insights API (FREE) + DataForSEO On-Page API
+
+**LLM usage:** None. Binary/threshold checks.
+
+---
+
+### Section 7: Content Gap Analysis — The Geo Page Opportunity
+
+**What the client sees:**
+- Service pages: exists / missing
+- City pages: found/not-found grid (max 6 columns)
+- Sub-city pages: service × city matrix (the big red sea)
+- Comparison page opportunities
+- Resource content opportunities
+- Total: "You need approximately X new pages"
+
+**Data sources:** DataForSEO crawl + keyword matrix + Haiku classification
+
+---
+
+### Section 8: Backlink & Authority Summary
+
+**What the client sees:**
+- Domain Rating bar chart: Client vs competitors
+- Referring domains comparison
+- Link quality distribution
+- Top 5 competitor backlinks you're missing
+- One-sentence competitive assessment
+
+**Data sources:** DataForSEO Backlinks API
+
+---
+
+### Section 9: Review & Reputation Health
+
+**What the client sees:**
+- Review scorecard: count, rating, velocity
+- Platform breakdown: Google, Yelp, Angi, BBB
+- Competitor comparison
+- Sentiment themes (positive/negative)
+- Recency indicator
+
+**Data sources:** Google Places API + DataForSEO Business Data API
+
+---
+
+### Section 10: Investment & Action Plan (The Close)
+
+**What the client sees:**
+- Phased deliverables: Phase 1 (Month 1-3), Phase 2 (4-6), Phase 3 (7-12)
+- Each deliverable: Description, hours, priority
+- Monthly investment recommendation
+- ROI timeline
+- Current state → 6 month → 12 month progression
+
+---
+
+## Updated Pipeline Data Flow
+
+```
+INPUT: Client URL + Business Name + Address + Service Area
+                    │
+    ┌───────────────┼───────────────┐
+    ▼               ▼               ▼
+Stage 1:        Stage 2:        Stage 3:
+Site Crawl      Technical       Keyword Research
+(DataForSEO     Audit           (Google Ads
+ On-Page)       (PageSpeed +     Keyword Planner
+                 DataForSEO)     API — FREE)
+    │               │               │
+    ▼               ▼               ▼
+ Page           37 Binary       Keyword × City
+ Hierarchy      Checks          Matrix + Volumes
+    │               │               │
+    │               │          ┌────┴────┐
+    │               │          ▼         ▼
+    │               │     Specialist   PPC Forecast
+    │               │     selects      (GenerateForecast
+    │               │     3-5 grid KWs  Metrics — FREE)
+    │               │          │         │
+    └───────┬───────┘          │         │
+            ▼                  │         │
+        Stage 4:               │         │
+        Page Scoring  ◄────────┘         │
+        (Haiku LLM)                      │
+            │                            │
+    ┌───────┼───────┬───────────────┐    │
+    ▼       ▼       ▼               ▼    │
+Stage 5:  Stage 6: Stage 7:     Stage 8: │
+SERP &    Comp.    Gap          Geo Grid │
+Rankings  Intel    Analysis     (DataForSEO
+(D4SEO)   (Haiku)  (Python)    Maps API) │
+    │       │       │               │    │
+    ▼       ▼       ▼               │    │
+Stage 9:  Stage 10: Stage 11:      │    │
+GEO/AI    Review    Geo            │    │
+Visibility Health   Prioritize     │    │
+(EXISTING: (Google  (Python)       │    │
+Gemini+OAI) Places)                │    │
+    │       │       │               │    │
+    └───┬───┘───┬───┘───────────────┘────┘
+        ▼       ▼
+    Stage 12:  Stage 13:
+    Scoping    Report
+    Engine     Generation
+    (Python)   (Sonnet LLM)
+        │           │
+        └─────┬─────┘
+              ▼
+         Dashboard Render
+         (React + Leaflet.js)
+              │
+              ▼
+         Magic Link
+         (client access)
+```
+
+---
+
+## Updated API Stack & Costs Per Audit
+
+### APIs
+
+| API | Purpose | Cost/Audit | Notes |
+|-----|---------|------------|-------|
+| **Google Ads Keyword Planner** | Keyword ideas, volumes, CPC, forecast | **FREE** | Replaces DataForSEO Keywords |
+| DataForSEO SERP | Organic rankings, AI Overviews | $0.10-0.25 | ~100-200 keyword queries |
+| DataForSEO Maps SERP | Geo grid | $0.30-0.51 | 13×13 grid × 3-5 KWs |
+| DataForSEO On-Page | Site crawl, technical checks | $0.05-0.10 | 1 crawl per audit |
+| DataForSEO Backlinks | Link profiles (client + 3 comps) | $0.10-0.20 | 4 domains |
+| Google PageSpeed Insights | Core Web Vitals | **FREE** | 25K tests/day |
+| Google Places API | Reviews, ratings | **FREE** | Within free tier |
+| OpenAI API | GEO visibility (existing) | ~$0.10-0.20 | Already implemented |
+| Google Gemini API | GEO visibility (existing) | ~$0.05-0.10 | Already implemented |
+
+**Total variable cost per audit: ~$0.80-1.60** (down from $1.05-1.90 by switching keyword research to free Google Ads API)
+
+### LLM Costs Per Audit
+
+| Task | Model | Cost |
+|------|-------|------|
+| Keyword classification | Haiku 4.5 | $0.02 |
+| Page scoring (30 pages) | Haiku 4.5 | $0.05-0.15 |
+| Review sentiment | Haiku 4.5 | $0.05 |
+| GEO visibility | OpenAI + Gemini (existing) | $0.15-0.30 |
+| Competitive summary | Sonnet 4.5 | $0.10 |
+| Report narratives | Sonnet 4.5 | $0.15 |
+
+**Total LLM per audit: ~$0.52-0.77**
+
+### Grand Total Per Audit: ~$1.30-2.40
+
+At 20 audits/month: **~$26-48/month** variable costs.
+
+---
+
+## LLM Model Recommendations
+
+| Use Case | Model | Why |
+|----------|-------|-----|
+| Classification, scoring | **Haiku 4.5** ($1/$5 per MT) | Deterministic, fast, cheap |
+| Narratives, exec summaries | **Sonnet 4.5** ($3/$15 per MT) | Better prose for client-facing copy |
+| GEO visibility | **Keep existing GPT-4o + Gemini** | Already built and working |
+| Prompt caching | **Use for page scoring** | System prompt cached across 30 evals = 87% input savings |
+
+---
+
+## Dashboard Architecture
+
+### Tech Stack (Existing Replit App)
+
+**Frontend:** React (existing)
+- Add: Leaflet.js for geo grid maps
+- Add: Recharts or Chart.js for charts
+- Existing: magic-link token sharing
+
+**Backend:** Node.js (existing)
+- Add: Google Ads API integration (REST calls with OAuth 2.0)
+- Add: DataForSEO Maps SERP integration
+- Existing: Supabase, GEO visibility engine
+
+### Dashboard Layout
+
+```
+┌─────────────────────────────────────────────┐
+│  HEADER: Client Name | Audit Date | Score   │
+│  [Share Link] [Present Mode] [Export PDF]    │
+├──────────┬──────────────────────────────────┤
+│ NAV      │  MAIN CONTENT AREA               │
+│          │                                    │
+│ ● Snapshot│  Each section = one "slide"      │
+│ ● Geo Grid│  in Present Mode                │
+│ ● AI/GEO │                                   │
+│ ● Rankings│  Scrollable in normal mode       │
+│ ● Revenue│                                    │
+│ ● Tech   │  Red/green color coding          │
+│ ● Content│  throughout                       │
+│ ● Links  │                                    │
+│ ● Reviews│                                    │
+│ ● Plan   │                                    │
+└──────────┴──────────────────────────────────┘
+```
+
+**Present Mode:** Fullscreen, one section at a time, arrow-key navigation. Each section = one "slide" in the sales story.
+
+**Client View (via magic link):** Same dashboard, read-only. No backend access, no edit capabilities.
+
+---
+
+## Presentation Design Rules
+
+1. **First screen = competitor comparison.** "Here's who's beating you."
+2. **Geo grids before data tables.** Visual maps > spreadsheets.
+3. **Max 6 columns in any table.** Paginate beyond. Red sea works at 6 wide.
+4. **Red = missing, Green = present.** Binary for client view.
+5. **Every section ends with one sentence:** "This means [business impact]."
+6. **Revenue > traffic.** "$40K/month in lost revenue" > "4,000 monthly searches."
+7. **3 competitors max.** More = hopeless. 3 = motivated.
+8. **GEO screenshots.** Show what AI says about their competitor.
+9. **Action plan = the proposal.** The audit IS the close.
+
+---
+
+## What We Dropped vs. Current Audit
+
+| Old Tab | Status | Replacement |
+|---------|--------|-------------|
+| Why Local SEO | DROPPED | Data tells the story |
+| Reasoning Behind Strategy | DROPPED | Integrated into action plan |
+| Overview | REPLACED | → Competitive Snapshot (Section 1) |
+| SEO Audit | REPLACED | → Site Health + Rankings (Sections 4 & 6) |
+| Initial Audit KWs | REPLACED | → Rankings & Gaps (Section 4) |
+| SEO Projection | REPLACED | → Revenue Opportunity (Section 5) |
+| Google Ad Projection | REPLACED | → Revenue Opportunity with live forecast data (Section 5) |
+| Content Audits | REPLACED | → Content Gap Analysis (Section 7) |
+| Organic Audits | REPLACED | → Rankings grid (Section 4) |
+| Local Pack Audits | REPLACED | → Geo Grid (Section 2) |
+| GBP Audits | REPLACED | → Geo Grid + Reviews (Sections 2 & 9) |
+| Backlink Audit | REPLACED | → Backlink Summary (Section 8) |
+| Competitor #1-3 (raw) | DROPPED | → Summarized in Sections 1 & 8 |
+| Client (raw backlinks) | DROPPED | → Summarized in Section 8 |
+
+**16 tabs → 10 focused sections.** No raw data dumps.
+
+---
+
+## Implementation Priority
+
+### Phase 1: Core Sales Narrative
+1. Competitive Snapshot (Section 1)
+2. Geo Grid with SoLV (Section 2)
+3. Keyword Rankings / Red Sea (Section 4)
+4. Content Gap Analysis (Section 7)
+5. Investment & Action Plan (Section 10)
+6. Google Ads Keyword Planner API integration
+7. Geo grid keyword selection onboarding flow
+
+### Phase 2: Complete Audit
+8. Revenue Opportunity + Google Ads Projection (Section 5)
+9. Site Health / Technical (Section 6)
+10. Backlink Summary (Section 8)
+11. Review Health (Section 9)
+
+### Phase 3: Polish
+12. AI/GEO Visibility integration into new layout (Section 3 — existing engine)
+13. Present Mode (fullscreen slide navigation)
+14. PDF/HTML export
+15. Magic link sharing updates
+
+---
+
+## Remaining Open Questions
+
+1. **Grid size default for the UI:** Default to 13×13 with 1-mile spacing? Or let the specialist choose? The onboarding flow above suggests a choice but defaults to 13×13.
+2. **Keyword cap for geo grids:** Hard cap at 5? Or allow more with a cost warning? At 5 keywords × 169 points, that's 845 API calls (~$0.51). At 10 keywords, that doubles to ~$1.01.
+3. **Competitor auto-detection for geo grids:** Should the geo grid automatically show the top competitor's SoLV alongside the client's? This doubles the API cost per grid but is the most visually compelling comparison.
+4. **National business handling:** Skip geo grid and local pack entirely? Or offer a national organic rankings view instead?
+5. **Onboarding flow location:** Is the specialist-facing onboarding (keyword selection, grid config) a separate admin view, or part of the audit creation wizard in the existing app?
