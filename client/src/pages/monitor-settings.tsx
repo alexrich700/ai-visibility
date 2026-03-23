@@ -841,7 +841,7 @@ export default function MonitorSettings() {
                               session.status === "complete"
                                 ? "border-green-500 text-green-600"
                                 : session.status === "running"
-                                ? "border-blue-500 text-blue-600"
+                                ? "border-orange-500 text-orange-600"
                                 : session.status === "failed"
                                 ? "border-red-500 text-red-600"
                                 : ""

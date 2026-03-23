@@ -70,11 +70,11 @@ function parseCitations(raw: unknown): Array<{ url: string; title?: string; doma
   return null;
 }
 
-function CitationsList({ citations, color }: { citations: Array<{ url: string; title?: string; domain: string }>; color: "blue" | "orange" }) {
-  const bg = color === "blue" ? "bg-blue-50" : "bg-orange-50";
-  const textColor = color === "blue" ? "text-blue-700" : "text-orange-700";
-  const linkColor = color === "blue" ? "text-blue-600 hover:text-blue-800" : "text-orange-600 hover:text-orange-800";
-  const numColor = color === "blue" ? "text-blue-400" : "text-orange-400";
+function CitationsList({ citations, color }: { citations: Array<{ url: string; title?: string; domain: string }>; color: "orange" | "amber" }) {
+  const bg = color === "orange" ? "bg-orange-50" : "bg-amber-50";
+  const textColor = color === "orange" ? "text-orange-700" : "text-amber-700";
+  const linkColor = color === "orange" ? "text-orange-600 hover:text-orange-800" : "text-amber-600 hover:text-amber-800";
+  const numColor = color === "orange" ? "text-orange-400" : "text-amber-400";
 
   return (
     <div className={`${bg} rounded-lg p-3`}>
@@ -157,7 +157,7 @@ function ResponseModal({ prompt, businessName, onClose }: { prompt: PromptPerfor
                 )}
               </ScrollArea>
               {chatgptCitations && chatgptCitations.length > 0 && (
-                <CitationsList citations={chatgptCitations} color="blue" />
+                <CitationsList citations={chatgptCitations} color="orange" />
               )}
             </TabsContent>
 

@@ -1668,7 +1668,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
                                   variant="secondary" 
                                   className={`mb-2 text-xs ${
                                     narrative.platform === 'chatgpt' 
-                                      ? 'bg-blue-100 text-blue-700 border-blue-200' 
+                                      ? 'bg-orange-100 text-orange-700 border-orange-200' 
                                       : 'bg-orange-100 text-orange-700 border-orange-200'
                                   }`}
                                   data-testid={`badge-platform-strength-${idx}`}
@@ -1720,7 +1720,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
                                   variant="secondary" 
                                   className={`mb-2 text-xs ${
                                     narrative.platform === 'chatgpt' 
-                                      ? 'bg-blue-100 text-blue-700 border-blue-200' 
+                                      ? 'bg-orange-100 text-orange-700 border-orange-200' 
                                       : 'bg-orange-100 text-orange-700 border-orange-200'
                                   }`}
                                   data-testid={`badge-platform-improvement-${idx}`}
@@ -2032,7 +2032,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
                     Direct AI queries about your business (excluded from visibility metrics)
                   </p>
                 </div>
-                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
                   {brandSentimentResults.length} prompts
                 </Badge>
               </div>
@@ -2221,8 +2221,8 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
                     }
                     if (!citations || !Array.isArray(citations) || citations.length === 0) return null;
                     return (
-                      <div className="bg-blue-50 rounded-lg p-3">
-                        <p className="text-xs text-blue-700 uppercase tracking-wider font-bold mb-2 flex items-center gap-1">
+                      <div className="bg-orange-50 rounded-lg p-3">
+                        <p className="text-xs text-orange-700 uppercase tracking-wider font-bold mb-2 flex items-center gap-1">
                           <ExternalLink className="w-3 h-3" />
                           Sources Cited ({citations.length})
                         </p>
@@ -2233,10 +2233,10 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
                               href={citation.url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline truncate"
+                              className="flex items-center gap-2 text-sm text-orange-600 hover:text-orange-800 hover:underline truncate"
                               data-testid={`link-chatgpt-citation-${idx}`}
                             >
-                              <span className="text-xs text-blue-400 flex-shrink-0">{idx + 1}.</span>
+                              <span className="text-xs text-orange-400 flex-shrink-0">{idx + 1}.</span>
                               <span className="truncate">{citation.title || citation.domain}</span>
                             </a>
                           ))}

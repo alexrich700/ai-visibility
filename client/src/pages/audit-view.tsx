@@ -732,7 +732,7 @@ export default function AuditView(props: AuditViewProps = {}) {
             <section className="p-12 border-b border-gray-200 bg-gray-50 no-print">
               <SectionHeader title="Simulated Prompt Log" icon={Cpu} />
               <p className="mb-4 text-gray-600">We simulated the following user queries to test brand presence across AI platforms.</p>
-              <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-6">
+              <div className="bg-orange-50 border border-orange-100 rounded-lg p-4 mb-6">
                 <p className="text-sm text-gray-700">
                   <span className="font-bold text-[#ff5800]">How to read this:</span> These are generic questions users might ask AI—your brand name is <span className="font-medium">not included</span> in the prompt. 
                   If AI doesn't recommend you here, it means you're invisible to organic AI-assisted discovery, even if AI knows about your brand when asked directly.
@@ -832,7 +832,7 @@ export default function AuditView(props: AuditViewProps = {}) {
             <section className="print-only p-8 border-b border-gray-200 bg-gray-50">
               <SectionHeader title="Simulated Prompt Log" icon={Cpu} />
               <p className="mb-4 text-gray-600 text-sm">We simulated the following user queries to test brand presence across AI platforms.</p>
-              <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 mb-6">
+              <div className="bg-orange-50 border border-orange-100 rounded-lg p-3 mb-6">
                 <p className="text-xs text-gray-700">
                   <span className="font-bold text-[#ff5800]">How to read this:</span> These are generic questions users might ask AI—your brand name is not included in the prompt. 
                   If AI doesn't recommend you here, it means you're invisible to organic AI-assisted discovery.
