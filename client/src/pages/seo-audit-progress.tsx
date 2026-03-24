@@ -86,8 +86,12 @@ export default function SeoAuditProgress() {
     }
 
     let cancelled = false;
+    let retryCount = 0;
+    const MAX_RETRIES = 3;
 
-    const initSSE = async () => {
+    const connectSSE = async () => {
+      if (cancelled) return;
+
       let sseUrl = `/api/seo-audits/${auditId}/status`;
       try {
         const tokenRes = await apiRequest("POST", `/api/seo-audits/${auditId}/stream-token`, undefined, { useAdminAuth: true });
@@ -103,6 +107,7 @@ export default function SeoAuditProgress() {
       eventSourceRef.current = es;
 
       es.onmessage = (event) => {
+        retryCount = 0;
         try {
           const data = JSON.parse(event.data);
 
@@ -135,10 +140,17 @@ export default function SeoAuditProgress() {
         }
       };
 
-      es.onerror = () => {};
+      es.onerror = () => {
+        es.close();
+        eventSourceRef.current = null;
+        if (!cancelled && retryCount < MAX_RETRIES) {
+          retryCount++;
+          setTimeout(() => connectSSE(), 2000 * retryCount);
+        }
+      };
     };
 
-    initSSE();
+    connectSSE();
 
     return () => {
       cancelled = true;
@@ -349,14 +361,24 @@ export default function SeoAuditProgress() {
                     )}
                   </div>
 
-                  {stage.status === "running" && (
-                    <Badge variant="outline" className="text-xs border-blue-200 text-blue-600">Running</Badge>
-                  )}
-                  {stage.status === "complete" && stage.startedAt && stage.completedAt && (
-                    <span className="text-xs text-gray-400">
-                      {Math.round((stage.completedAt - stage.startedAt) / 1000)}s
-                    </span>
-                  )}
+                  <div className="flex items-center gap-3 shrink-0">
+                    {stage.startedAt && (
+                      <span className="text-[10px] text-gray-400 tabular-nums" data-testid={`stage-start-time-${stage.name}`}>
+                        {new Date(stage.startedAt).toLocaleTimeString()}
+                      </span>
+                    )}
+                    {stage.status === "running" && (
+                      <Badge variant="outline" className="text-xs border-blue-200 text-blue-600">Running</Badge>
+                    )}
+                    {stage.status === "complete" && stage.startedAt && stage.completedAt && (
+                      <span className="text-xs text-gray-400 tabular-nums" data-testid={`stage-duration-${stage.name}`}>
+                        {Math.round((stage.completedAt - stage.startedAt) / 1000)}s
+                      </span>
+                    )}
+                    {stage.status === "error" && (
+                      <Badge variant="outline" className="text-xs border-red-200 text-red-600">Failed</Badge>
+                    )}
+                  </div>
                 </div>
               );
             })}
