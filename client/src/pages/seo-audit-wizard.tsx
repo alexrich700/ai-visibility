@@ -1,6 +1,9 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
+import { useForm, useFieldArray } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -11,6 +14,14 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -20,22 +31,45 @@ import {
 import {
   Building2, Globe, MapPin, ArrowRight, ArrowLeft,
   Plus, Trash2, Loader2, Check, DollarSign, Play,
-  Users, Grid3X3, Search
+  Users, Grid3X3, Search, MapPinned, Sparkles, Info
 } from "lucide-react";
+import { MapContainer, TileLayer, Marker, Popup, Rectangle, useMap } from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 
-interface WizardData {
-  businessName: string;
-  businessUrl: string;
-  businessAddress: string;
-  businessType: "local" | "national";
-  industry: string;
-  serviceAreaCities: string[];
-  services: string[];
-  competitors: Array<{ name: string; domain: string }>;
-  geoGridKeywords: string[];
-  geoGridSize: number;
-  geoGridSpacingMiles: number;
-}
+delete (L.Icon.Default.prototype as Record<string, unknown>)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
+  iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
+  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
+});
+
+const wizardSchema = z.object({
+  businessName: z.string().min(1, "Business name is required"),
+  businessUrl: z.string().min(1, "Website URL is required").refine(
+    (v) => /^https?:\/\/.+/.test(v) || /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(v),
+    "Enter a valid URL (e.g. https://example.com)"
+  ),
+  businessAddress: z.string().optional(),
+  businessLat: z.number().optional(),
+  businessLng: z.number().optional(),
+  businessType: z.enum(["local", "national"]),
+  industry: z.string().optional(),
+  serviceAreaCities: z.array(z.string()).default([]),
+  services: z.array(z.object({
+    name: z.string().min(1),
+    customKeywords: z.array(z.string()).default([]),
+  })).default([]),
+  competitors: z.array(z.object({
+    name: z.string().default(""),
+    domain: z.string().default(""),
+  })).max(3).default([]),
+  geoGridKeywords: z.array(z.string()).default([]),
+  geoGridSize: z.number().int().min(3).max(25).default(13),
+  geoGridSpacingMiles: z.number().min(0.1).max(10).default(1),
+});
+
+type WizardFormData = z.infer<typeof wizardSchema>;
 
 const INDUSTRIES = [
   "Plumbing", "HVAC", "Electrical", "Roofing", "Landscaping",
@@ -67,7 +101,30 @@ const SPACING_OPTIONS = [
 
 const STEPS = ["Business Info", "Service Area", "Services", "Competitors", "Geo Grid", "Review & Run"];
 
-function estimateCost(data: WizardData): { total: number; breakdown: Record<string, number> } {
+const CITY_COORDS: Record<string, [number, number]> = {
+  "Minneapolis, MN": [44.9778, -93.2650],
+  "St. Paul, MN": [44.9537, -93.0900],
+  "Denver, CO": [39.7392, -104.9903],
+  "Austin, TX": [30.2672, -97.7431],
+  "Chicago, IL": [41.8781, -87.6298],
+  "New York, NY": [40.7128, -74.0060],
+  "Los Angeles, CA": [34.0522, -118.2437],
+  "Phoenix, AZ": [33.4484, -112.0740],
+  "Portland, OR": [45.5152, -122.6784],
+  "Seattle, WA": [47.6062, -122.3321],
+};
+
+function getCityCoords(city: string): [number, number] | null {
+  if (CITY_COORDS[city]) return CITY_COORDS[city];
+  const parts = city.split(",").map(s => s.trim());
+  if (parts.length >= 2) {
+    const key = `${parts[0]}, ${parts[parts.length - 1]}`;
+    if (CITY_COORDS[key]) return CITY_COORDS[key];
+  }
+  return null;
+}
+
+function estimateCost(data: WizardFormData): { total: number; breakdown: Record<string, number> } {
   const breakdown: Record<string, number> = {};
   breakdown["Site Crawl"] = 0.10;
   breakdown["PageSpeed"] = 0;
@@ -86,6 +143,78 @@ function estimateCost(data: WizardData): { total: number; breakdown: Record<stri
   return { total: Math.round(total * 100) / 100, breakdown };
 }
 
+function FitBounds({ bounds }: { bounds: L.LatLngBoundsExpression }) {
+  const map = useMap();
+  useEffect(() => {
+    map.fitBounds(bounds, { padding: [30, 30] });
+  }, [map, bounds]);
+  return null;
+}
+
+function ServiceAreaMap({ cities }: { cities: string[] }) {
+  const markers = cities
+    .map(c => ({ city: c, coords: getCityCoords(c) }))
+    .filter((m): m is { city: string; coords: [number, number] } => m.coords !== null);
+
+  if (markers.length === 0) return null;
+
+  const bounds = L.latLngBounds(markers.map(m => m.coords));
+
+  return (
+    <div className="rounded-lg overflow-hidden border border-gray-200 mt-4" style={{ height: 250 }}>
+      <MapContainer
+        center={markers[0].coords}
+        zoom={10}
+        style={{ height: "100%", width: "100%" }}
+        scrollWheelZoom={false}
+      >
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+        {markers.map(m => (
+          <Marker key={m.city} position={m.coords}>
+            <Popup>{m.city}</Popup>
+          </Marker>
+        ))}
+        {markers.length > 1 && <FitBounds bounds={bounds} />}
+      </MapContainer>
+    </div>
+  );
+}
+
+function GeoGridPreviewMap({
+  lat, lng, gridSize, spacingMiles, keywords,
+}: { lat: number; lng: number; gridSize: number; spacingMiles: number; keywords: string[] }) {
+  const mileToLat = 1 / 69.0;
+  const mileToLng = 1 / (69.0 * Math.cos((lat * Math.PI) / 180));
+  const halfSpan = ((gridSize - 1) / 2) * spacingMiles;
+  const topLeft: [number, number] = [lat + halfSpan * mileToLat, lng - halfSpan * mileToLng];
+  const bottomRight: [number, number] = [lat - halfSpan * mileToLat, lng + halfSpan * mileToLng];
+  const bounds: L.LatLngBoundsExpression = [topLeft, bottomRight];
+
+  return (
+    <div className="rounded-lg overflow-hidden border border-gray-200 mt-4" style={{ height: 250 }}>
+      <MapContainer
+        center={[lat, lng]}
+        zoom={12}
+        style={{ height: "100%", width: "100%" }}
+        scrollWheelZoom={false}
+      >
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+        <Marker position={[lat, lng]}>
+          <Popup>Business Location</Popup>
+        </Marker>
+        <Rectangle bounds={bounds} pathOptions={{ color: "#ff5800", weight: 2, fillOpacity: 0.08 }} />
+        <FitBounds bounds={L.latLngBounds(topLeft, bottomRight).pad(0.2)} />
+      </MapContainer>
+    </div>
+  );
+}
+
 export default function SeoAuditWizard() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -95,41 +224,87 @@ export default function SeoAuditWizard() {
   const [serviceInput, setServiceInput] = useState("");
   const [compName, setCompName] = useState("");
   const [compDomain, setCompDomain] = useState("");
+  const [customKwInput, setCustomKwInput] = useState<Record<number, string>>({});
+  const [isGeocoding, setIsGeocoding] = useState(false);
 
-  const [data, setData] = useState<WizardData>({
-    businessName: "",
-    businessUrl: "",
-    businessAddress: "",
-    businessType: "local",
-    industry: "",
-    serviceAreaCities: [],
-    services: [],
-    competitors: [],
-    geoGridKeywords: [],
-    geoGridSize: 13,
-    geoGridSpacingMiles: 1,
+  const form = useForm<WizardFormData>({
+    resolver: zodResolver(wizardSchema),
+    defaultValues: {
+      businessName: "",
+      businessUrl: "",
+      businessAddress: "",
+      businessType: "local",
+      industry: "",
+      serviceAreaCities: [],
+      services: [],
+      competitors: [],
+      geoGridKeywords: [],
+      geoGridSize: 13,
+      geoGridSpacingMiles: 1,
+    },
   });
 
-  const update = useCallback((partial: Partial<WizardData>) => {
-    setData(prev => ({ ...prev, ...partial }));
-  }, []);
+  const { fields: serviceFields, append: appendService, remove: removeService } = useFieldArray({
+    control: form.control,
+    name: "services",
+  });
+
+  const { fields: competitorFields, append: appendCompetitor, remove: removeCompetitor } = useFieldArray({
+    control: form.control,
+    name: "competitors",
+  });
+
+  const watchedData = form.watch();
+
+  const geocodeAddress = useCallback(async (address: string) => {
+    if (!address || address.length < 5) return;
+    setIsGeocoding(true);
+    try {
+      const resp = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`,
+        { headers: { "User-Agent": "MotiventSEOAudit/1.0" } }
+      );
+      const results = await resp.json();
+      if (results.length > 0) {
+        const { lat, lon } = results[0];
+        form.setValue("businessLat", parseFloat(lat));
+        form.setValue("businessLng", parseFloat(lon));
+        toast({ title: "Location found", description: `Coordinates: ${parseFloat(lat).toFixed(4)}, ${parseFloat(lon).toFixed(4)}` });
+      } else {
+        toast({ title: "Location not found", description: "Could not geocode this address. You can set coordinates manually.", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Geocoding failed", description: "Network error during geocoding.", variant: "destructive" });
+    } finally {
+      setIsGeocoding(false);
+    }
+  }, [form, toast]);
 
   const createAndRunMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (formData: WizardFormData) => {
+      let url = formData.businessUrl;
+      if (!/^https?:\/\//.test(url)) url = `https://${url}`;
       const res = await apiRequest("POST", "/api/seo-audits", {
-        businessName: data.businessName,
-        businessUrl: data.businessUrl,
-        businessAddress: data.businessAddress || undefined,
-        businessType: data.businessType,
-        industry: data.industry || undefined,
-        serviceAreaCities: data.serviceAreaCities,
-        services: data.services,
-        competitors: data.competitors.filter(c => c.name || c.domain),
-        geoGridKeywords: data.geoGridKeywords,
-        geoGridSize: data.geoGridSize,
-        geoGridSpacingMiles: data.geoGridSpacingMiles,
+        businessName: formData.businessName,
+        businessUrl: url,
+        businessAddress: formData.businessAddress || undefined,
+        businessType: formData.businessType,
+        industry: formData.industry || undefined,
+        serviceAreaCities: formData.serviceAreaCities,
+        services: formData.services.map(s => s.name),
+        competitors: formData.competitors.filter(c => c.name || c.domain),
+        geoGridKeywords: formData.geoGridKeywords,
+        geoGridSize: formData.geoGridSize,
+        geoGridSpacingMiles: formData.geoGridSpacingMiles,
       }, { useAdminAuth: true });
       const audit = await res.json();
+
+      if (formData.businessLat && formData.businessLng) {
+        await apiRequest("POST", `/api/seo-audits/${audit.id}/configure`, {
+          businessLat: formData.businessLat,
+          businessLng: formData.businessLng,
+        }, { useAdminAuth: true });
+      }
 
       await apiRequest("POST", `/api/seo-audits/${audit.id}/run`, undefined, { useAdminAuth: true });
       return audit;
@@ -146,9 +321,9 @@ export default function SeoAuditWizard() {
 
   const canAdvance = (): boolean => {
     switch (step) {
-      case 0: return data.businessName.length > 0 && data.businessUrl.length > 0;
-      case 1: return data.businessType === "national" || data.serviceAreaCities.length > 0;
-      case 2: return data.services.length > 0;
+      case 0: return watchedData.businessName.length > 0 && watchedData.businessUrl.length > 0;
+      case 1: return watchedData.businessType === "national" || watchedData.serviceAreaCities.length > 0;
+      case 2: return watchedData.services.length > 0;
       case 3: return true;
       case 4: return true;
       case 5: return true;
@@ -158,41 +333,74 @@ export default function SeoAuditWizard() {
 
   const addCity = () => {
     const city = cityState ? `${cityInput.trim()}, ${cityState}` : cityInput.trim();
-    if (city && !data.serviceAreaCities.includes(city)) {
-      update({ serviceAreaCities: [...data.serviceAreaCities, city] });
+    const current = form.getValues("serviceAreaCities");
+    if (city && !current.includes(city)) {
+      form.setValue("serviceAreaCities", [...current, city]);
     }
     setCityInput("");
     setCityState("");
   };
 
+  const removeCity = (city: string) => {
+    const current = form.getValues("serviceAreaCities");
+    form.setValue("serviceAreaCities", current.filter(c => c !== city));
+  };
+
   const addService = () => {
     const svc = serviceInput.trim();
-    if (svc && !data.services.includes(svc)) {
-      update({ services: [...data.services, svc] });
+    if (svc && !watchedData.services.some(s => s.name === svc)) {
+      appendService({ name: svc, customKeywords: [] });
     }
     setServiceInput("");
   };
 
+  const addCustomKeyword = (serviceIndex: number) => {
+    const kw = (customKwInput[serviceIndex] || "").trim();
+    if (!kw) return;
+    const current = form.getValues(`services.${serviceIndex}.customKeywords`) || [];
+    if (!current.includes(kw)) {
+      form.setValue(`services.${serviceIndex}.customKeywords`, [...current, kw]);
+    }
+    setCustomKwInput(prev => ({ ...prev, [serviceIndex]: "" }));
+  };
+
+  const removeCustomKeyword = (serviceIndex: number, kw: string) => {
+    const current = form.getValues(`services.${serviceIndex}.customKeywords`) || [];
+    form.setValue(`services.${serviceIndex}.customKeywords`, current.filter(k => k !== kw));
+  };
+
   const addCompetitor = () => {
-    if ((compName.trim() || compDomain.trim()) && data.competitors.length < 3) {
-      update({
-        competitors: [...data.competitors, { name: compName.trim(), domain: compDomain.trim() }],
-      });
+    if ((compName.trim() || compDomain.trim()) && competitorFields.length < 3) {
+      appendCompetitor({ name: compName.trim(), domain: compDomain.trim() });
     }
     setCompName("");
     setCompDomain("");
   };
 
   const toggleGeoKeyword = (kw: string) => {
-    const current = data.geoGridKeywords;
+    const current = form.getValues("geoGridKeywords");
     if (current.includes(kw)) {
-      update({ geoGridKeywords: current.filter(k => k !== kw) });
+      form.setValue("geoGridKeywords", current.filter(k => k !== kw));
     } else if (current.length < 5) {
-      update({ geoGridKeywords: [...current, kw] });
+      form.setValue("geoGridKeywords", [...current, kw]);
     }
   };
 
-  const cost = estimateCost(data);
+  const allKeywords = useMemo(() => {
+    const kws: Array<{ keyword: string; source: string; service: string }> = [];
+    for (const svc of watchedData.services) {
+      kws.push({ keyword: svc.name, source: "service", service: svc.name });
+      kws.push({ keyword: `${svc.name} near me`, source: "auto", service: svc.name });
+      kws.push({ keyword: `best ${svc.name}`, source: "auto", service: svc.name });
+      for (const ck of (svc.customKeywords || [])) {
+        kws.push({ keyword: ck, source: "custom", service: svc.name });
+      }
+    }
+    return kws;
+  }, [watchedData.services]);
+
+  const cost = estimateCost(watchedData);
+  const hasLatLng = watchedData.businessLat !== undefined && watchedData.businessLng !== undefined && watchedData.businessLat !== 0;
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
@@ -228,474 +436,587 @@ export default function SeoAuditWizard() {
         </div>
       </div>
 
-      <Card className="border border-gray-200 shadow-sm">
-        <CardContent className="p-6">
-          {step === 0 && (
-            <div className="space-y-5">
-              <CardHeader className="px-0 pt-0">
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <Building2 className="w-5 h-5 text-[#ff5800]" />
-                  Business Information
-                </CardTitle>
-              </CardHeader>
+      <Form {...form}>
+        <div>
+          <Card className="border border-gray-200 shadow-sm">
+            <CardContent className="p-6">
+              {step === 0 && (
+                <div className="space-y-5">
+                  <CardHeader className="px-0 pt-0">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <Building2 className="w-5 h-5 text-[#ff5800]" />
+                      Business Information
+                    </CardTitle>
+                  </CardHeader>
 
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="businessName">Business Name *</Label>
-                  <Input
-                    id="businessName"
-                    value={data.businessName}
-                    onChange={e => update({ businessName: e.target.value })}
-                    placeholder="Acme Plumbing Co."
-                    data-testid="input-business-name"
-                  />
+                  <div className="space-y-4">
+                    <FormField control={form.control} name="businessName" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Business Name *</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Acme Plumbing Co." data-testid="input-business-name" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+
+                    <FormField control={form.control} name="businessUrl" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Website URL *</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="https://acmeplumbing.com" data-testid="input-business-url" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+
+                    <FormField control={form.control} name="businessAddress" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Business Address</FormLabel>
+                        <div className="flex gap-2">
+                          <FormControl>
+                            <Input {...field} placeholder="123 Main St, Minneapolis, MN 55401" data-testid="input-business-address" />
+                          </FormControl>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => geocodeAddress(field.value || "")}
+                            disabled={isGeocoding || !field.value}
+                            data-testid="button-geocode"
+                          >
+                            {isGeocoding ? <Loader2 className="w-4 h-4 animate-spin" /> : <MapPinned className="w-4 h-4" />}
+                          </Button>
+                        </div>
+                        {hasLatLng && (
+                          <p className="text-xs text-green-600 flex items-center gap-1 mt-1">
+                            <Check className="w-3 h-3" />
+                            Located: {watchedData.businessLat?.toFixed(4)}, {watchedData.businessLng?.toFixed(4)}
+                          </p>
+                        )}
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+
+                    <FormField control={form.control} name="businessType" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Business Type</FormLabel>
+                        <FormControl>
+                          <RadioGroup
+                            value={field.value}
+                            onValueChange={field.onChange}
+                            className="flex gap-4 mt-2"
+                          >
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="local" id="type-local" data-testid="radio-type-local" />
+                              <Label htmlFor="type-local" className="font-normal">Local Business</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="national" id="type-national" data-testid="radio-type-national" />
+                              <Label htmlFor="type-national" className="font-normal">National / Online</Label>
+                            </div>
+                          </RadioGroup>
+                        </FormControl>
+                      </FormItem>
+                    )} />
+
+                    <FormField control={form.control} name="industry" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Industry</FormLabel>
+                        <Select value={field.value} onValueChange={field.onChange}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-industry">
+                              <SelectValue placeholder="Select industry" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {INDUSTRIES.map(ind => (
+                              <SelectItem key={ind} value={ind}>{ind}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </FormItem>
+                    )} />
+                  </div>
                 </div>
-                <div>
-                  <Label htmlFor="businessUrl">Website URL *</Label>
-                  <Input
-                    id="businessUrl"
-                    value={data.businessUrl}
-                    onChange={e => update({ businessUrl: e.target.value })}
-                    placeholder="https://acmeplumbing.com"
-                    data-testid="input-business-url"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="businessAddress">Business Address</Label>
-                  <Input
-                    id="businessAddress"
-                    value={data.businessAddress}
-                    onChange={e => update({ businessAddress: e.target.value })}
-                    placeholder="123 Main St, Minneapolis, MN 55401"
-                    data-testid="input-business-address"
-                  />
-                </div>
-                <div>
-                  <Label>Business Type</Label>
-                  <RadioGroup
-                    value={data.businessType}
-                    onValueChange={(v) => update({ businessType: v as "local" | "national" })}
-                    className="flex gap-4 mt-2"
-                  >
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="local" id="type-local" data-testid="radio-type-local" />
-                      <Label htmlFor="type-local" className="font-normal">Local Business</Label>
+              )}
+
+              {step === 1 && (
+                <div className="space-y-5">
+                  <CardHeader className="px-0 pt-0">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <MapPin className="w-5 h-5 text-[#ff5800]" />
+                      Service Area
+                    </CardTitle>
+                  </CardHeader>
+
+                  {watchedData.businessType === "national" ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <Globe className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                      <p className="text-lg font-medium text-gray-700">National / Online Business</p>
+                      <p className="text-sm">Service area configuration is skipped for national businesses.</p>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="national" id="type-national" data-testid="radio-type-national" />
-                      <Label htmlFor="type-national" className="font-normal">National / Online</Label>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="flex gap-2">
+                        <Input
+                          value={cityInput}
+                          onChange={e => setCityInput(e.target.value)}
+                          placeholder="City name"
+                          onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addCity())}
+                          className="flex-1"
+                          data-testid="input-city"
+                        />
+                        <Select value={cityState} onValueChange={setCityState}>
+                          <SelectTrigger className="w-24" data-testid="select-state">
+                            <SelectValue placeholder="State" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {US_STATES.map(st => (
+                              <SelectItem key={st} value={st}>{st}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button type="button" onClick={addCity} variant="outline" data-testid="button-add-city">
+                          <Plus className="w-4 h-4" />
+                        </Button>
+                      </div>
+
+                      {watchedData.serviceAreaCities.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {watchedData.serviceAreaCities.map(city => (
+                            <Badge key={city} variant="secondary" className="flex items-center gap-1 px-3 py-1.5">
+                              <MapPin className="w-3 h-3" />
+                              {city}
+                              <button
+                                type="button"
+                                onClick={() => removeCity(city)}
+                                className="ml-1 hover:text-red-500"
+                                data-testid={`button-remove-city-${city}`}
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-400">Add at least one city to your service area.</p>
+                      )}
+
+                      <ServiceAreaMap cities={watchedData.serviceAreaCities} />
                     </div>
-                  </RadioGroup>
+                  )}
                 </div>
-                <div>
-                  <Label>Industry</Label>
-                  <Select value={data.industry} onValueChange={(v) => update({ industry: v })}>
-                    <SelectTrigger data-testid="select-industry">
-                      <SelectValue placeholder="Select industry" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {INDUSTRIES.map(ind => (
-                        <SelectItem key={ind} value={ind}>{ind}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
-          )}
+              )}
 
-          {step === 1 && (
-            <div className="space-y-5">
-              <CardHeader className="px-0 pt-0">
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <MapPin className="w-5 h-5 text-[#ff5800]" />
-                  Service Area
-                </CardTitle>
-              </CardHeader>
+              {step === 2 && (
+                <div className="space-y-5">
+                  <CardHeader className="px-0 pt-0">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <Search className="w-5 h-5 text-[#ff5800]" />
+                      Services
+                    </CardTitle>
+                  </CardHeader>
 
-              {data.businessType === "national" ? (
-                <div className="text-center py-8 text-gray-500">
-                  <Globe className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                  <p className="text-lg font-medium text-gray-700">National / Online Business</p>
-                  <p className="text-sm">Service area configuration is skipped for national businesses.</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
+                  <div className="flex items-center gap-2 bg-blue-50 text-blue-700 text-sm rounded-lg px-4 py-3">
+                    <Sparkles className="w-4 h-4 shrink-0" />
+                    <span>
+                      The pipeline will auto-detect additional services from the website crawl. Add your primary services here to seed keyword research.
+                    </span>
+                  </div>
+
                   <div className="flex gap-2">
                     <Input
-                      value={cityInput}
-                      onChange={e => setCityInput(e.target.value)}
-                      placeholder="City name"
-                      onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addCity())}
+                      value={serviceInput}
+                      onChange={e => setServiceInput(e.target.value)}
+                      placeholder="e.g. Drain Cleaning"
+                      onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addService())}
                       className="flex-1"
-                      data-testid="input-city"
+                      data-testid="input-service"
                     />
-                    <Select value={cityState} onValueChange={setCityState}>
-                      <SelectTrigger className="w-24" data-testid="select-state">
-                        <SelectValue placeholder="State" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {US_STATES.map(st => (
-                          <SelectItem key={st} value={st}>{st}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button onClick={addCity} variant="outline" data-testid="button-add-city">
-                      <Plus className="w-4 h-4" />
+                    <Button type="button" onClick={addService} variant="outline" data-testid="button-add-service">
+                      <Plus className="w-4 h-4 mr-1" /> Add
                     </Button>
                   </div>
 
-                  {data.serviceAreaCities.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {data.serviceAreaCities.map(city => (
-                        <Badge key={city} variant="secondary" className="flex items-center gap-1 px-3 py-1.5">
-                          <MapPin className="w-3 h-3" />
-                          {city}
-                          <button
-                            onClick={() => update({ serviceAreaCities: data.serviceAreaCities.filter(c => c !== city) })}
-                            className="ml-1 hover:text-red-500"
-                            data-testid={`button-remove-city-${city}`}
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </Badge>
+                  {serviceFields.length > 0 ? (
+                    <div className="space-y-3">
+                      {serviceFields.map((field, i) => (
+                        <div key={field.id} className="bg-gray-50 rounded-lg px-4 py-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium">{watchedData.services[i]?.name}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const kw = watchedData.services[i]?.name;
+                                if (kw) {
+                                  const current = form.getValues("geoGridKeywords");
+                                  form.setValue("geoGridKeywords", current.filter(k => k !== kw));
+                                }
+                                removeService(i);
+                              }}
+                              className="text-gray-400 hover:text-red-500"
+                              data-testid={`button-remove-service-${i}`}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                          <div className="pl-2">
+                            <p className="text-xs text-gray-400 mb-1.5">Custom keywords (optional):</p>
+                            <div className="flex flex-wrap gap-1.5 mb-2">
+                              {(watchedData.services[i]?.customKeywords || []).map(kw => (
+                                <Badge key={kw} variant="outline" className="text-xs flex items-center gap-1">
+                                  {kw}
+                                  <button
+                                    type="button"
+                                    onClick={() => removeCustomKeyword(i, kw)}
+                                    className="hover:text-red-500"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                </Badge>
+                              ))}
+                            </div>
+                            <div className="flex gap-1.5">
+                              <Input
+                                value={customKwInput[i] || ""}
+                                onChange={e => setCustomKwInput(prev => ({ ...prev, [i]: e.target.value }))}
+                                onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addCustomKeyword(i))}
+                                placeholder="Add keyword"
+                                className="h-7 text-xs flex-1"
+                                data-testid={`input-custom-keyword-${i}`}
+                              />
+                              <Button type="button" variant="ghost" size="sm" className="h-7 px-2" onClick={() => addCustomKeyword(i)} data-testid={`button-add-keyword-${i}`}>
+                                <Plus className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-sm text-gray-400">Add at least one city to your service area.</p>
+                    <p className="text-sm text-gray-400">Add at least one service.</p>
                   )}
                 </div>
               )}
-            </div>
-          )}
 
-          {step === 2 && (
-            <div className="space-y-5">
-              <CardHeader className="px-0 pt-0">
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <Search className="w-5 h-5 text-[#ff5800]" />
-                  Services
-                </CardTitle>
-              </CardHeader>
+              {step === 3 && (
+                <div className="space-y-5">
+                  <CardHeader className="px-0 pt-0">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <Users className="w-5 h-5 text-[#ff5800]" />
+                      Competitors (up to 3)
+                    </CardTitle>
+                  </CardHeader>
 
-              <p className="text-sm text-gray-500">
-                Add the services this business offers. These will be used for keyword research and content gap analysis.
-              </p>
+                  <p className="text-sm text-gray-500">
+                    Add up to 3 competitors to compare against. Leave blank to skip competitive analysis.
+                  </p>
 
-              <div className="flex gap-2">
-                <Input
-                  value={serviceInput}
-                  onChange={e => setServiceInput(e.target.value)}
-                  placeholder="e.g. Drain Cleaning"
-                  onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addService())}
-                  className="flex-1"
-                  data-testid="input-service"
-                />
-                <Button onClick={addService} variant="outline" data-testid="button-add-service">
-                  <Plus className="w-4 h-4 mr-1" /> Add
-                </Button>
-              </div>
-
-              {data.services.length > 0 ? (
-                <div className="space-y-2">
-                  {data.services.map((svc, i) => (
-                    <div key={svc} className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-2.5">
-                      <span className="text-sm font-medium">{svc}</span>
-                      <button
-                        onClick={() => update({ services: data.services.filter((_, j) => j !== i) })}
-                        className="text-gray-400 hover:text-red-500"
-                        data-testid={`button-remove-service-${i}`}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                  {competitorFields.length < 3 && (
+                    <div className="flex gap-2">
+                      <Input
+                        value={compName}
+                        onChange={e => setCompName(e.target.value)}
+                        placeholder="Business name"
+                        className="flex-1"
+                        data-testid="input-competitor-name"
+                      />
+                      <Input
+                        value={compDomain}
+                        onChange={e => setCompDomain(e.target.value)}
+                        placeholder="domain.com"
+                        className="flex-1"
+                        data-testid="input-competitor-domain"
+                      />
+                      <Button type="button" onClick={addCompetitor} variant="outline" data-testid="button-add-competitor">
+                        <Plus className="w-4 h-4" />
+                      </Button>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-400">Add at least one service.</p>
-              )}
-            </div>
-          )}
+                  )}
 
-          {step === 3 && (
-            <div className="space-y-5">
-              <CardHeader className="px-0 pt-0">
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <Users className="w-5 h-5 text-[#ff5800]" />
-                  Competitors (up to 3)
-                </CardTitle>
-              </CardHeader>
-
-              <p className="text-sm text-gray-500">
-                Add up to 3 competitors to compare against. Leave blank if you want the pipeline to skip competitive analysis.
-              </p>
-
-              {data.competitors.length < 3 && (
-                <div className="flex gap-2">
-                  <Input
-                    value={compName}
-                    onChange={e => setCompName(e.target.value)}
-                    placeholder="Business name"
-                    className="flex-1"
-                    data-testid="input-competitor-name"
-                  />
-                  <Input
-                    value={compDomain}
-                    onChange={e => setCompDomain(e.target.value)}
-                    placeholder="domain.com"
-                    className="flex-1"
-                    data-testid="input-competitor-domain"
-                  />
-                  <Button onClick={addCompetitor} variant="outline" data-testid="button-add-competitor">
-                    <Plus className="w-4 h-4" />
-                  </Button>
+                  {competitorFields.length > 0 ? (
+                    <div className="space-y-2">
+                      {competitorFields.map((field, i) => (
+                        <div key={field.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-2.5">
+                          <div className="flex items-center gap-3">
+                            <Building2 className="w-4 h-4 text-gray-400" />
+                            <span className="text-sm font-medium">{watchedData.competitors[i]?.name || "—"}</span>
+                            <span className="text-sm text-gray-400">{watchedData.competitors[i]?.domain}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeCompetitor(i)}
+                            className="text-gray-400 hover:text-red-500"
+                            data-testid={`button-remove-competitor-${i}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-400 italic">No competitors added — competitive analysis will be skipped.</p>
+                  )}
                 </div>
               )}
 
-              {data.competitors.length > 0 ? (
-                <div className="space-y-2">
-                  {data.competitors.map((comp, i) => (
-                    <div key={i} className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-2.5">
-                      <div className="flex items-center gap-3">
-                        <Building2 className="w-4 h-4 text-gray-400" />
-                        <span className="text-sm font-medium">{comp.name || "—"}</span>
-                        <span className="text-sm text-gray-400">{comp.domain}</span>
+              {step === 4 && (
+                <div className="space-y-5">
+                  <CardHeader className="px-0 pt-0">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <Grid3X3 className="w-5 h-5 text-[#ff5800]" />
+                      Geo Grid Configuration
+                    </CardTitle>
+                  </CardHeader>
+
+                  {watchedData.businessType === "national" ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <Globe className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                      <p className="text-lg font-medium text-gray-700">Skipped for National Businesses</p>
+                      <p className="text-sm">Geo grid analysis is only available for local businesses.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      <div>
+                        <Label className="text-sm font-medium mb-3 block">
+                          Keywords to Map (select up to 5)
+                        </Label>
+                        {allKeywords.length > 0 ? (
+                          <div className="space-y-1.5 max-h-64 overflow-y-auto pr-2">
+                            {allKeywords.map((item, idx) => (
+                              <div key={`${item.keyword}-${idx}`} className="flex items-center justify-between py-1">
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox
+                                    id={`geo-kw-${idx}`}
+                                    checked={watchedData.geoGridKeywords.includes(item.keyword)}
+                                    onCheckedChange={() => toggleGeoKeyword(item.keyword)}
+                                    disabled={!watchedData.geoGridKeywords.includes(item.keyword) && watchedData.geoGridKeywords.length >= 5}
+                                    data-testid={`checkbox-geo-keyword-${item.keyword}`}
+                                  />
+                                  <Label htmlFor={`geo-kw-${idx}`} className="font-normal text-sm">{item.keyword}</Label>
+                                </div>
+                                <Badge variant="outline" className="text-[10px]">
+                                  {item.source === "service" ? "Primary" : item.source === "auto" ? "Auto" : "Custom"}
+                                </Badge>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-400">No services added. Go back to Step 3 to add services.</p>
+                        )}
+                        <p className="text-xs text-gray-400 mt-2">
+                          {watchedData.geoGridKeywords.length}/5 selected
+                        </p>
                       </div>
-                      <button
-                        onClick={() => update({ competitors: data.competitors.filter((_, j) => j !== i) })}
-                        className="text-gray-400 hover:text-red-500"
-                        data-testid={`button-remove-competitor-${i}`}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+
+                      <div>
+                        <Label className="text-sm font-medium mb-3 block">Grid Size</Label>
+                        <RadioGroup
+                          value={String(watchedData.geoGridSize)}
+                          onValueChange={v => form.setValue("geoGridSize", parseInt(v))}
+                          className="flex flex-wrap gap-3"
+                        >
+                          {GRID_SIZES.map(g => (
+                            <div key={g.value} className="flex items-center space-x-2">
+                              <RadioGroupItem value={String(g.value)} id={`grid-${g.value}`} data-testid={`radio-grid-${g.value}`} />
+                              <Label htmlFor={`grid-${g.value}`} className="font-normal text-sm">{g.label}</Label>
+                            </div>
+                          ))}
+                        </RadioGroup>
+                      </div>
+
+                      <div>
+                        <Label className="text-sm font-medium mb-3 block">Point Spacing</Label>
+                        <RadioGroup
+                          value={String(watchedData.geoGridSpacingMiles)}
+                          onValueChange={v => form.setValue("geoGridSpacingMiles", parseFloat(v))}
+                          className="flex flex-wrap gap-3"
+                        >
+                          {SPACING_OPTIONS.map(s => (
+                            <div key={s.value} className="flex items-center space-x-2">
+                              <RadioGroupItem value={String(s.value)} id={`spacing-${s.value}`} data-testid={`radio-spacing-${s.value}`} />
+                              <Label htmlFor={`spacing-${s.value}`} className="font-normal text-sm">{s.label}</Label>
+                            </div>
+                          ))}
+                        </RadioGroup>
+                      </div>
+
+                      {watchedData.geoGridKeywords.length > 0 && (
+                        <div className="bg-blue-50 rounded-lg p-4">
+                          <div className="flex items-center gap-2 text-blue-700 text-sm font-medium mb-1">
+                            <Grid3X3 className="w-4 h-4" />
+                            Grid Preview
+                          </div>
+                          <p className="text-sm text-blue-600">
+                            {watchedData.geoGridKeywords.length} keyword{watchedData.geoGridKeywords.length !== 1 ? "s" : ""} × {watchedData.geoGridSize}×{watchedData.geoGridSize} grid ({watchedData.geoGridSize * watchedData.geoGridSize} points) @ {watchedData.geoGridSpacingMiles}mi spacing
+                          </p>
+                          <p className="text-xs text-blue-500 mt-1">
+                            Total API calls: {watchedData.geoGridKeywords.length * watchedData.geoGridSize * watchedData.geoGridSize}
+                          </p>
+                        </div>
+                      )}
+
+                      {hasLatLng && watchedData.businessLat && watchedData.businessLng && (
+                        <GeoGridPreviewMap
+                          lat={watchedData.businessLat}
+                          lng={watchedData.businessLng}
+                          gridSize={watchedData.geoGridSize}
+                          spacingMiles={watchedData.geoGridSpacingMiles}
+                          keywords={watchedData.geoGridKeywords}
+                        />
+                      )}
+
+                      {!hasLatLng && watchedData.geoGridKeywords.length > 0 && (
+                        <div className="flex items-start gap-2 bg-amber-50 text-amber-700 text-sm rounded-lg px-4 py-3">
+                          <Info className="w-4 h-4 shrink-0 mt-0.5" />
+                          <span>
+                            Set a business address in Step 1 and geocode it to see the grid overlay on the map.
+                          </span>
+                        </div>
+                      )}
                     </div>
-                  ))}
+                  )}
                 </div>
-              ) : (
-                <p className="text-sm text-gray-400 italic">No competitors added — competitive analysis will be skipped.</p>
               )}
-            </div>
-          )}
 
-          {step === 4 && (
-            <div className="space-y-5">
-              <CardHeader className="px-0 pt-0">
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <Grid3X3 className="w-5 h-5 text-[#ff5800]" />
-                  Geo Grid Configuration
-                </CardTitle>
-              </CardHeader>
+              {step === 5 && (
+                <div className="space-y-5">
+                  <CardHeader className="px-0 pt-0">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <Check className="w-5 h-5 text-[#ff5800]" />
+                      Review & Run Audit
+                    </CardTitle>
+                  </CardHeader>
 
-              {data.businessType === "national" ? (
-                <div className="text-center py-8 text-gray-500">
-                  <Globe className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                  <p className="text-lg font-medium text-gray-700">Skipped for National Businesses</p>
-                  <p className="text-sm">Geo grid analysis is only available for local businesses.</p>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  <div>
-                    <Label className="text-sm font-medium mb-3 block">
-                      Keywords to Map (select up to 5)
-                    </Label>
-                    {data.services.length > 0 ? (
-                      <div className="space-y-2">
-                        {data.services.map(svc => (
-                          <div key={svc} className="flex items-center space-x-2">
-                            <Checkbox
-                              id={`geo-kw-${svc}`}
-                              checked={data.geoGridKeywords.includes(svc)}
-                              onCheckedChange={() => toggleGeoKeyword(svc)}
-                              disabled={!data.geoGridKeywords.includes(svc) && data.geoGridKeywords.length >= 5}
-                              data-testid={`checkbox-geo-keyword-${svc}`}
-                            />
-                            <Label htmlFor={`geo-kw-${svc}`} className="font-normal text-sm">{svc}</Label>
+                  <div className="space-y-4">
+                    <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                      <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider">Business</h4>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div><span className="text-gray-500">Name:</span> <span className="font-medium">{watchedData.businessName}</span></div>
+                        <div><span className="text-gray-500">URL:</span> <span className="font-medium">{watchedData.businessUrl}</span></div>
+                        <div><span className="text-gray-500">Type:</span> <span className="font-medium">{watchedData.businessType}</span></div>
+                        {watchedData.industry && <div><span className="text-gray-500">Industry:</span> <span className="font-medium">{watchedData.industry}</span></div>}
+                        {watchedData.businessAddress && <div className="col-span-2"><span className="text-gray-500">Address:</span> <span className="font-medium">{watchedData.businessAddress}</span></div>}
+                        {hasLatLng && <div className="col-span-2"><span className="text-gray-500">Coordinates:</span> <span className="font-medium text-green-600">{watchedData.businessLat?.toFixed(4)}, {watchedData.businessLng?.toFixed(4)}</span></div>}
+                      </div>
+                    </div>
+
+                    {watchedData.serviceAreaCities.length > 0 && (
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-2">Service Area</h4>
+                        <div className="flex flex-wrap gap-1.5">
+                          {watchedData.serviceAreaCities.map(c => (
+                            <Badge key={c} variant="outline" className="text-xs">{c}</Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-2">Services ({watchedData.services.length})</h4>
+                      <div className="space-y-1">
+                        {watchedData.services.map(s => (
+                          <div key={s.name} className="text-sm">
+                            <span className="font-medium">{s.name}</span>
+                            {s.customKeywords.length > 0 && (
+                              <span className="text-gray-400 ml-2">
+                                + {s.customKeywords.length} custom keyword{s.customKeywords.length !== 1 ? "s" : ""}
+                              </span>
+                            )}
                           </div>
                         ))}
                       </div>
-                    ) : (
-                      <p className="text-sm text-gray-400">No services added. Go back to Step 3 to add services.</p>
-                    )}
-                    <p className="text-xs text-gray-400 mt-2">
-                      {data.geoGridKeywords.length}/5 selected
-                    </p>
-                  </div>
-
-                  <div>
-                    <Label className="text-sm font-medium mb-3 block">Grid Size</Label>
-                    <RadioGroup
-                      value={String(data.geoGridSize)}
-                      onValueChange={v => update({ geoGridSize: parseInt(v) })}
-                      className="flex flex-wrap gap-3"
-                    >
-                      {GRID_SIZES.map(g => (
-                        <div key={g.value} className="flex items-center space-x-2">
-                          <RadioGroupItem value={String(g.value)} id={`grid-${g.value}`} data-testid={`radio-grid-${g.value}`} />
-                          <Label htmlFor={`grid-${g.value}`} className="font-normal text-sm">{g.label}</Label>
-                        </div>
-                      ))}
-                    </RadioGroup>
-                  </div>
-
-                  <div>
-                    <Label className="text-sm font-medium mb-3 block">Point Spacing</Label>
-                    <RadioGroup
-                      value={String(data.geoGridSpacingMiles)}
-                      onValueChange={v => update({ geoGridSpacingMiles: parseFloat(v) })}
-                      className="flex flex-wrap gap-3"
-                    >
-                      {SPACING_OPTIONS.map(s => (
-                        <div key={s.value} className="flex items-center space-x-2">
-                          <RadioGroupItem value={String(s.value)} id={`spacing-${s.value}`} data-testid={`radio-spacing-${s.value}`} />
-                          <Label htmlFor={`spacing-${s.value}`} className="font-normal text-sm">{s.label}</Label>
-                        </div>
-                      ))}
-                    </RadioGroup>
-                  </div>
-
-                  {data.geoGridKeywords.length > 0 && (
-                    <div className="bg-blue-50 rounded-lg p-4">
-                      <div className="flex items-center gap-2 text-blue-700 text-sm font-medium mb-1">
-                        <Grid3X3 className="w-4 h-4" />
-                        Grid Preview
-                      </div>
-                      <p className="text-sm text-blue-600">
-                        {data.geoGridKeywords.length} keyword{data.geoGridKeywords.length !== 1 ? "s" : ""} × {data.geoGridSize}×{data.geoGridSize} grid ({data.geoGridSize * data.geoGridSize} points) @ {data.geoGridSpacingMiles}mi spacing
-                      </p>
-                      <p className="text-xs text-blue-500 mt-1">
-                        Total API calls: {data.geoGridKeywords.length * data.geoGridSize * data.geoGridSize}
-                      </p>
                     </div>
-                  )}
+
+                    {watchedData.competitors.length > 0 && (
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-2">Competitors ({watchedData.competitors.length})</h4>
+                        {watchedData.competitors.map((c, i) => (
+                          <div key={i} className="text-sm">{c.name} — <span className="text-gray-500">{c.domain}</span></div>
+                        ))}
+                      </div>
+                    )}
+
+                    {watchedData.businessType === "local" && watchedData.geoGridKeywords.length > 0 && (
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-2">Geo Grid</h4>
+                        <div className="text-sm space-y-1">
+                          <div><span className="text-gray-500">Keywords:</span> {watchedData.geoGridKeywords.join(", ")}</div>
+                          <div><span className="text-gray-500">Grid:</span> {watchedData.geoGridSize}×{watchedData.geoGridSize} @ {watchedData.geoGridSpacingMiles}mi</div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
+                      <h4 className="text-sm font-bold text-orange-700 uppercase tracking-wider mb-2 flex items-center gap-1">
+                        <DollarSign className="w-4 h-4" />
+                        Estimated Cost
+                      </h4>
+                      <div className="space-y-1">
+                        {Object.entries(cost.breakdown).filter(([, v]) => v > 0).map(([k, v]) => (
+                          <div key={k} className="flex justify-between text-sm">
+                            <span className="text-orange-700">{k}</span>
+                            <span className="font-medium text-orange-800">${v.toFixed(2)}</span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between text-sm font-bold border-t border-orange-200 pt-1 mt-1">
+                          <span className="text-orange-800">Total</span>
+                          <span className="text-orange-900">${cost.total.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
-            </div>
-          )}
 
-          {step === 5 && (
-            <div className="space-y-5">
-              <CardHeader className="px-0 pt-0">
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <Check className="w-5 h-5 text-[#ff5800]" />
-                  Review & Run Audit
-                </CardTitle>
-              </CardHeader>
+              <div className="flex justify-between mt-8 pt-4 border-t">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setStep(s => s - 1)}
+                  disabled={step === 0}
+                  data-testid="button-prev-step"
+                >
+                  <ArrowLeft className="w-4 h-4 mr-1" /> Back
+                </Button>
 
-              <div className="space-y-4">
-                <div className="bg-gray-50 rounded-lg p-4 space-y-3">
-                  <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider">Business</h4>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div><span className="text-gray-500">Name:</span> <span className="font-medium">{data.businessName}</span></div>
-                    <div><span className="text-gray-500">URL:</span> <span className="font-medium">{data.businessUrl}</span></div>
-                    <div><span className="text-gray-500">Type:</span> <span className="font-medium">{data.businessType}</span></div>
-                    {data.industry && <div><span className="text-gray-500">Industry:</span> <span className="font-medium">{data.industry}</span></div>}
-                    {data.businessAddress && <div className="col-span-2"><span className="text-gray-500">Address:</span> <span className="font-medium">{data.businessAddress}</span></div>}
-                  </div>
-                </div>
-
-                {data.serviceAreaCities.length > 0 && (
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-2">Service Area</h4>
-                    <div className="flex flex-wrap gap-1.5">
-                      {data.serviceAreaCities.map(c => (
-                        <Badge key={c} variant="outline" className="text-xs">{c}</Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-2">Services ({data.services.length})</h4>
-                  <div className="flex flex-wrap gap-1.5">
-                    {data.services.map(s => (
-                      <Badge key={s} variant="secondary" className="text-xs">{s}</Badge>
-                    ))}
-                  </div>
-                </div>
-
-                {data.competitors.length > 0 && (
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-2">Competitors ({data.competitors.length})</h4>
-                    {data.competitors.map((c, i) => (
-                      <div key={i} className="text-sm">{c.name} — <span className="text-gray-500">{c.domain}</span></div>
-                    ))}
-                  </div>
-                )}
-
-                {data.businessType === "local" && data.geoGridKeywords.length > 0 && (
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-2">Geo Grid</h4>
-                    <div className="text-sm space-y-1">
-                      <div><span className="text-gray-500">Keywords:</span> {data.geoGridKeywords.join(", ")}</div>
-                      <div><span className="text-gray-500">Grid:</span> {data.geoGridSize}×{data.geoGridSize} @ {data.geoGridSpacingMiles}mi</div>
-                    </div>
-                  </div>
-                )}
-
-                <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
-                  <h4 className="text-sm font-bold text-orange-700 uppercase tracking-wider mb-2 flex items-center gap-1">
-                    <DollarSign className="w-4 h-4" />
-                    Estimated Cost
-                  </h4>
-                  <div className="space-y-1">
-                    {Object.entries(cost.breakdown).filter(([, v]) => v > 0).map(([k, v]) => (
-                      <div key={k} className="flex justify-between text-sm">
-                        <span className="text-orange-700">{k}</span>
-                        <span className="font-medium text-orange-800">${v.toFixed(2)}</span>
-                      </div>
-                    ))}
-                    <div className="flex justify-between text-sm font-bold border-t border-orange-200 pt-1 mt-1">
-                      <span className="text-orange-800">Total</span>
-                      <span className="text-orange-900">${cost.total.toFixed(2)}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="flex justify-between mt-8 pt-4 border-t">
-            <Button
-              variant="outline"
-              onClick={() => setStep(s => s - 1)}
-              disabled={step === 0}
-              data-testid="button-prev-step"
-            >
-              <ArrowLeft className="w-4 h-4 mr-1" /> Back
-            </Button>
-
-            {step < STEPS.length - 1 ? (
-              <Button
-                onClick={() => setStep(s => s + 1)}
-                disabled={!canAdvance()}
-                className="bg-[#ff5800] hover:bg-[#e04f00]"
-                data-testid="button-next-step"
-              >
-                Next <ArrowRight className="w-4 h-4 ml-1" />
-              </Button>
-            ) : (
-              <Button
-                onClick={() => createAndRunMutation.mutate()}
-                disabled={createAndRunMutation.isPending}
-                className="bg-[#ff5800] hover:bg-[#e04f00]"
-                data-testid="button-run-audit"
-              >
-                {createAndRunMutation.isPending ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Starting...
-                  </>
+                {step < STEPS.length - 1 ? (
+                  <Button
+                    type="button"
+                    onClick={() => setStep(s => s + 1)}
+                    disabled={!canAdvance()}
+                    className="bg-[#ff5800] hover:bg-[#e04f00]"
+                    data-testid="button-next-step"
+                  >
+                    Next <ArrowRight className="w-4 h-4 ml-1" />
+                  </Button>
                 ) : (
-                  <>
-                    <Play className="w-4 h-4 mr-2" />
-                    Run Audit
-                  </>
+                  <Button
+                    type="button"
+                    onClick={() => form.handleSubmit((d) => createAndRunMutation.mutate(d))()}
+                    disabled={createAndRunMutation.isPending}
+                    className="bg-[#ff5800] hover:bg-[#e04f00]"
+                    data-testid="button-run-audit"
+                  >
+                    {createAndRunMutation.isPending ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Starting...
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-4 h-4 mr-2" />
+                        Run Audit
+                      </>
+                    )}
+                  </Button>
                 )}
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </Form>
     </div>
   );
 }

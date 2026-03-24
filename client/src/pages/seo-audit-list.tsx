@@ -204,6 +204,20 @@ export default function SeoAuditList() {
                       </div>
                     )}
 
+                    {audit.marketPositionScore !== null && (
+                      <div className="text-center">
+                        <div className={`inline-flex items-center justify-center w-12 h-12 rounded-lg font-bold text-sm ${
+                          audit.marketPositionScore >= 80 ? "bg-green-100 text-green-700" :
+                          audit.marketPositionScore >= 60 ? "bg-lime-100 text-lime-700" :
+                          audit.marketPositionScore >= 40 ? "bg-yellow-100 text-yellow-700" :
+                          "bg-red-100 text-red-700"
+                        }`}>
+                          {audit.marketPositionScore}
+                        </div>
+                        <div className="text-xs text-gray-400 mt-1">Position</div>
+                      </div>
+                    )}
+
                     {audit.shareOfLocalVoice !== null && (
                       <div className="text-center">
                         <div className="inline-flex items-center justify-center w-12 h-12 rounded-lg bg-blue-50 text-blue-700 font-bold text-sm">

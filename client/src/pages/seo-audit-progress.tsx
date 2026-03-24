@@ -6,6 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   ArrowLeft, Check, X, Loader2, AlertCircle,
   BarChart3, Globe, Search, MapPin, Shield, Brain,
   Star, FileText, Zap, Calculator, FileCheck, Clock
@@ -22,6 +27,7 @@ interface SeoAudit {
 interface StageInfo {
   name: string;
   label: string;
+  shortLabel: string;
   icon: typeof Check;
   status: "pending" | "running" | "complete" | "error";
   error?: string;
@@ -29,19 +35,19 @@ interface StageInfo {
   completedAt?: number;
 }
 
-const STAGE_CONFIG: Array<{ name: string; label: string; icon: typeof Check }> = [
-  { name: "intake", label: "Site Crawl & Intake", icon: Globe },
-  { name: "technical_audit", label: "Technical Audit", icon: Shield },
-  { name: "keyword_research", label: "Keyword Research", icon: Search },
-  { name: "serp_rankings", label: "SERP Rankings", icon: BarChart3 },
-  { name: "geo_grid", label: "Geo Grid Analysis", icon: MapPin },
-  { name: "competitive_intel", label: "Competitive Intel", icon: Zap },
-  { name: "geo_visibility", label: "AI/GEO Visibility", icon: Brain },
-  { name: "review_health", label: "Review Health", icon: Star },
-  { name: "gap_analysis", label: "Gap Analysis", icon: FileText },
-  { name: "content_scoring", label: "Content Scoring", icon: Calculator },
-  { name: "scoping_engine", label: "Scoping Engine", icon: FileCheck },
-  { name: "report_generation", label: "Report Generation", icon: Clock },
+const STAGE_CONFIG: Array<{ name: string; label: string; shortLabel: string; icon: typeof Check }> = [
+  { name: "intake", label: "Site Crawl & Intake", shortLabel: "Intake", icon: Globe },
+  { name: "technical_audit", label: "Technical Audit", shortLabel: "Technical", icon: Shield },
+  { name: "keyword_research", label: "Keyword Research", shortLabel: "Keywords", icon: Search },
+  { name: "serp_rankings", label: "SERP Rankings", shortLabel: "SERPs", icon: BarChart3 },
+  { name: "geo_grid", label: "Geo Grid Analysis", shortLabel: "Grid", icon: MapPin },
+  { name: "competitive_intel", label: "Competitive Intel", shortLabel: "Compete", icon: Zap },
+  { name: "geo_visibility", label: "AI/GEO Visibility", shortLabel: "AI/GEO", icon: Brain },
+  { name: "review_health", label: "Review Health", shortLabel: "Reviews", icon: Star },
+  { name: "gap_analysis", label: "Gap Analysis", shortLabel: "Gaps", icon: FileText },
+  { name: "content_scoring", label: "Content Scoring", shortLabel: "Scoring", icon: Calculator },
+  { name: "scoping_engine", label: "Scoping Engine", shortLabel: "Scope", icon: FileCheck },
+  { name: "report_generation", label: "Report Generation", shortLabel: "Report", icon: Clock },
 ];
 
 export default function SeoAuditProgress() {
@@ -51,6 +57,7 @@ export default function SeoAuditProgress() {
   const eventSourceRef = useRef<EventSource | null>(null);
   const [pipelineComplete, setPipelineComplete] = useState(false);
   const [hadErrors, setHadErrors] = useState(false);
+  const [activeStageDetail, setActiveStageDetail] = useState<StageInfo | null>(null);
 
   const [stages, setStages] = useState<StageInfo[]>(
     STAGE_CONFIG.map(s => ({ ...s, status: "pending" as const }))
@@ -116,9 +123,7 @@ export default function SeoAuditProgress() {
       }
     };
 
-    es.onerror = () => {
-      // SSE will auto-reconnect; no action needed
-    };
+    es.onerror = () => {};
 
     return () => {
       es.close();
@@ -129,6 +134,7 @@ export default function SeoAuditProgress() {
   const completedCount = stages.filter(s => s.status === "complete").length;
   const errorCount = stages.filter(s => s.status === "error").length;
   const progress = Math.round(((completedCount + errorCount) / stages.length) * 100);
+  const runningStage = stages.find(s => s.status === "running");
 
   if (!auditId) {
     return (
@@ -139,7 +145,7 @@ export default function SeoAuditProgress() {
   }
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
+    <div className="p-6 max-w-5xl mx-auto">
       <div className="mb-6">
         <Button variant="ghost" size="sm" onClick={() => navigate("/admin/seo-audits")} data-testid="button-back-to-list">
           <ArrowLeft className="w-4 h-4 mr-1" /> Back to Audits
@@ -177,27 +183,94 @@ export default function SeoAuditProgress() {
         </CardHeader>
 
         <CardContent>
-          <div className="mb-6">
+          <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-gray-700">
                 {pipelineComplete
                   ? hadErrors ? "Pipeline finished with errors" : "Pipeline complete"
-                  : `Running... ${progress}%`
+                  : runningStage
+                    ? `Running: ${runningStage.label}`
+                    : `Waiting... ${progress}%`
                 }
               </span>
               <span className="text-sm text-gray-500">
                 {completedCount}/{stages.length} stages
               </span>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-2.5">
+            <div className="w-full bg-gray-200 rounded-full h-2">
               <div
-                className={`h-2.5 rounded-full transition-all duration-500 ${
+                className={`h-2 rounded-full transition-all duration-500 ${
                   hadErrors ? "bg-orange-500" : pipelineComplete ? "bg-green-500" : "bg-[#ff5800]"
                 }`}
                 style={{ width: `${progress}%` }}
                 data-testid="progress-bar"
               />
             </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-0 mb-8 overflow-x-auto py-4">
+            {stages.map((stage, i) => {
+              const Icon = stage.icon;
+              const isActive = stage.status === "running";
+              return (
+                <div key={stage.name} className="flex items-center flex-shrink-0">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className="flex flex-col items-center gap-1.5 min-w-[60px]"
+                        onClick={() => setActiveStageDetail(stage)}
+                        data-testid={`stage-indicator-${stage.name}`}
+                      >
+                        <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all ${
+                          isActive
+                            ? "border-[#ff5800] bg-[#ff5800] text-white shadow-lg shadow-orange-200 scale-110"
+                            : stage.status === "complete"
+                            ? "border-green-500 bg-green-500 text-white"
+                            : stage.status === "error"
+                            ? "border-red-500 bg-red-500 text-white"
+                            : "border-gray-300 bg-white text-gray-400"
+                        }`}>
+                          {isActive ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : stage.status === "complete" ? (
+                            <Check className="w-4 h-4" />
+                          ) : stage.status === "error" ? (
+                            <X className="w-4 h-4" />
+                          ) : (
+                            <Icon className="w-4 h-4" />
+                          )}
+                        </div>
+                        <span className={`text-[10px] font-medium text-center leading-tight ${
+                          isActive ? "text-[#ff5800]" :
+                          stage.status === "complete" ? "text-green-600" :
+                          stage.status === "error" ? "text-red-600" :
+                          "text-gray-400"
+                        }`}>
+                          {stage.shortLabel}
+                        </span>
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      <p className="font-medium">{stage.label}</p>
+                      {stage.error && <p className="text-red-300 text-xs mt-1">{stage.error}</p>}
+                      {stage.status === "complete" && stage.startedAt && stage.completedAt && (
+                        <p className="text-gray-300 text-xs mt-1">
+                          Duration: {Math.round((stage.completedAt - stage.startedAt) / 1000)}s
+                        </p>
+                      )}
+                    </TooltipContent>
+                  </Tooltip>
+                  {i < stages.length - 1 && (
+                    <div className={`h-0.5 w-4 mx-0.5 flex-shrink-0 ${
+                      stage.status === "complete" ? "bg-green-400" :
+                      stage.status === "error" ? "bg-red-300" :
+                      "bg-gray-200"
+                    }`} />
+                  )}
+                </div>
+              );
+            })}
           </div>
 
           <div className="space-y-2">
