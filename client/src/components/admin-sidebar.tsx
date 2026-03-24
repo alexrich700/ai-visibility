@@ -20,11 +20,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { FileText, Monitor, Users, User, LogOut, ChevronUp, ExternalLink } from "lucide-react";
+import { FileText, Monitor, Users, User, LogOut, ChevronUp, ExternalLink, Search } from "lucide-react";
 import logoIcon from "@assets/Motivent_Logo_-_Tertiary_1774297439930.png";
 
 const mainNav = [
   { title: "Audit Submissions", url: "/admin", icon: FileText },
+  { title: "SEO Audits", url: "/admin/seo-audits", icon: Search },
   { title: "Monitoring Clients", url: "/admin/monitor/clients", icon: Monitor },
 ];
 

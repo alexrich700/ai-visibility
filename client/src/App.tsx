@@ -23,6 +23,9 @@ const MonitorSetup = lazy(() => import("@/pages/monitor-setup"));
 const MonitorDashboard = lazy(() => import("@/pages/monitor-dashboard"));
 const MonitorSettings = lazy(() => import("@/pages/monitor-settings"));
 const MonitorClientAccess = lazy(() => import("@/pages/monitor-client-access"));
+const SeoAuditList = lazy(() => import("@/pages/seo-audit-list"));
+const SeoAuditWizard = lazy(() => import("@/pages/seo-audit-wizard"));
+const SeoAuditProgress = lazy(() => import("@/pages/seo-audit-progress"));
 
 function PageLoader() {
   return (
@@ -42,6 +45,11 @@ function Router() {
 
         <Route path="/admin/login" component={AdminLogin} />
         <Route path="/admin/reset-password" component={AdminResetPassword} />
+
+        <Route path="/admin/seo-audits/new">{() => <AdminLayout><SeoAuditWizard /></AdminLayout>}</Route>
+        <Route path="/admin/seo-audits/:id/progress">{() => <AdminLayout><SeoAuditProgress /></AdminLayout>}</Route>
+        <Route path="/admin/seo-audits/:id/dashboard">{() => <AdminLayout><div>Dashboard placeholder</div></AdminLayout>}</Route>
+        <Route path="/admin/seo-audits">{() => <AdminLayout><SeoAuditList /></AdminLayout>}</Route>
 
         <Route path="/admin">{() => <AdminLayout><Admin /></AdminLayout>}</Route>
         <Route path="/admin/audit/:id">{() => <AdminLayout><AdminAuditView /></AdminLayout>}</Route>

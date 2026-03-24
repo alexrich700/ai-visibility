@@ -147,6 +147,30 @@ router.get('/:id', requireAdminOrMagicLink, async (req: Request, res: Response) 
   }
 });
 
+router.delete('/:id', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      res.status(400).json({ error: 'Invalid audit ID' });
+      return;
+    }
+    const audit = await storage.getSeoAuditById(id);
+    if (!audit) {
+      res.status(404).json({ error: 'Audit not found' });
+      return;
+    }
+    if (audit.status === 'running') {
+      res.status(409).json({ error: 'Cannot delete a running audit' });
+      return;
+    }
+    await storage.deleteSeoAudit(id);
+    res.json({ message: 'Audit deleted', id });
+  } catch (error) {
+    console.error('[SeoAudit] Delete error:', error);
+    res.status(500).json({ error: 'Failed to delete audit' });
+  }
+});
+
 router.post('/:id/configure', requireAdminAuth, async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id, 10);
