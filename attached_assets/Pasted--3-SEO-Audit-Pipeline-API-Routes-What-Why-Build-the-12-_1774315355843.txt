@@ -1,0 +1,36 @@
+#3 - SEO Audit Pipeline & API Routes
+What & Why
+Build the 12-stage audit pipeline orchestrator and all backend API routes including SSE progress streaming. The pipeline is the core engine that coordinates all external API calls, LLM processing, and data aggregation. It must handle 50 concurrent audits gracefully with stage-level error recovery (continue with degraded data, never halt the pipeline).
+
+Done looks like
+Pipeline orchestrator class that runs 12 stages sequentially per audit: intake (site crawl), technical audit, keyword research, SERP rankings, geo grid (skip for national), competitive intel, GEO/AI visibility (delegate to existing engine), review health, gap analysis, content scoring, scoping engine, and report generation
+Each stage logs start/complete/error to audit_stage_log table, emits events for SSE
+Pipeline continues on stage failure — stores error and proceeds with available data
+SSE endpoint streams real-time progress updates (stage_start, stage_complete, stage_error, pipeline_complete) to connected clients
+REST API routes: POST /api/seo-audits (create), GET /api/seo-audits (list), GET /api/seo-audits/:id (get full audit), POST /api/seo-audits/:id/configure (save wizard config), POST /api/seo-audits/:id/run (start pipeline via job queue), GET /api/seo-audits/:id/status (SSE stream), GET /api/seo-audits/:id/sections/:section (section-specific data), GET /api/seo-audits/:id/geogrid/:keyword (grid data for specific keyword), POST /api/seo-audits/:id/share (generate magic link), GET /api/seo-audit/view/:token (public magic link access)
+Pipeline uses the job queue from Task #1 to respect concurrency limits
+Admin authentication required for all write endpoints; magic link token for read-only client access
+Out of scope
+Frontend components (Tasks #3 and #4)
+External API service implementations (Task #1 — this task calls them)
+Database schema changes (Task #1)
+Tasks
+Pipeline orchestrator — Build server/services/seo-audit/pipeline.ts as an EventEmitter-based class. Each of the 12 stages calls the appropriate service from Task #1, processes results, and saves to the database via storage interface. Implement stage-level try/catch so failures don't halt the pipeline. Track current_stage and status on the audit record.
+
+Stage implementations — Implement each stage's business logic: intake (start crawl, geocode, extract services via LLM), technical audit (PageSpeed + crawl data → 37 checks → grade), keyword research (seed keywords → Google Ads API → classify via LLM → match to existing pages → PPC forecast), SERP rankings (batch organic SERP → find client/competitor ranks → detect AI overviews), geo grid (generate coordinates → batch Maps API → compute SoLV/rank), competitive intel (backlink summaries + Google reviews for up to 3 competitors), GEO/AI visibility (integrate with existing GEO visibility engine), review health (Google Places + sentiment via LLM), gap analysis (service/city/subcity page gaps from keyword matrix), content scoring (score existing pages via LLM), scoping (generate phased deliverables from findings), report (generate executive narrative via Sonnet + magic link).
+
+SSE progress streaming — Build an SSE endpoint at GET /api/seo-audits/:id/status that streams pipeline events. Use the existing SSE pattern from scan-job-processor. Support multiple concurrent listeners per audit.
+
+API routes — Build server/routes/seo-audit.ts with all REST endpoints. Include request validation with Zod schemas, admin auth middleware on write routes, magic link token validation on read routes. Section endpoints should return pre-shaped data for each dashboard section (snapshot, geogrid, geo_visibility, rankings, revenue, technical, content_gaps, backlinks, reviews, action_plan).
+
+Pipeline-queue integration — Wire the pipeline to use the job queue manager from Task #1. POST /api/seo-audits/:id/run should enqueue the pipeline job, not run it inline. The queue processes jobs respecting concurrency limits.
+
+Register routes — Add the new seo-audit routes to the Express app in server/routes/index.ts.
+
+Relevant files
+server/routes/index.ts
+server/routes/monitoring.ts
+server/services/scan-job-processor.ts
+server/services/monitoring/
+server/middleware/
+server/ai-services.ts
