@@ -517,7 +517,13 @@ function SnapshotSection({ data, audit, backlinksData }: { data: SnapshotData; a
     })),
   ];
 
-  const drChartData = compMetrics.map(m => ({ name: m.name, DR: m["Domain Rating"], Keywords: m["Organic KWs"] }));
+  const allMetricChartData = compMetrics.map(m => ({
+    name: m.name,
+    DR: m["Domain Rating"],
+    Keywords: Math.min(m["Organic KWs"], 500),
+    Traffic: Math.min(m["Monthly Traffic"], 5000),
+    Reviews: m.Reviews,
+  }));
 
   const verdict = data.marketPositionScore >= 70
     ? "You have a strong competitive position. Focus on maintaining your advantage."
@@ -566,10 +572,10 @@ function SnapshotSection({ data, audit, backlinksData }: { data: SnapshotData; a
         </table>
       </div>
 
-      {drChartData.length > 1 && (
-        <div className="h-48 mb-4">
+      {allMetricChartData.length > 1 && (
+        <div className="h-56 mb-4">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={drChartData}>
+            <BarChart data={allMetricChartData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="name" tick={{ fontSize: 11 }} />
               <YAxis />
@@ -577,6 +583,8 @@ function SnapshotSection({ data, audit, backlinksData }: { data: SnapshotData; a
               <Legend />
               <Bar dataKey="DR" name="Domain Rating" fill="#ff5800" radius={[4, 4, 0, 0]} />
               <Bar dataKey="Keywords" name="Organic Keywords" fill="#22c55e" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Traffic" name="Monthly Traffic" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Reviews" name="Reviews" fill="#ffb41c" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -641,6 +649,14 @@ function GeoGridSection({ data, auditId, authParam, isClientView }: { data: GeoG
         </>
       ) : (
         <p className="text-gray-500 text-sm py-4">No geo grid data available.</p>
+      )}
+      {activeGrid && (
+        <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-3 bg-gray-50 rounded-lg p-3" data-testid="geogrid-summary-bar">
+          <div className="text-center"><p className="text-xs text-gray-500">Your SoLV</p><p className="text-sm font-bold text-[#ff5800]">{Math.round((activeGrid.clientSolv ?? 0) * 100)}%</p></div>
+          {activeGrid.competitorName && <div className="text-center"><p className="text-xs text-gray-500">{activeGrid.competitorName} SoLV</p><p className="text-sm font-bold text-gray-600">{Math.round((activeGrid.competitorSolv ?? 0) * 100)}%</p></div>}
+          <div className="text-center"><p className="text-xs text-gray-500">Delta</p><p className={`text-sm font-bold ${(activeGrid.clientSolv ?? 0) >= (activeGrid.competitorSolv ?? 0) ? "text-green-600" : "text-red-600"}`}>{((activeGrid.clientSolv ?? 0) - (activeGrid.competitorSolv ?? 0) > 0 ? "+" : "")}{Math.round(((activeGrid.clientSolv ?? 0) - (activeGrid.competitorSolv ?? 0)) * 100)}%</p></div>
+          <div className="text-center"><p className="text-xs text-gray-500">Avg Rank</p><p className="text-sm font-bold">{activeGrid.clientAvgRank?.toFixed(1) || "—"}</p></div>
+        </div>
       )}
       <div className="mt-3 flex items-center gap-4 text-xs text-gray-500" data-testid="geogrid-legend">
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-green-500 inline-block" /> #1-3</span>
@@ -1162,11 +1178,14 @@ function ContentGapsSection({ data }: { data: ContentGapsData }) {
 function BacklinksSection({ data, audit }: { data: BacklinksData; audit: AuditRecord }) {
   const competitors = data.competitors || [];
 
-  const chartData = competitors.slice(0, 4).map(c => ({
-    name: c.businessName || c.domain,
-    DR: c.domainRating ?? 0,
-    RefDomains: Math.min(c.referringDomains ?? 0, 1000),
-  }));
+  const chartData = [
+    { name: audit.businessName || "You", DR: (audit.marketPositionScore ?? 0), RefDomains: 0 },
+    ...competitors.slice(0, 3).map(c => ({
+      name: c.businessName || c.domain,
+      DR: c.domainRating ?? 0,
+      RefDomains: Math.min(c.referringDomains ?? 0, 1000),
+    })),
+  ];
 
   const qualityData = competitors.slice(0, 4).map(c => {
     const summary = c.backlinkSummary || "";
