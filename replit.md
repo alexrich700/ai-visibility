@@ -84,6 +84,13 @@ A comprehensive 10-section SEO audit system with a 12-stage data pipeline, desig
 
 **External API Keys Needed**: `DATAFORSEO_LOGIN`, `DATAFORSEO_PASSWORD`, `GOOGLE_PSI_API_KEY`, `GOOGLE_PLACES_API_KEY`, `GOOGLE_ADS_*` (5 vars, for Keyword Planner)
 
+**SEO Audit Dashboard** (`client/src/pages/seo-audit-dashboard.tsx`):
+- 10-section scrollable dashboard with sidebar navigation and sticky header
+- Sections: Competitive Snapshot, Geo Grid (SVG map with rank-colored dots), AI/GEO Visibility, Keyword Rankings (service-grouped grid with city columns, max 6 with pagination), Revenue Opportunity (funnel chart + PPC table), Site Health (collapsible category cards with A-F grades), Content Gap Analysis, Backlinks (DR comparison charts), Review Health (scorecard with competitor comparison), Investment & Action Plan (phased deliverables)
+- Present Mode: fullscreen overlay, arrow key + click navigation, slide counter, progress dots with tooltips, ESC to close
+- Magic link client view at `/seo-audit/view/:token` — same dashboard, read-only, no admin sidebar
+- Charts built with Recharts; data fetched per-section via `/api/seo-audits/:id/sections/:section`
+
 ### Data Layer
 -   **ORM**: Drizzle ORM with PostgreSQL.
 -   **Schema**: Defined in `shared/schema.ts`.

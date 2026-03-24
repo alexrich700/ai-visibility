@@ -26,6 +26,7 @@ const MonitorClientAccess = lazy(() => import("@/pages/monitor-client-access"));
 const SeoAuditList = lazy(() => import("@/pages/seo-audit-list"));
 const SeoAuditWizard = lazy(() => import("@/pages/seo-audit-wizard"));
 const SeoAuditProgress = lazy(() => import("@/pages/seo-audit-progress"));
+const SeoAuditDashboard = lazy(() => import("@/pages/seo-audit-dashboard"));
 
 function PageLoader() {
   return (
@@ -40,6 +41,7 @@ function Router() {
     <Suspense fallback={<PageLoader />}>
       <Switch>
         <Route path="/" component={Home} />
+        <Route path="/seo-audit/view/:token">{() => <SeoAuditDashboard isClientView={true} />}</Route>
         <Route path="/audit/share/:token">{() => <AuditView isSharedView={true} />}</Route>
         <Route path="/audit/:id">{() => <AuditView />}</Route>
 
@@ -48,7 +50,7 @@ function Router() {
 
         <Route path="/admin/seo-audits/new">{() => <AdminLayout><SeoAuditWizard /></AdminLayout>}</Route>
         <Route path="/admin/seo-audits/:id/progress">{() => <AdminLayout><SeoAuditProgress /></AdminLayout>}</Route>
-        <Route path="/admin/seo-audits/:id/dashboard">{() => <AdminLayout><div>Dashboard placeholder</div></AdminLayout>}</Route>
+        <Route path="/admin/seo-audits/:id/dashboard">{() => <AdminLayout><SeoAuditDashboard /></AdminLayout>}</Route>
         <Route path="/admin/seo-audits">{() => <AdminLayout><SeoAuditList /></AdminLayout>}</Route>
 
         <Route path="/admin">{() => <AdminLayout><Admin /></AdminLayout>}</Route>
