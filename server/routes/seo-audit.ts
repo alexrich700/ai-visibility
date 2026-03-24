@@ -240,10 +240,55 @@ router.post('/:id/run', requireAdminAuth, async (req: Request, res: Response) =>
   }
 });
 
-router.get('/:id/status', requireAdminOrMagicLink, async (req: Request, res: Response) => {
+const activeStreamTokens = new Map<string, { auditId: number; expires: number }>();
+
+router.post('/:id/stream-token', requireAdminAuth, async (req: Request, res: Response) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) {
     res.status(400).json({ error: 'Invalid audit ID' });
+    return;
+  }
+  const audit = await storage.getSeoAuditById(id);
+  if (!audit) {
+    res.status(404).json({ error: 'Audit not found' });
+    return;
+  }
+  const { randomBytes } = await import('crypto');
+  const token = randomBytes(16).toString('hex');
+  activeStreamTokens.set(token, { auditId: id, expires: Date.now() + 5 * 60 * 1000 });
+  res.json({ streamToken: token });
+});
+
+router.get('/:id/status', async (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: 'Invalid audit ID' });
+    return;
+  }
+
+  const streamToken = req.query.streamToken as string | undefined;
+  const auditToken = req.query.token as string | undefined
+    || req.headers['x-audit-token'] as string | undefined;
+
+  let authorized = false;
+
+  if (await isAdminRequest(req)) {
+    authorized = true;
+  } else if (streamToken) {
+    const entry = activeStreamTokens.get(streamToken);
+    if (entry && entry.auditId === id && entry.expires > Date.now()) {
+      authorized = true;
+      activeStreamTokens.delete(streamToken);
+    }
+  } else if (auditToken) {
+    const audit = await storage.getSeoAuditByMagicLink(auditToken);
+    if (audit && audit.id === id) {
+      authorized = true;
+    }
+  }
+
+  if (!authorized) {
+    res.status(401).json({ error: 'Authorization required' });
     return;
   }
 

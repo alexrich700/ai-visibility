@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { getAdminQueryFn } from "@/lib/queryClient";
+import { getAdminQueryFn, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -85,49 +85,67 @@ export default function SeoAuditProgress() {
       return;
     }
 
-    const token = sessionStorage.getItem("adminToken");
-    const url = `/api/seo-audits/${auditId}/status${token ? `?token=${token}` : ""}`;
-    const es = new EventSource(url);
-    eventSourceRef.current = es;
+    let cancelled = false;
 
-    es.onmessage = (event) => {
+    const initSSE = async () => {
+      let sseUrl = `/api/seo-audits/${auditId}/status`;
       try {
-        const data = JSON.parse(event.data);
-
-        if (data.type === "stage_start" && data.stage) {
-          setStages(prev => prev.map(s =>
-            s.name === data.stage ? { ...s, status: "running", startedAt: data.timestamp } : s
-          ));
-        }
-
-        if (data.type === "stage_complete" && data.stage) {
-          setStages(prev => prev.map(s =>
-            s.name === data.stage ? { ...s, status: "complete", completedAt: data.timestamp } : s
-          ));
-        }
-
-        if (data.type === "stage_error" && data.stage) {
-          setStages(prev => prev.map(s =>
-            s.name === data.stage ? { ...s, status: "error", error: data.error, completedAt: data.timestamp } : s
-          ));
-          setHadErrors(true);
-        }
-
-        if (data.type === "pipeline_complete" || data.type === "pipeline_error") {
-          setPipelineComplete(true);
-          if (data.type === "pipeline_error") setHadErrors(true);
-          es.close();
-        }
+        const tokenRes = await apiRequest("POST", `/api/seo-audits/${auditId}/stream-token`, undefined, { useAdminAuth: true });
+        const { streamToken } = await tokenRes.json();
+        sseUrl = `/api/seo-audits/${auditId}/status?streamToken=${streamToken}`;
       } catch {
-        // ignore parse errors
+        // fall through
       }
+
+      if (cancelled) return;
+
+      const es = new EventSource(sseUrl);
+      eventSourceRef.current = es;
+
+      es.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+
+          if (data.type === "stage_start" && data.stage) {
+            setStages(prev => prev.map(s =>
+              s.name === data.stage ? { ...s, status: "running", startedAt: data.timestamp } : s
+            ));
+          }
+
+          if (data.type === "stage_complete" && data.stage) {
+            setStages(prev => prev.map(s =>
+              s.name === data.stage ? { ...s, status: "complete", completedAt: data.timestamp } : s
+            ));
+          }
+
+          if (data.type === "stage_error" && data.stage) {
+            setStages(prev => prev.map(s =>
+              s.name === data.stage ? { ...s, status: "error", error: data.error, completedAt: data.timestamp } : s
+            ));
+            setHadErrors(true);
+          }
+
+          if (data.type === "pipeline_complete" || data.type === "pipeline_error") {
+            setPipelineComplete(true);
+            if (data.type === "pipeline_error") setHadErrors(true);
+            es.close();
+          }
+        } catch {
+          // ignore parse errors
+        }
+      };
+
+      es.onerror = () => {};
     };
 
-    es.onerror = () => {};
+    initSSE();
 
     return () => {
-      es.close();
-      eventSourceRef.current = null;
+      cancelled = true;
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
     };
   }, [auditId, audit?.status]);
 

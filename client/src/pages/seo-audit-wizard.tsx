@@ -310,6 +310,13 @@ export default function SeoAuditWizard() {
     mutationFn: async (formData: WizardFormData) => {
       let url = formData.businessUrl;
       if (!/^https?:\/\//.test(url)) url = `https://${url}`;
+      const serviceNames = formData.services.map(s => s.name);
+      const customKeywordsMap: Record<string, string[]> = {};
+      for (const svc of formData.services) {
+        if (svc.customKeywords.length > 0) {
+          customKeywordsMap[svc.name] = svc.customKeywords;
+        }
+      }
       const res = await apiRequest("POST", "/api/seo-audits", {
         businessName: formData.businessName,
         businessUrl: url,
@@ -317,7 +324,8 @@ export default function SeoAuditWizard() {
         businessType: formData.businessType,
         industry: formData.industry || undefined,
         serviceAreaCities: formData.serviceAreaCities,
-        services: formData.services.map(s => s.name),
+        services: serviceNames,
+        customKeywords: Object.keys(customKeywordsMap).length > 0 ? customKeywordsMap : undefined,
         competitors: formData.competitors.filter(c => c.name || c.domain),
         geoGridKeywords: formData.geoGridKeywords,
         geoGridSize: formData.geoGridSize,
@@ -345,6 +353,15 @@ export default function SeoAuditWizard() {
     },
   });
 
+  const stepFieldMap: Record<number, Array<keyof WizardFormData>> = {
+    0: ["businessName", "businessUrl"],
+    1: ["businessType", "serviceAreaCities"],
+    2: ["services"],
+    3: [],
+    4: [],
+    5: [],
+  };
+
   const canAdvance = (): boolean => {
     switch (step) {
       case 0: return watchedData.businessName.length > 0 && watchedData.businessUrl.length > 0;
@@ -355,6 +372,15 @@ export default function SeoAuditWizard() {
       case 5: return true;
       default: return false;
     }
+  };
+
+  const handleNext = async () => {
+    const fields = stepFieldMap[step] || [];
+    if (fields.length > 0) {
+      const valid = await form.trigger(fields);
+      if (!valid) return;
+    }
+    setStep(s => s + 1);
   };
 
   const addCity = () => {
@@ -1019,7 +1045,7 @@ export default function SeoAuditWizard() {
                 {step < STEPS.length - 1 ? (
                   <Button
                     type="button"
-                    onClick={() => setStep(s => s + 1)}
+                    onClick={handleNext}
                     disabled={!canAdvance()}
                     className="bg-[#ff5800] hover:bg-[#e04f00]"
                     data-testid="button-next-step"
