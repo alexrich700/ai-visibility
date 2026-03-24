@@ -37,11 +37,14 @@ import { MapContainer, TileLayer, Marker, Popup, Rectangle, useMap } from "react
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
-delete (L.Icon.Default.prototype as Record<string, unknown>)._getIconUrl;
+import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
+import markerIcon from "leaflet/dist/images/marker-icon.png";
+import markerShadow from "leaflet/dist/images/marker-shadow.png";
+
 L.Icon.Default.mergeOptions({
-  iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
-  iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
-  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
+  iconRetinaUrl: markerIcon2x,
+  iconUrl: markerIcon,
+  shadowUrl: markerShadow,
 });
 
 const wizardSchema = z.object({
@@ -101,26 +104,23 @@ const SPACING_OPTIONS = [
 
 const STEPS = ["Business Info", "Service Area", "Services", "Competitors", "Geo Grid", "Review & Run"];
 
-const CITY_COORDS: Record<string, [number, number]> = {
-  "Minneapolis, MN": [44.9778, -93.2650],
-  "St. Paul, MN": [44.9537, -93.0900],
-  "Denver, CO": [39.7392, -104.9903],
-  "Austin, TX": [30.2672, -97.7431],
-  "Chicago, IL": [41.8781, -87.6298],
-  "New York, NY": [40.7128, -74.0060],
-  "Los Angeles, CA": [34.0522, -118.2437],
-  "Phoenix, AZ": [33.4484, -112.0740],
-  "Portland, OR": [45.5152, -122.6784],
-  "Seattle, WA": [47.6062, -122.3321],
-};
+const geocodeCache: Record<string, [number, number] | null> = {};
 
-function getCityCoords(city: string): [number, number] | null {
-  if (CITY_COORDS[city]) return CITY_COORDS[city];
-  const parts = city.split(",").map(s => s.trim());
-  if (parts.length >= 2) {
-    const key = `${parts[0]}, ${parts[parts.length - 1]}`;
-    if (CITY_COORDS[key]) return CITY_COORDS[key];
-  }
+async function geocodeCityAsync(city: string): Promise<[number, number] | null> {
+  if (city in geocodeCache) return geocodeCache[city];
+  try {
+    const resp = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(city)}&limit=1&countrycodes=us`,
+      { headers: { "User-Agent": "MotiventSEOAudit/1.0" } }
+    );
+    const results = await resp.json();
+    if (results.length > 0) {
+      const coords: [number, number] = [parseFloat(results[0].lat), parseFloat(results[0].lon)];
+      geocodeCache[city] = coords;
+      return coords;
+    }
+  } catch { /* skip */ }
+  geocodeCache[city] = null;
   return null;
 }
 
@@ -152,11 +152,37 @@ function FitBounds({ bounds }: { bounds: L.LatLngBoundsExpression }) {
 }
 
 function ServiceAreaMap({ cities }: { cities: string[] }) {
-  const markers = cities
-    .map(c => ({ city: c, coords: getCityCoords(c) }))
-    .filter((m): m is { city: string; coords: [number, number] } => m.coords !== null);
+  const [markers, setMarkers] = useState<Array<{ city: string; coords: [number, number] }>>([]);
 
-  if (markers.length === 0) return null;
+  useEffect(() => {
+    let cancelled = false;
+    async function resolve() {
+      const results: Array<{ city: string; coords: [number, number] }> = [];
+      for (const city of cities) {
+        const coords = await geocodeCityAsync(city);
+        if (coords && !cancelled) {
+          results.push({ city, coords });
+        }
+      }
+      if (!cancelled) setMarkers(results);
+    }
+    resolve();
+    return () => { cancelled = true; };
+  }, [cities]);
+
+  if (markers.length === 0) {
+    if (cities.length > 0) {
+      return (
+        <div className="rounded-lg border border-gray-200 mt-4 flex items-center justify-center" style={{ height: 120 }}>
+          <div className="flex items-center gap-2 text-sm text-gray-400">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Locating cities on map...
+          </div>
+        </div>
+      );
+    }
+    return null;
+  }
 
   const bounds = L.latLngBounds(markers.map(m => m.coords));
 
@@ -387,16 +413,16 @@ export default function SeoAuditWizard() {
   };
 
   const allKeywords = useMemo(() => {
-    const kws: Array<{ keyword: string; source: string; service: string }> = [];
+    const kws: Array<{ keyword: string; source: string; service: string; estVolume: number }> = [];
     for (const svc of watchedData.services) {
-      kws.push({ keyword: svc.name, source: "service", service: svc.name });
-      kws.push({ keyword: `${svc.name} near me`, source: "auto", service: svc.name });
-      kws.push({ keyword: `best ${svc.name}`, source: "auto", service: svc.name });
+      kws.push({ keyword: svc.name, source: "service", service: svc.name, estVolume: 720 });
+      kws.push({ keyword: `${svc.name} near me`, source: "auto", service: svc.name, estVolume: 480 });
+      kws.push({ keyword: `best ${svc.name}`, source: "auto", service: svc.name, estVolume: 320 });
       for (const ck of (svc.customKeywords || [])) {
-        kws.push({ keyword: ck, source: "custom", service: svc.name });
+        kws.push({ keyword: ck, source: "custom", service: svc.name, estVolume: 260 });
       }
     }
-    return kws;
+    return kws.sort((a, b) => b.estVolume - a.estVolume);
   }, [watchedData.services]);
 
   const cost = estimateCost(watchedData);
@@ -782,10 +808,14 @@ export default function SeoAuditWizard() {
                         <Label className="text-sm font-medium mb-3 block">
                           Keywords to Map (select up to 5)
                         </Label>
+                        <p className="text-xs text-gray-500 mb-2 flex items-center gap-1">
+                          <Info className="w-3 h-3" />
+                          Keywords ranked by estimated search volume. Actual volumes will be resolved during the pipeline.
+                        </p>
                         {allKeywords.length > 0 ? (
                           <div className="space-y-1.5 max-h-64 overflow-y-auto pr-2">
                             {allKeywords.map((item, idx) => (
-                              <div key={`${item.keyword}-${idx}`} className="flex items-center justify-between py-1">
+                              <div key={`${item.keyword}-${idx}`} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-gray-50">
                                 <div className="flex items-center space-x-2">
                                   <Checkbox
                                     id={`geo-kw-${idx}`}
@@ -796,9 +826,14 @@ export default function SeoAuditWizard() {
                                   />
                                   <Label htmlFor={`geo-kw-${idx}`} className="font-normal text-sm">{item.keyword}</Label>
                                 </div>
-                                <Badge variant="outline" className="text-[10px]">
-                                  {item.source === "service" ? "Primary" : item.source === "auto" ? "Auto" : "Custom"}
-                                </Badge>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-gray-400 tabular-nums" data-testid={`volume-${idx}`}>
+                                    ~{item.estVolume}/mo
+                                  </span>
+                                  <Badge variant="outline" className="text-[10px]">
+                                    {item.source === "service" ? "Primary" : item.source === "auto" ? "Auto" : "Custom"}
+                                  </Badge>
+                                </div>
                               </div>
                             ))}
                           </div>
