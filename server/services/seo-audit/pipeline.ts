@@ -406,7 +406,11 @@ class SEOAuditPipeline extends EventEmitter {
     }));
 
     try {
-      this.serpResults = await batchOrganicSerp(serpPairs);
+      const serpResponse = await batchOrganicSerp(serpPairs);
+      this.serpResults = serpResponse.results;
+      if (serpResponse.partialFailure) {
+        console.warn(`[Pipeline] SERP rankings: ${serpResponse.partialFailure.failedBatches}/${serpResponse.partialFailure.totalBatches} batches failed — continuing with partial data`);
+      }
     } catch (error) {
       if (error instanceof DataForSEOAuthError) {
         console.warn('[Pipeline] DataForSEO credentials missing or invalid — skipping SERP rankings stage.');
@@ -502,6 +506,10 @@ class SEOAuditPipeline extends EventEmitter {
         clientBusinessName: audit.businessName,
         competitorBusinessName: topCompetitorName,
       });
+
+      if (result.partialFailure) {
+        console.warn(`[Pipeline] Geo grid: ${result.partialFailure.failedBatches}/${result.partialFailure.totalBatches} batches failed — continuing with partial data`);
+      }
 
       for (const keyword of keywordsToRun) {
         const points = result.gridResults[keyword];

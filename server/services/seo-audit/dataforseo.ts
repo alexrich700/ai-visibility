@@ -84,9 +84,9 @@ interface D4SeoItem {
 
 async function d4seoRequest(endpoint: string, body: unknown[], retries = MAX_RETRIES): Promise<D4SeoApiResponse> {
   const taskCount = body.length;
-  await dataForSeoLimiter.acquire(taskCount);
 
   for (let attempt = 0; attempt <= retries; attempt++) {
+    await dataForSeoLimiter.acquire(taskCount);
     try {
       const response = await fetchWithTimeout(`${BASE_URL}${endpoint}`, {
         method: 'POST',
@@ -146,9 +146,8 @@ async function d4seoRequest(endpoint: string, body: unknown[], retries = MAX_RET
 }
 
 async function d4seoGet(endpoint: string, retries = MAX_RETRIES): Promise<D4SeoApiResponse> {
-  await dataForSeoLimiter.acquire();
-
   for (let attempt = 0; attempt <= retries; attempt++) {
+    await dataForSeoLimiter.acquire();
     try {
       const response = await fetchWithTimeout(`${BASE_URL}${endpoint}`, {
         headers: {
@@ -230,7 +229,17 @@ export async function getOrganicSerp(params: { keyword: string; locationName: st
   };
 }
 
-export async function batchOrganicSerp(pairs: Array<{ keyword: string; locationName: string }>): Promise<SerpResult[]> {
+export interface PartialFailureInfo {
+  failedBatches: number;
+  totalBatches: number;
+}
+
+export interface BatchSerpResponse {
+  results: SerpResult[];
+  partialFailure: PartialFailureInfo | null;
+}
+
+export async function batchOrganicSerp(pairs: Array<{ keyword: string; locationName: string }>): Promise<BatchSerpResponse> {
   const batches = chunk(pairs, SERP_BATCH_SIZE);
   const allResults: SerpResult[] = [];
   let failedBatches = 0;
@@ -278,9 +287,10 @@ export async function batchOrganicSerp(pairs: Array<{ keyword: string; locationN
     console.warn(`[DataForSEO] ${failedBatches}/${batches.length} SERP batches failed — returning partial results`);
   }
 
-  return Object.assign(allResults, {
+  return {
+    results: allResults,
     partialFailure: failedBatches > 0 ? { failedBatches, totalBatches: batches.length } : null,
-  });
+  };
 }
 
 export interface MapsSerpResult {
@@ -425,7 +435,7 @@ export async function runGeoGrid(params: {
   keywords: string[];
   clientBusinessName: string;
   competitorBusinessName?: string;
-}): Promise<{ gridResults: Record<string, GridPointResult[]>; metrics: Record<string, GridMetrics>; partialFailure: { failedBatches: number; totalBatches: number } | null }> {
+}): Promise<{ gridResults: Record<string, GridPointResult[]>; metrics: Record<string, GridMetrics>; partialFailure: PartialFailureInfo | null }> {
   const points = generateGridPoints(params.centerLat, params.centerLng, params.gridSize, params.spacingMiles);
 
   const allTasks: Array<{
