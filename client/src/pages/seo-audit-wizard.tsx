@@ -168,7 +168,7 @@ function FitBounds({ bounds }: { bounds: L.LatLngBoundsExpression }) {
   return null;
 }
 
-function MapClickHandler({ onAddCity }: { onAddCity: (cityLabel: string) => void }) {
+function MapClickHandler({ onAddCity, onError }: { onAddCity: (cityLabel: string) => void; onError?: (msg: string) => void }) {
   const [isResolving, setIsResolving] = useState(false);
 
   useMapEvents({
@@ -179,9 +179,12 @@ function MapClickHandler({ onAddCity }: { onAddCity: (cityLabel: string) => void
         const { lat, lng } = e.latlng;
         const res = await fetch(
           `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10&addressdetails=1`,
-          { headers: { "Accept-Language": "en" } }
+          { headers: { "Accept-Language": "en", "User-Agent": "MotivientSEOAuditTool/1.0" } }
         );
-        if (!res.ok) return;
+        if (!res.ok) {
+          onError?.("Could not look up that location. Please try again.");
+          return;
+        }
         const data = await res.json();
         const addr = data.address;
         const city = addr?.city || addr?.town || addr?.village || addr?.hamlet || addr?.county;
@@ -189,8 +192,11 @@ function MapClickHandler({ onAddCity }: { onAddCity: (cityLabel: string) => void
         const stateCode = rawState && (US_STATES.includes(rawState) ? rawState : STATE_NAME_TO_CODE[rawState]);
         if (city && stateCode) {
           onAddCity(`${city}, ${stateCode}`);
+        } else {
+          onError?.("Could not identify a US city at that location. Try clicking closer to a city.");
         }
       } catch {
+        onError?.("Could not look up that location. Please try again.");
       } finally {
         setIsResolving(false);
       }
@@ -200,7 +206,7 @@ function MapClickHandler({ onAddCity }: { onAddCity: (cityLabel: string) => void
   return null;
 }
 
-function ServiceAreaMap({ cities, onAddCity }: { cities: string[]; onAddCity?: (cityLabel: string) => void }) {
+function ServiceAreaMap({ cities, onAddCity, onError }: { cities: string[]; onAddCity?: (cityLabel: string) => void; onError?: (msg: string) => void }) {
   const [markers, setMarkers] = useState<Array<{ city: string; coords: [number, number] }>>([]);
 
   useEffect(() => {
@@ -238,7 +244,7 @@ function ServiceAreaMap({ cities, onAddCity }: { cities: string[]; onAddCity?: (
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
-            {onAddCity && <MapClickHandler onAddCity={onAddCity} />}
+            {onAddCity && <MapClickHandler onAddCity={onAddCity} onError={onError} />}
           </MapContainer>
         </div>
       </div>
@@ -285,7 +291,7 @@ function ServiceAreaMap({ cities, onAddCity }: { cities: string[]; onAddCity?: (
             </Marker>
           ))}
           {markers.length > 1 && <FitBounds bounds={bounds} />}
-          {onAddCity && <MapClickHandler onAddCity={onAddCity} />}
+          {onAddCity && <MapClickHandler onAddCity={onAddCity} onError={onError} />}
         </MapContainer>
       </div>
     </div>
@@ -745,6 +751,7 @@ export default function SeoAuditWizard() {
                             form.setValue("serviceAreaCities", [...current, cityLabel]);
                           }
                         }}
+                        onError={(msg) => toast({ title: "Map Lookup", description: msg, variant: "destructive" })}
                       />
                     </div>
                   )}
