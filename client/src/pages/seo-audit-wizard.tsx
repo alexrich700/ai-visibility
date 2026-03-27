@@ -469,7 +469,11 @@ export default function SeoAuditWizard() {
 
   const parseBusinessMutation = useMutation({
     mutationFn: async (description: string) => {
-      const response = await apiRequest("POST", "/api/seo-audits/parse-business", { description }, { useAdminAuth: true });
+      const existingUrl = form.getValues("businessUrl");
+      const response = await apiRequest("POST", "/api/seo-audits/parse-business", {
+        description,
+        ...(existingUrl ? { businessUrl: existingUrl } : {}),
+      }, { useAdminAuth: true });
       return await response.json() as {
         businessName: string;
         businessUrl: string;
