@@ -33,7 +33,7 @@ import {
   Plus, Trash2, Loader2, Check, DollarSign, Play,
   Users, Grid3X3, Search, MapPinned, Sparkles, Info
 } from "lucide-react";
-import { MapContainer, TileLayer, Marker, Popup, Rectangle, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Rectangle, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -41,10 +41,14 @@ import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
 import markerIcon from "leaflet/dist/images/marker-icon.png";
 import markerShadow from "leaflet/dist/images/marker-shadow.png";
 
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: markerIcon2x,
+const defaultIcon = new L.Icon({
   iconUrl: markerIcon,
+  iconRetinaUrl: markerIcon2x,
   shadowUrl: markerShadow,
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41],
 });
 
 const wizardSchema = z.object({
@@ -151,7 +155,38 @@ function FitBounds({ bounds }: { bounds: L.LatLngBoundsExpression }) {
   return null;
 }
 
-function ServiceAreaMap({ cities }: { cities: string[] }) {
+function MapClickHandler({ onAddCity }: { onAddCity: (cityLabel: string) => void }) {
+  const [isResolving, setIsResolving] = useState(false);
+
+  useMapEvents({
+    click: async (e) => {
+      if (isResolving) return;
+      setIsResolving(true);
+      try {
+        const { lat, lng } = e.latlng;
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10&addressdetails=1`,
+          { headers: { "Accept-Language": "en" } }
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        const addr = data.address;
+        const city = addr?.city || addr?.town || addr?.village || addr?.hamlet || addr?.county;
+        const stateCode = addr?.["ISO3166-2-lvl4"]?.split("-")[1] || addr?.state_code || addr?.state;
+        if (city && stateCode) {
+          onAddCity(`${city}, ${stateCode}`);
+        }
+      } catch {
+      } finally {
+        setIsResolving(false);
+      }
+    },
+  });
+
+  return null;
+}
+
+function ServiceAreaMap({ cities, onAddCity }: { cities: string[]; onAddCity?: (cityLabel: string) => void }) {
   const [markers, setMarkers] = useState<Array<{ city: string; coords: [number, number] }>>([]);
 
   useEffect(() => {
@@ -170,6 +205,32 @@ function ServiceAreaMap({ cities }: { cities: string[] }) {
     return () => { cancelled = true; };
   }, [cities]);
 
+  const defaultCenter: [number, number] = [39.8283, -98.5795];
+
+  if (markers.length === 0 && cities.length === 0 && onAddCity) {
+    return (
+      <div>
+        <p className="text-xs text-gray-400 mt-2 mb-1 flex items-center gap-1">
+          <MapPin className="w-3 h-3" /> Click anywhere on the map to add a city
+        </p>
+        <div className="rounded-lg overflow-hidden border border-gray-200" style={{ height: 250 }}>
+          <MapContainer
+            center={defaultCenter}
+            zoom={4}
+            style={{ height: "100%", width: "100%" }}
+            scrollWheelZoom={false}
+          >
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+            {onAddCity && <MapClickHandler onAddCity={onAddCity} />}
+          </MapContainer>
+        </div>
+      </div>
+    );
+  }
+
   if (markers.length === 0) {
     if (cities.length > 0) {
       return (
@@ -187,24 +248,32 @@ function ServiceAreaMap({ cities }: { cities: string[] }) {
   const bounds = L.latLngBounds(markers.map(m => m.coords));
 
   return (
-    <div className="rounded-lg overflow-hidden border border-gray-200 mt-4" style={{ height: 250 }}>
-      <MapContainer
-        center={markers[0].coords}
-        zoom={10}
-        style={{ height: "100%", width: "100%" }}
-        scrollWheelZoom={false}
-      >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-        {markers.map(m => (
-          <Marker key={m.city} position={m.coords}>
-            <Popup>{m.city}</Popup>
-          </Marker>
-        ))}
-        {markers.length > 1 && <FitBounds bounds={bounds} />}
-      </MapContainer>
+    <div>
+      {onAddCity && (
+        <p className="text-xs text-gray-400 mt-2 mb-1 flex items-center gap-1">
+          <MapPin className="w-3 h-3" /> Click anywhere on the map to add a city
+        </p>
+      )}
+      <div className="rounded-lg overflow-hidden border border-gray-200" style={{ height: 250 }}>
+        <MapContainer
+          center={markers[0].coords}
+          zoom={10}
+          style={{ height: "100%", width: "100%" }}
+          scrollWheelZoom={false}
+        >
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+          {markers.map(m => (
+            <Marker key={m.city} position={m.coords} icon={defaultIcon}>
+              <Popup>{m.city}</Popup>
+            </Marker>
+          ))}
+          {markers.length > 1 && <FitBounds bounds={bounds} />}
+          {onAddCity && <MapClickHandler onAddCity={onAddCity} />}
+        </MapContainer>
+      </div>
     </div>
   );
 }
@@ -231,7 +300,7 @@ function GeoGridPreviewMap({
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <Marker position={[lat, lng]}>
+        <Marker position={[lat, lng]} icon={defaultIcon}>
           <Popup>Business Location</Popup>
         </Marker>
         <Rectangle bounds={bounds} pathOptions={{ color: "#ff5800", weight: 2, fillOpacity: 0.08 }} />
@@ -622,7 +691,7 @@ export default function SeoAuditWizard() {
                           <SelectTrigger className="w-24" data-testid="select-state">
                             <SelectValue placeholder="State" />
                           </SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className="z-[9999]">
                             {US_STATES.map(st => (
                               <SelectItem key={st} value={st}>{st}</SelectItem>
                             ))}
@@ -654,7 +723,15 @@ export default function SeoAuditWizard() {
                         <p className="text-sm text-gray-400">Add at least one city to your service area.</p>
                       )}
 
-                      <ServiceAreaMap cities={watchedData.serviceAreaCities} />
+                      <ServiceAreaMap
+                        cities={watchedData.serviceAreaCities}
+                        onAddCity={(cityLabel) => {
+                          const current = form.getValues("serviceAreaCities");
+                          if (!current.includes(cityLabel)) {
+                            form.setValue("serviceAreaCities", [...current, cityLabel]);
+                          }
+                        }}
+                      />
                     </div>
                   )}
                 </div>
