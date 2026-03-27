@@ -44,3 +44,7 @@ waitForPort = 5000
 
 [agent]
 integrations = ["perplexity_v0:1.0.0", "javascript_mem_db:1.0.0", "javascript_openai_ai_integrations:1.0.0", "javascript_gemini:1.0.0", "javascript_gemini_ai_integrations:1.0.0", "resend:1.0.0", "sendgrid:1.0.0"]
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 20000
