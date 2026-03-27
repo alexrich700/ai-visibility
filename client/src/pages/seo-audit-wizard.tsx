@@ -807,16 +807,18 @@ export default function SeoAuditWizard() {
     const seen = new Set<string>();
 
     for (const kr of keywordResults) {
-      if (!seen.has(kr.keyword)) {
+      const key = kr.keyword.toLowerCase();
+      if (!seen.has(key)) {
         kws.push({ keyword: kr.keyword, source: "research", service: kr.service, estVolume: kr.estVolume });
-        seen.add(kr.keyword);
+        seen.add(key);
       }
     }
 
     for (const svc of watchedData.services) {
-      if (!seen.has(svc.name)) {
+      const key = svc.name.toLowerCase();
+      if (!seen.has(key)) {
         kws.push({ keyword: svc.name, source: "service", service: svc.name, estVolume: 0 });
-        seen.add(svc.name);
+        seen.add(key);
       }
     }
 
@@ -1810,7 +1812,10 @@ export default function SeoAuditWizard() {
             ) : (
               <Button
                 type="button"
-                onClick={() => createAndRunMutation.mutate(form.getValues())}
+                onClick={async () => {
+                  const valid = await form.trigger();
+                  if (valid) createAndRunMutation.mutate(form.getValues());
+                }}
                 disabled={createAndRunMutation.isPending}
                 className="bg-green-600 hover:bg-green-700"
                 data-testid="button-run-audit"

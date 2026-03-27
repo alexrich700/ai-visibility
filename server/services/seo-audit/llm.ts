@@ -389,10 +389,11 @@ Generate keyword research results for these service categories.`
     const text = response.content[0].type === 'text' ? response.content[0].text : '';
     const parsed: unknown = JSON.parse(stripCodeFences(text));
     if (!Array.isArray(parsed)) return [];
+    const validIntents = ['transactional', 'informational', 'commercial', 'navigational'] as const;
     const keywordItemSchema = z.object({
       keyword: z.string(),
       estVolume: z.coerce.number().default(0),
-      intent: z.string().default('informational'),
+      intent: z.string().default('informational').transform(v => validIntents.includes(v as typeof validIntents[number]) ? v : 'informational'),
       service: z.string().default(''),
     });
     const results: KeywordResearchResult[] = [];
