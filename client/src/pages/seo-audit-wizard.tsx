@@ -514,7 +514,7 @@ export default function SeoAuditWizard() {
         return watchedData.businessName.length > 0 && watchedData.businessUrl.length > 0 && (hasCats || hasOther);
       }
       case 1: return watchedData.businessType === "national" || watchedData.serviceAreaCities.length > 0;
-      case 2: return generatedGroups.some(g => g.isActive);
+      case 2: return generatedGroups.some(g => g.isActive && !g.isHighLevelCategory);
       case 3: return watchedData.services.length > 0;
       case 4: return true;
       case 5: return true;
