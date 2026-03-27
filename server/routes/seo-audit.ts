@@ -4,6 +4,7 @@ import { storage } from '../storage';
 import { requireAdminAuth, isAdminRequest } from '../middleware/auth';
 import { enqueuePipelineRun, getPipelineEmitter, type PipelineEvent } from '../services/seo-audit/pipeline';
 import { auditQueue } from '../services/seo-audit/queue';
+import { geocodeAddress } from '../services/seo-audit/google-places';
 
 const router = Router();
 
@@ -599,5 +600,26 @@ async function getSectionData(
       return {};
   }
 }
+
+router.post('/geocode', requireAdminAuth, async (req: Request, res: Response) => {
+  const schema = z.object({ address: z.string().min(5) });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'A valid address is required (at least 5 characters).' });
+    return;
+  }
+
+  try {
+    const result = await geocodeAddress(parsed.data.address);
+    if (result) {
+      res.json({ lat: result.lat, lng: result.lng });
+    } else {
+      res.status(404).json({ error: 'Could not geocode this address.' });
+    }
+  } catch (err) {
+    console.error('[Geocode] Error:', err);
+    res.status(500).json({ error: 'Geocoding service error.' });
+  }
+});
 
 export default router;

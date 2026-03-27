@@ -4,7 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getAdminToken } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -286,16 +286,22 @@ export default function SeoAuditWizard() {
     if (!address || address.length < 5) return;
     setIsGeocoding(true);
     try {
-      const resp = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`,
-        { headers: { "User-Agent": "MotiventSEOAudit/1.0" } }
-      );
-      const results = await resp.json();
-      if (results.length > 0) {
-        const { lat, lon } = results[0];
-        form.setValue("businessLat", parseFloat(lat));
-        form.setValue("businessLng", parseFloat(lon));
-        toast({ title: "Location found", description: `Coordinates: ${parseFloat(lat).toFixed(4)}, ${parseFloat(lon).toFixed(4)}` });
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      const token = getAdminToken();
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+      const resp = await fetch("/api/seo-audits/geocode", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ address }),
+        credentials: "include",
+      });
+      if (resp.ok) {
+        const { lat, lng } = await resp.json();
+        form.setValue("businessLat", lat);
+        form.setValue("businessLng", lng);
+        toast({ title: "Location found", description: `Coordinates: ${lat.toFixed(4)}, ${lng.toFixed(4)}` });
       } else {
         toast({ title: "Location not found", description: "Could not geocode this address. You can set coordinates manually.", variant: "destructive" });
       }
