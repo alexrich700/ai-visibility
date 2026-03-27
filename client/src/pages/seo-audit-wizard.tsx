@@ -8,6 +8,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -62,6 +63,8 @@ const wizardSchema = z.object({
   businessLng: z.number().optional(),
   businessType: z.enum(["local", "national"]),
   industry: z.string().optional(),
+  primaryCategories: z.array(z.string()).default([]),
+  otherBusinessDescription: z.string().optional(),
   serviceAreaCities: z.array(z.string()).default([]),
   services: z.array(z.object({
     name: z.string().min(1),
@@ -119,7 +122,7 @@ const SPACING_OPTIONS = [
   { value: 3, label: "3 mi" },
 ];
 
-const STEPS = ["Business Info", "Service Area", "Services", "Competitors", "Geo Grid", "Review & Run"];
+const STEPS = ["Business Info", "Service Area", "Service Categories", "Services", "Competitors", "Geo Grid", "Review & Run"];
 
 const geocodeCache: Record<string, [number, number] | null> = {};
 
@@ -342,6 +345,12 @@ export default function SeoAuditWizard() {
   const [compDomain, setCompDomain] = useState("");
   const [customKwInput, setCustomKwInput] = useState<Record<number, string>>({});
   const [isGeocoding, setIsGeocoding] = useState(false);
+  const [newCategoryInput, setNewCategoryInput] = useState("");
+  const [generatedGroups, setGeneratedGroups] = useState<Array<{ name: string; description: string; isActive: boolean; isHighLevelCategory: boolean }>>([]);
+  const [isLoadingGroups, setIsLoadingGroups] = useState(false);
+  const [groupsGenerated, setGroupsGenerated] = useState(false);
+  const [manualServiceInput, setManualServiceInput] = useState("");
+  const [lastGenerationInputs, setLastGenerationInputs] = useState("");
 
   const form = useForm<WizardFormData>({
     resolver: zodResolver(wizardSchema),
@@ -351,6 +360,8 @@ export default function SeoAuditWizard() {
       businessAddress: "",
       businessType: "local",
       industry: "",
+      primaryCategories: [],
+      otherBusinessDescription: "",
       serviceAreaCities: [],
       services: [],
       competitors: [],
@@ -395,6 +406,46 @@ export default function SeoAuditWizard() {
     }
   }, [form, toast]);
 
+  const generateGroupsMutation = useMutation({
+    mutationFn: async () => {
+      const categories = form.getValues("primaryCategories");
+      const otherDesc = form.getValues("otherBusinessDescription");
+      const categoriesToUse = categories.length > 0 ? categories : (otherDesc ? [otherDesc] : []);
+      const businessName = form.getValues("businessName");
+      const businessUrl = form.getValues("businessUrl");
+      const scope = form.getValues("businessType");
+      const cities = form.getValues("serviceAreaCities");
+      const domain = businessUrl.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+      const response = await apiRequest("POST", "/api/monitoring/generate-groups", {
+        businessName,
+        domain,
+        industry: categoriesToUse[0] || "",
+        primaryCategories: categoriesToUse.length > 1 ? categoriesToUse : undefined,
+        scope,
+        city: cities.length > 0 ? cities[0] : undefined,
+      });
+      return await response.json() as {
+        groups: { name: string; description: string; isHighLevelCategory?: boolean }[];
+        isMultiCategory?: boolean;
+      };
+    },
+    onSuccess: (data) => {
+      const newGroups = data.groups.map((g) => ({
+        name: g.name,
+        description: g.description,
+        isActive: true,
+        isHighLevelCategory: g.isHighLevelCategory || false,
+      }));
+      setGeneratedGroups(newGroups);
+      setIsLoadingGroups(false);
+      setGroupsGenerated(true);
+    },
+    onError: (error: Error) => {
+      setIsLoadingGroups(false);
+      toast({ title: "Failed to generate categories", description: error.message, variant: "destructive" });
+    },
+  });
+
   const createAndRunMutation = useMutation({
     mutationFn: async (formData: WizardFormData) => {
       let url = formData.businessUrl;
@@ -411,7 +462,8 @@ export default function SeoAuditWizard() {
         businessUrl: url,
         businessAddress: formData.businessAddress || undefined,
         businessType: formData.businessType,
-        industry: formData.industry || undefined,
+        industry: formData.primaryCategories.length > 0 ? formData.primaryCategories[0] : (formData.otherBusinessDescription || formData.industry || undefined),
+        primaryCategories: formData.primaryCategories.length > 0 ? formData.primaryCategories : undefined,
         serviceAreaCities: formData.serviceAreaCities,
         services: serviceNames,
         customKeywords: Object.keys(customKeywordsMap).length > 0 ? customKeywordsMap : undefined,
@@ -445,20 +497,26 @@ export default function SeoAuditWizard() {
   const stepFieldMap: Record<number, Array<keyof WizardFormData>> = {
     0: ["businessName", "businessUrl"],
     1: ["businessType", "serviceAreaCities"],
-    2: ["services"],
-    3: [],
+    2: [],
+    3: ["services"],
     4: [],
     5: [],
+    6: [],
   };
 
   const canAdvance = (): boolean => {
     switch (step) {
-      case 0: return watchedData.businessName.length > 0 && watchedData.businessUrl.length > 0;
+      case 0: {
+        const hasCats = watchedData.primaryCategories.length > 0;
+        const hasOther = (watchedData.otherBusinessDescription || "").trim().length > 0;
+        return watchedData.businessName.length > 0 && watchedData.businessUrl.length > 0 && (hasCats || hasOther);
+      }
       case 1: return watchedData.businessType === "national" || watchedData.serviceAreaCities.length > 0;
-      case 2: return watchedData.services.length > 0;
-      case 3: return true;
+      case 2: return groupsGenerated && generatedGroups.some(g => g.isActive);
+      case 3: return watchedData.services.length > 0;
       case 4: return true;
       case 5: return true;
+      case 6: return true;
       default: return false;
     }
   };
@@ -469,7 +527,84 @@ export default function SeoAuditWizard() {
       const valid = await form.trigger(fields);
       if (!valid) return;
     }
+    if (step === 1) {
+      setStep(2);
+      const currentInputs = JSON.stringify({
+        url: form.getValues("businessUrl"),
+        cats: form.getValues("primaryCategories"),
+        desc: form.getValues("otherBusinessDescription"),
+        type: form.getValues("businessType"),
+        cities: form.getValues("serviceAreaCities"),
+      });
+      const inputsChanged = currentInputs !== lastGenerationInputs;
+      if (!groupsGenerated || inputsChanged) {
+        setIsLoadingGroups(true);
+        setGroupsGenerated(false);
+        setGeneratedGroups([]);
+        setLastGenerationInputs(currentInputs);
+        generateGroupsMutation.mutate();
+      }
+      return;
+    }
+    if (step === 2) {
+      const activeGroups = generatedGroups.filter(g => g.isActive && !g.isHighLevelCategory);
+      const activeGroupNames = new Set(activeGroups.map(g => g.name));
+      const allGroupNames = new Set(generatedGroups.map(g => g.name));
+      const currentServices = form.getValues("services");
+      const manualServices = currentServices.filter(s => !allGroupNames.has(s.name));
+      const groupServices = activeGroups.map(g => {
+        const existing = currentServices.find(s => s.name === g.name);
+        return existing || { name: g.name, customKeywords: [] as string[] };
+      });
+      form.setValue("services", [...groupServices, ...manualServices]);
+      setStep(3);
+      return;
+    }
     setStep(s => s + 1);
+  };
+
+  const addCategory = () => {
+    const trimmed = newCategoryInput.trim();
+    if (trimmed) {
+      const current = form.getValues("primaryCategories");
+      if (!current.includes(trimmed)) {
+        form.setValue("primaryCategories", [...current, trimmed]);
+        if (current.length === 0) {
+          form.setValue("industry", trimmed);
+        }
+      }
+    }
+    setNewCategoryInput("");
+  };
+
+  const removeCategory = (category: string) => {
+    const current = form.getValues("primaryCategories");
+    const updated = current.filter(c => c !== category);
+    form.setValue("primaryCategories", updated);
+    if (updated.length > 0) {
+      form.setValue("industry", updated[0]);
+    } else {
+      form.setValue("industry", "");
+    }
+  };
+
+  const toggleGroupActive = (index: number) => {
+    setGeneratedGroups(prev => prev.map((g, i) => i === index ? { ...g, isActive: !g.isActive } : g));
+  };
+
+  const addManualGroup = () => {
+    const trimmed = manualServiceInput.trim();
+    if (trimmed && !generatedGroups.some(g => g.name === trimmed)) {
+      setGeneratedGroups(prev => [...prev, { name: trimmed, description: "", isActive: true, isHighLevelCategory: false }]);
+    }
+    setManualServiceInput("");
+  };
+
+  const regenerateGroups = () => {
+    setIsLoadingGroups(true);
+    setGroupsGenerated(false);
+    setGeneratedGroups([]);
+    generateGroupsMutation.mutate();
   };
 
   const addCity = () => {
@@ -661,23 +796,87 @@ export default function SeoAuditWizard() {
                       </FormItem>
                     )} />
 
-                    <FormField control={form.control} name="industry" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Industry</FormLabel>
-                        <Select value={field.value} onValueChange={field.onChange}>
-                          <FormControl>
-                            <SelectTrigger data-testid="select-industry">
-                              <SelectValue placeholder="Select industry" />
-                            </SelectTrigger>
-                          </FormControl>
+                    <div>
+                      <Label className="text-sm font-medium">Business Type / Categories *</Label>
+                      <p className="text-xs text-gray-500 mb-2">
+                        Add one or more categories that describe this business (e.g., Plumbing, HVAC, Roofing).
+                      </p>
+                      {watchedData.primaryCategories.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mb-2">
+                          {watchedData.primaryCategories.map((category) => (
+                            <Badge
+                              key={category}
+                              variant="secondary"
+                              className="bg-[#ff5800] text-white hover:bg-[#e04f00] px-3 py-1.5 flex items-center gap-1"
+                            >
+                              {category}
+                              <button
+                                type="button"
+                                onClick={() => removeCategory(category)}
+                                className="ml-1 hover:text-red-200"
+                                data-testid={`button-remove-category-${category}`}
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <Select
+                          value=""
+                          onValueChange={(val) => {
+                            if (val === "Other") {
+                              return;
+                            }
+                            const current = form.getValues("primaryCategories");
+                            if (!current.includes(val)) {
+                              form.setValue("primaryCategories", [...current, val]);
+                              if (current.length === 0) form.setValue("industry", val);
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="flex-1" data-testid="select-business-type">
+                            <SelectValue placeholder="Select a category..." />
+                          </SelectTrigger>
                           <SelectContent>
-                            {INDUSTRIES.map(ind => (
+                            {INDUSTRIES.filter(ind => ind !== "Other").map(ind => (
                               <SelectItem key={ind} value={ind}>{ind}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
-                      </FormItem>
-                    )} />
+                        <div className="flex gap-1">
+                          <Input
+                            value={newCategoryInput}
+                            onChange={e => setNewCategoryInput(e.target.value)}
+                            onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addCategory())}
+                            placeholder="Or type custom..."
+                            className="w-40"
+                            data-testid="input-custom-category"
+                          />
+                          <Button type="button" variant="outline" size="icon" onClick={addCategory} data-testid="button-add-category">
+                            <Plus className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                      {watchedData.primaryCategories.length === 0 && (
+                        <div className="mt-3">
+                          <Label className="text-sm font-medium">Or describe this business</Label>
+                          <FormField control={form.control} name="otherBusinessDescription" render={({ field }) => (
+                            <FormItem className="mt-1">
+                              <FormControl>
+                                <Textarea
+                                  {...field}
+                                  placeholder="Describe the business type and what it offers (e.g., 'A full-service roofing company specializing in residential and commercial roof repair, replacement, and installation')"
+                                  rows={3}
+                                  data-testid="input-business-description"
+                                />
+                              </FormControl>
+                            </FormItem>
+                          )} />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
@@ -760,6 +959,93 @@ export default function SeoAuditWizard() {
               )}
 
               {step === 2 && (
+                <div className="space-y-5">
+                  <CardHeader className="px-0 pt-0">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <Sparkles className="w-5 h-5 text-[#ff5800]" />
+                      Service Categories
+                    </CardTitle>
+                  </CardHeader>
+
+                  {isLoadingGroups ? (
+                    <div className="text-center py-12">
+                      <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-[#ff5800]" />
+                      <p className="text-sm font-medium text-gray-700">Analyzing website & generating service categories...</p>
+                      <p className="text-xs text-gray-400 mt-1">This may take 15-30 seconds</p>
+                    </div>
+                  ) : generatedGroups.length > 0 ? (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2 bg-blue-50 text-blue-700 text-sm rounded-lg px-4 py-3">
+                        <Sparkles className="w-4 h-4 shrink-0" />
+                        <span>
+                          We analyzed the website and identified these service categories. Select the ones that apply to this business.
+                        </span>
+                      </div>
+
+                      <div className="space-y-2">
+                        {generatedGroups.map((group, idx) => (
+                          <div
+                            key={`${group.name}-${idx}`}
+                            className={`flex items-start gap-3 rounded-lg px-4 py-3 cursor-pointer transition-colors ${
+                              group.isActive ? "bg-orange-50 border border-orange-200" : "bg-gray-50 border border-gray-200 opacity-60"
+                            }`}
+                            onClick={() => toggleGroupActive(idx)}
+                            data-testid={`group-toggle-${idx}`}
+                          >
+                            <Checkbox
+                              checked={group.isActive}
+                              onCheckedChange={() => toggleGroupActive(idx)}
+                              className="mt-0.5"
+                              data-testid={`checkbox-group-${idx}`}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium">{group.name}</span>
+                                {group.isHighLevelCategory && (
+                                  <Badge variant="outline" className="text-[10px]">Category</Badge>
+                                )}
+                              </div>
+                              {group.description && (
+                                <p className="text-xs text-gray-500 mt-0.5">{group.description}</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Input
+                          value={manualServiceInput}
+                          onChange={e => setManualServiceInput(e.target.value)}
+                          onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addManualGroup())}
+                          placeholder="Add a custom category..."
+                          className="flex-1"
+                          data-testid="input-manual-group"
+                        />
+                        <Button type="button" variant="outline" onClick={addManualGroup} data-testid="button-add-manual-group">
+                          <Plus className="w-4 h-4 mr-1" /> Add
+                        </Button>
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs text-gray-500">
+                        <span>{generatedGroups.filter(g => g.isActive).length} of {generatedGroups.length} selected</span>
+                        <Button type="button" variant="ghost" size="sm" className="text-xs" onClick={regenerateGroups} data-testid="button-regenerate-groups">
+                          <Loader2 className="w-3 h-3 mr-1" /> Regenerate
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <p className="text-sm">No service categories generated yet.</p>
+                      <Button type="button" variant="outline" size="sm" className="mt-3" onClick={regenerateGroups} data-testid="button-generate-groups">
+                        Generate Categories
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {step === 3 && (
                 <div className="space-y-5">
                   <CardHeader className="px-0 pt-0">
                     <CardTitle className="flex items-center gap-2 text-lg">
@@ -850,7 +1136,7 @@ export default function SeoAuditWizard() {
                 </div>
               )}
 
-              {step === 3 && (
+              {step === 4 && (
                 <div className="space-y-5">
                   <CardHeader className="px-0 pt-0">
                     <CardTitle className="flex items-center gap-2 text-lg">
@@ -911,7 +1197,7 @@ export default function SeoAuditWizard() {
                 </div>
               )}
 
-              {step === 4 && (
+              {step === 5 && (
                 <div className="space-y-5">
                   <CardHeader className="px-0 pt-0">
                     <CardTitle className="flex items-center gap-2 text-lg">
@@ -962,7 +1248,7 @@ export default function SeoAuditWizard() {
                             ))}
                           </div>
                         ) : (
-                          <p className="text-sm text-gray-400">No services added. Go back to Step 3 to add services.</p>
+                          <p className="text-sm text-gray-400">No services added. Go back to Step 4 to add services.</p>
                         )}
                         <p className="text-xs text-gray-400 mt-2">
                           {watchedData.geoGridKeywords.length}/5 selected
@@ -1039,7 +1325,7 @@ export default function SeoAuditWizard() {
                 </div>
               )}
 
-              {step === 5 && (
+              {step === 6 && (
                 <div className="space-y-5">
                   <CardHeader className="px-0 pt-0">
                     <CardTitle className="flex items-center gap-2 text-lg">
@@ -1055,7 +1341,12 @@ export default function SeoAuditWizard() {
                         <div><span className="text-gray-500">Name:</span> <span className="font-medium">{watchedData.businessName}</span></div>
                         <div><span className="text-gray-500">URL:</span> <span className="font-medium">{watchedData.businessUrl}</span></div>
                         <div><span className="text-gray-500">Type:</span> <span className="font-medium">{watchedData.businessType}</span></div>
-                        {watchedData.industry && <div><span className="text-gray-500">Industry:</span> <span className="font-medium">{watchedData.industry}</span></div>}
+                        {watchedData.primaryCategories.length > 0 && (
+                          <div className="col-span-2">
+                            <span className="text-gray-500">Categories:</span>{" "}
+                            <span className="font-medium">{watchedData.primaryCategories.join(", ")}</span>
+                          </div>
+                        )}
                         {watchedData.businessAddress && <div className="col-span-2"><span className="text-gray-500">Address:</span> <span className="font-medium">{watchedData.businessAddress}</span></div>}
                         {hasLatLng && <div className="col-span-2"><span className="text-gray-500">Coordinates:</span> <span className="font-medium text-green-600">{watchedData.businessLat?.toFixed(4)}, {watchedData.businessLng?.toFixed(4)}</span></div>}
                       </div>
