@@ -513,7 +513,7 @@ export default function SeoAuditWizard() {
         return watchedData.businessName.length > 0 && watchedData.businessUrl.length > 0 && (hasCats || hasOther);
       }
       case 1: return watchedData.businessType === "national" || watchedData.serviceAreaCities.length > 0;
-      case 2: return groupsGenerated && generatedGroups.some(g => g.isActive);
+      case 2: return generatedGroups.some(g => g.isActive);
       case 3: return watchedData.services.length > 0;
       case 4: return true;
       case 5: return true;
@@ -549,7 +549,6 @@ export default function SeoAuditWizard() {
     }
     if (step === 2) {
       const activeGroups = generatedGroups.filter(g => g.isActive && !g.isHighLevelCategory);
-      const activeGroupNames = new Set(activeGroups.map(g => g.name));
       const allGroupNames = new Set(generatedGroups.map(g => g.name));
       const currentServices = form.getValues("services");
       const manualServices = currentServices.filter(s => !allGroupNames.has(s.name));
@@ -970,82 +969,86 @@ export default function SeoAuditWizard() {
                     </CardTitle>
                   </CardHeader>
 
-                  {isLoadingGroups ? (
-                    <div className="text-center py-12">
-                      <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-[#ff5800]" />
-                      <p className="text-sm font-medium text-gray-700">Analyzing website & generating service categories...</p>
-                      <p className="text-xs text-gray-400 mt-1">This may take 15-30 seconds</p>
-                    </div>
-                  ) : generatedGroups.length > 0 ? (
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2 bg-blue-50 text-blue-700 text-sm rounded-lg px-4 py-3">
-                        <Sparkles className="w-4 h-4 shrink-0" />
-                        <span>
-                          We analyzed the website and identified these service categories. Select the ones that apply to this business.
-                        </span>
+                  <div className="space-y-4">
+                    {isLoadingGroups && (
+                      <div className="text-center py-8">
+                        <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-[#ff5800]" />
+                        <p className="text-sm font-medium text-gray-700">Analyzing website & generating service categories...</p>
+                        <p className="text-xs text-gray-400 mt-1">This may take 15-30 seconds</p>
                       </div>
+                    )}
 
-                      <div className="space-y-2">
-                        {generatedGroups.map((group, idx) => (
-                          <div
-                            key={`${group.name}-${idx}`}
-                            className={`flex items-start gap-3 rounded-lg px-4 py-3 cursor-pointer transition-colors ${
-                              group.isActive ? "bg-orange-50 border border-orange-200" : "bg-gray-50 border border-gray-200 opacity-60"
-                            }`}
-                            onClick={() => toggleGroupActive(idx)}
-                            data-testid={`group-toggle-${idx}`}
-                          >
-                            <Checkbox
-                              checked={group.isActive}
-                              onCheckedChange={() => {}}
-                              onClick={(e) => e.stopPropagation()}
-                              className="mt-0.5 pointer-events-none"
-                              data-testid={`checkbox-group-${idx}`}
-                            />
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium">{group.name}</span>
-                                {group.isHighLevelCategory && (
-                                  <Badge variant="outline" className="text-[10px]">Category</Badge>
+                    {!isLoadingGroups && generatedGroups.length > 0 && (
+                      <>
+                        <div className="flex items-center gap-2 bg-blue-50 text-blue-700 text-sm rounded-lg px-4 py-3">
+                          <Sparkles className="w-4 h-4 shrink-0" />
+                          <span>
+                            We analyzed the website and identified these service categories. Select the ones that apply to this business.
+                          </span>
+                        </div>
+
+                        <div className="space-y-2">
+                          {generatedGroups.map((group, idx) => (
+                            <div
+                              key={`${group.name}-${idx}`}
+                              className={`flex items-start gap-3 rounded-lg px-4 py-3 cursor-pointer transition-colors ${
+                                group.isActive ? "bg-orange-50 border border-orange-200" : "bg-gray-50 border border-gray-200 opacity-60"
+                              }`}
+                              onClick={() => toggleGroupActive(idx)}
+                              data-testid={`group-toggle-${idx}`}
+                            >
+                              <Checkbox
+                                checked={group.isActive}
+                                onCheckedChange={() => {}}
+                                onClick={(e) => e.stopPropagation()}
+                                className="mt-0.5 pointer-events-none"
+                                data-testid={`checkbox-group-${idx}`}
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-medium">{group.name}</span>
+                                  {group.isHighLevelCategory && (
+                                    <Badge variant="outline" className="text-[10px]">Category</Badge>
+                                  )}
+                                </div>
+                                {group.description && (
+                                  <p className="text-xs text-gray-500 mt-0.5">{group.description}</p>
                                 )}
                               </div>
-                              {group.description && (
-                                <p className="text-xs text-gray-500 mt-0.5">{group.description}</p>
-                              )}
                             </div>
-                          </div>
-                        ))}
-                      </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
 
-                      <div className="flex gap-2">
-                        <Input
-                          value={manualServiceInput}
-                          onChange={e => setManualServiceInput(e.target.value)}
-                          onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addManualGroup())}
-                          placeholder="Add a custom category..."
-                          className="flex-1"
-                          data-testid="input-manual-group"
-                        />
-                        <Button type="button" variant="outline" onClick={addManualGroup} data-testid="button-add-manual-group">
-                          <Plus className="w-4 h-4 mr-1" /> Add
-                        </Button>
+                    {!isLoadingGroups && generatedGroups.length === 0 && groupsGenerated && (
+                      <div className="flex items-center gap-2 bg-amber-50 text-amber-700 text-sm rounded-lg px-4 py-3">
+                        <Info className="w-4 h-4 shrink-0" />
+                        <span>No categories were generated. You can add service categories manually below or try regenerating.</span>
                       </div>
+                    )}
 
-                      <div className="flex items-center justify-between text-xs text-gray-500">
-                        <span>{generatedGroups.filter(g => g.isActive).length} of {generatedGroups.length} selected</span>
-                        <Button type="button" variant="ghost" size="sm" className="text-xs" onClick={regenerateGroups} data-testid="button-regenerate-groups">
-                          <Loader2 className="w-3 h-3 mr-1" /> Regenerate
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-center py-8 text-gray-500">
-                      <p className="text-sm">No service categories generated yet.</p>
-                      <Button type="button" variant="outline" size="sm" className="mt-3" onClick={regenerateGroups} data-testid="button-generate-groups">
-                        Generate Categories
+                    <div className="flex gap-2">
+                      <Input
+                        value={manualServiceInput}
+                        onChange={e => setManualServiceInput(e.target.value)}
+                        onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addManualGroup())}
+                        placeholder="Add a custom category..."
+                        className="flex-1"
+                        data-testid="input-manual-group"
+                      />
+                      <Button type="button" variant="outline" onClick={addManualGroup} data-testid="button-add-manual-group">
+                        <Plus className="w-4 h-4 mr-1" /> Add
                       </Button>
                     </div>
-                  )}
+
+                    <div className="flex items-center justify-between text-xs text-gray-500">
+                      <span>{generatedGroups.filter(g => g.isActive).length} of {generatedGroups.length} selected</span>
+                      <Button type="button" variant="ghost" size="sm" className="text-xs" onClick={regenerateGroups} data-testid="button-regenerate-groups">
+                        <Loader2 className="w-3 h-3 mr-1" /> Regenerate
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               )}
 
