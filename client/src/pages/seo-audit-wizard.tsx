@@ -548,24 +548,6 @@ export default function SeoAuditWizard() {
       let url = formData.businessUrl;
       if (!/^https?:\/\//.test(url)) url = `https://${url}`;
       const serviceNames = formData.services.map(s => s.name);
-      const customKeywordsMap: Record<string, string[]> = {};
-      for (const svc of formData.services) {
-        if (svc.customKeywords.length > 0) {
-          customKeywordsMap[svc.name] = svc.customKeywords;
-        }
-      }
-
-      const selectedKeywords = keywordResults.filter(k => k.selected);
-      for (const kw of selectedKeywords) {
-        if (kw.service) {
-          if (!customKeywordsMap[kw.service]) {
-            customKeywordsMap[kw.service] = [];
-          }
-          if (!customKeywordsMap[kw.service].includes(kw.keyword)) {
-            customKeywordsMap[kw.service].push(kw.keyword);
-          }
-        }
-      }
 
       const res = await apiRequest("POST", "/api/seo-audits", {
         businessName: formData.businessName,
@@ -573,10 +555,8 @@ export default function SeoAuditWizard() {
         businessAddress: formData.businessAddress || undefined,
         businessType: formData.businessType,
         industry: formData.primaryCategories.length > 0 ? formData.primaryCategories[0] : (formData.otherBusinessDescription || formData.industry || undefined),
-        primaryCategories: formData.primaryCategories.length > 0 ? formData.primaryCategories : undefined,
         serviceAreaCities: formData.serviceAreaCities,
         services: serviceNames,
-        customKeywords: Object.keys(customKeywordsMap).length > 0 ? customKeywordsMap : undefined,
         competitors: formData.competitors.filter(c => c.name || c.domain),
         geoGridKeywords: formData.geoGridKeywords,
         geoGridSize: formData.geoGridSize,

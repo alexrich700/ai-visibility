@@ -88,12 +88,15 @@ router.post('/', requireAdminAuth, async (req: Request, res: Response) => {
 
 router.post('/parse-business', requireAdminAuth, async (req: Request, res: Response) => {
   try {
-    const { description } = req.body;
+    const { description, businessUrl } = req.body;
     if (!description || typeof description !== 'string') {
       res.status(400).json({ error: 'Description text is required' });
       return;
     }
-    const result = await parseBusinessDescription(description);
+    const enrichedDescription = businessUrl
+      ? `${description}\n\nWebsite: ${businessUrl}`
+      : description;
+    const result = await parseBusinessDescription(enrichedDescription);
     res.json(result);
   } catch (error) {
     console.error('[SeoAudit] Parse business error:', error);
