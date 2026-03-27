@@ -278,7 +278,9 @@ export async function batchOrganicSerp(pairs: Array<{ keyword: string; locationN
     console.warn(`[DataForSEO] ${failedBatches}/${batches.length} SERP batches failed — returning partial results`);
   }
 
-  return allResults;
+  return Object.assign(allResults, {
+    partialFailure: failedBatches > 0 ? { failedBatches, totalBatches: batches.length } : null,
+  });
 }
 
 export interface MapsSerpResult {
@@ -494,6 +496,8 @@ export async function runGeoGrid(params: {
     console.warn(`[DataForSEO] ${failedBatches}/${batches.length} geo grid batches failed — returning partial results`);
   }
 
+  const partialFailure = failedBatches > 0 ? { failedBatches, totalBatches: batches.length } : null;
+
   const gridResults: Record<string, GridPointResult[]> = {};
   const metrics: Record<string, GridMetrics> = {};
 
@@ -546,7 +550,7 @@ export async function runGeoGrid(params: {
     };
   }
 
-  return { gridResults, metrics };
+  return { gridResults, metrics, partialFailure };
 }
 
 export async function startSiteCrawl(params: { targetUrl: string; maxPages?: number }): Promise<string> {

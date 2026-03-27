@@ -127,7 +127,8 @@ export default function SeoAuditProgress() {
 
       const hasErrors = logs.some(l => l.status === "failed");
       if (hasErrors) setHadErrors(true);
-    } catch {
+    } catch (err) {
+      console.warn('[SeoAuditProgress] Failed to hydrate from stage logs:', err);
     }
   }, [auditId]);
 
