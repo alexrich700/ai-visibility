@@ -6,6 +6,9 @@ The AI Visibility Audit Tool for Motivent Marketing assesses business visibility
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
+### Testing Credentials
+For authenticated e2e testing in the staging environment, use the secrets `TEST_ADMIN_EMAIL` and `TEST_ADMIN_PASSWORD` to log in to the admin portal. Always reference these environment variables when running tests that require admin authentication.
+
 **CRITICAL Design Requirement**: The existing UI design must be preserved exactly as implemented. Keep all colors, fonts, styles, layouts, and visual elements unchanged.
 
 ### Landing Page (Feb 2026 Redesign)
