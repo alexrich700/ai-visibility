@@ -425,7 +425,7 @@ export async function runGeoGrid(params: {
   keywords: string[];
   clientBusinessName: string;
   competitorBusinessName?: string;
-}): Promise<{ gridResults: Record<string, GridPointResult[]>; metrics: Record<string, GridMetrics> }> {
+}): Promise<{ gridResults: Record<string, GridPointResult[]>; metrics: Record<string, GridMetrics>; partialFailure: { failedBatches: number; totalBatches: number } | null }> {
   const points = generateGridPoints(params.centerLat, params.centerLng, params.gridSize, params.spacingMiles);
 
   const allTasks: Array<{
