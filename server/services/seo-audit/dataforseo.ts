@@ -9,8 +9,9 @@ function getAuthHeader(): string {
 }
 
 const MAX_RETRIES = 3;
-const RETRY_DELAYS = [1000, 2000, 4000];
-const BATCH_SIZE = 100;
+const RETRY_BASE_MS = 1000;
+const SERP_BATCH_SIZE = 25;
+const MAPS_BATCH_SIZE = 10;
 
 export class DataForSEOAuthError extends Error {
   constructor(message: string) {
@@ -19,7 +20,14 @@ export class DataForSEOAuthError extends Error {
   }
 }
 
-function isRetryableError(error: unknown): boolean {
+class DataForSEOApiError extends Error {
+  constructor(message: string, public readonly statusCode: number) {
+    super(message);
+    this.name = 'DataForSEOApiError';
+  }
+}
+
+function isNetworkError(error: unknown): boolean {
   if (error instanceof Error) {
     const msg = error.message.toLowerCase();
     return msg.includes('fetch failed') ||
@@ -31,6 +39,12 @@ function isRetryableError(error: unknown): boolean {
            msg.includes('abort');
   }
   return false;
+}
+
+function retryDelay(attempt: number): number {
+  const base = RETRY_BASE_MS * Math.pow(2, attempt);
+  const jitter = Math.random() * base * 0.3;
+  return Math.min(base + jitter, 15000);
 }
 
 interface D4SeoApiResponse {
@@ -69,7 +83,8 @@ interface D4SeoItem {
 }
 
 async function d4seoRequest(endpoint: string, body: unknown[], retries = MAX_RETRIES): Promise<D4SeoApiResponse> {
-  await dataForSeoLimiter.acquire();
+  const taskCount = body.length;
+  await dataForSeoLimiter.acquire(taskCount);
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
@@ -89,8 +104,17 @@ async function d4seoRequest(endpoint: string, body: unknown[], retries = MAX_RET
           throw new DataForSEOAuthError(`DataForSEO authentication failed (401): credentials missing or invalid`);
         }
         if (response.status === 429 && attempt < retries) {
-          const delay = RETRY_DELAYS[attempt] || 4000;
-          console.log(`[DataForSEO] Rate limited, retrying in ${delay}ms (attempt ${attempt + 1}/${retries})`);
+          const delay = retryDelay(attempt);
+          console.log(`[DataForSEO] Rate limited, retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/${retries})`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        if (response.status >= 400 && response.status < 500) {
+          throw new DataForSEOApiError(`DataForSEO API error ${response.status}: ${text}`, response.status);
+        }
+        if (response.status >= 500 && attempt < retries) {
+          const delay = retryDelay(attempt);
+          console.log(`[DataForSEO] Server error ${response.status}, retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/${retries})`);
           await new Promise(resolve => setTimeout(resolve, delay));
           continue;
         }
@@ -99,16 +123,19 @@ async function d4seoRequest(endpoint: string, body: unknown[], retries = MAX_RET
 
       const data = await response.json() as D4SeoApiResponse;
       if (data.status_code !== 20000) {
-        throw new Error(`DataForSEO error: ${data.status_message || 'Unknown error'}`);
+        throw new DataForSEOApiError(
+          `DataForSEO error: ${data.status_message || 'Unknown error'} (code ${data.status_code})`,
+          data.status_code
+        );
       }
       return data;
     } catch (error) {
-      if (error instanceof DataForSEOAuthError) {
+      if (error instanceof DataForSEOAuthError || error instanceof DataForSEOApiError) {
         throw error;
       }
-      if (attempt < retries && (isRetryableError(error) || !(error instanceof Error && error.message.includes('API error 4')))) {
-        const delay = RETRY_DELAYS[attempt] || 4000;
-        console.log(`[DataForSEO] Request failed (${error instanceof Error ? error.message : 'unknown'}), retrying in ${delay}ms (attempt ${attempt + 1}/${retries})`);
+      if (attempt < retries && isNetworkError(error)) {
+        const delay = retryDelay(attempt);
+        console.log(`[DataForSEO] Network error (${error instanceof Error ? error.message : 'unknown'}), retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/${retries})`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
@@ -118,21 +145,59 @@ async function d4seoRequest(endpoint: string, body: unknown[], retries = MAX_RET
   throw new Error('DataForSEO: max retries exceeded');
 }
 
-async function d4seoGet(endpoint: string): Promise<D4SeoApiResponse> {
+async function d4seoGet(endpoint: string, retries = MAX_RETRIES): Promise<D4SeoApiResponse> {
   await dataForSeoLimiter.acquire();
 
-  const response = await fetchWithTimeout(`${BASE_URL}${endpoint}`, {
-    headers: {
-      'Authorization': getAuthHeader(),
-    },
-    timeoutMs: 60000,
-  });
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await fetchWithTimeout(`${BASE_URL}${endpoint}`, {
+        headers: {
+          'Authorization': getAuthHeader(),
+        },
+        timeoutMs: 60000,
+      });
 
-  if (response.status === 401) {
-    throw new DataForSEOAuthError(`DataForSEO authentication failed (401): credentials missing or invalid`);
+      if (response.status === 401) {
+        throw new DataForSEOAuthError(`DataForSEO authentication failed (401): credentials missing or invalid`);
+      }
+      if (response.status === 429 && attempt < retries) {
+        const delay = retryDelay(attempt);
+        console.log(`[DataForSEO] GET rate limited, retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/${retries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      if (!response.ok) {
+        if (response.status >= 500 && attempt < retries) {
+          const delay = retryDelay(attempt);
+          console.log(`[DataForSEO] GET server error ${response.status}, retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/${retries})`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        throw new Error(`DataForSEO GET error: ${response.status}`);
+      }
+
+      const data = await response.json() as D4SeoApiResponse;
+      if (data.status_code !== 20000) {
+        throw new DataForSEOApiError(
+          `DataForSEO GET error: ${data.status_message || 'Unknown error'} (code ${data.status_code})`,
+          data.status_code
+        );
+      }
+      return data;
+    } catch (error) {
+      if (error instanceof DataForSEOAuthError || error instanceof DataForSEOApiError) {
+        throw error;
+      }
+      if (attempt < retries && isNetworkError(error)) {
+        const delay = retryDelay(attempt);
+        console.log(`[DataForSEO] GET network error (${error instanceof Error ? error.message : 'unknown'}), retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/${retries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      throw error;
+    }
   }
-  if (!response.ok) throw new Error(`DataForSEO GET error: ${response.status}`);
-  return await response.json() as D4SeoApiResponse;
+  throw new Error('DataForSEO GET: max retries exceeded');
 }
 
 function chunk<T>(arr: T[], size: number): T[][] {
@@ -166,27 +231,51 @@ export async function getOrganicSerp(params: { keyword: string; locationName: st
 }
 
 export async function batchOrganicSerp(pairs: Array<{ keyword: string; locationName: string }>): Promise<SerpResult[]> {
-  const batches = chunk(pairs, BATCH_SIZE);
+  const batches = chunk(pairs, SERP_BATCH_SIZE);
   const allResults: SerpResult[] = [];
+  let failedBatches = 0;
 
-  for (const batch of batches) {
-    const tasks = batch.map(p => ({
-      keyword: p.keyword,
-      location_name: p.locationName,
-      language_code: 'en',
-      depth: 100,
-    }));
+  for (let batchIdx = 0; batchIdx < batches.length; batchIdx++) {
+    const batch = batches[batchIdx];
+    try {
+      const tasks = batch.map(p => ({
+        keyword: p.keyword,
+        location_name: p.locationName,
+        language_code: 'en',
+        depth: 100,
+      }));
 
-    const data = await d4seoRequest('/serp/google/organic/live/advanced', tasks);
+      const data = await d4seoRequest('/serp/google/organic/live/advanced', tasks);
 
-    for (let i = 0; i < batch.length; i++) {
-      const task = data.tasks?.[i];
-      allResults.push({
-        keyword: batch[i].keyword,
-        locationName: batch[i].locationName,
-        items: task?.result?.[0]?.items || [],
-      });
+      for (let i = 0; i < batch.length; i++) {
+        const task = data.tasks?.[i];
+        allResults.push({
+          keyword: batch[i].keyword,
+          locationName: batch[i].locationName,
+          items: task?.result?.[0]?.items || [],
+        });
+      }
+    } catch (error) {
+      if (error instanceof DataForSEOAuthError) {
+        throw error;
+      }
+      failedBatches++;
+      console.warn(`[DataForSEO] SERP batch ${batchIdx + 1}/${batches.length} failed: ${error instanceof Error ? error.message : 'unknown'}`);
+      for (const pair of batch) {
+        allResults.push({
+          keyword: pair.keyword,
+          locationName: pair.locationName,
+          items: [],
+        });
+      }
     }
+  }
+
+  if (failedBatches > 0 && failedBatches === batches.length) {
+    throw new Error(`DataForSEO: all ${batches.length} SERP batches failed — no results available`);
+  }
+  if (failedBatches > 0) {
+    console.warn(`[DataForSEO] ${failedBatches}/${batches.length} SERP batches failed — returning partial results`);
   }
 
   return allResults;
@@ -357,7 +446,7 @@ export async function runGeoGrid(params: {
     }
   }
 
-  const batches = chunk(allTasks, BATCH_SIZE);
+  const batches = chunk(allTasks, MAPS_BATCH_SIZE);
 
   interface GeoGridResult {
     tag: string;
@@ -365,8 +454,10 @@ export async function runGeoGrid(params: {
   }
 
   const allResults: GeoGridResult[] = [];
+  let failedBatches = 0;
 
-  for (const batch of batches) {
+  for (let batchIdx = 0; batchIdx < batches.length; batchIdx++) {
+    const batch = batches[batchIdx];
     try {
       const data = await d4seoRequest('/serp/google/maps/live/advanced', batch);
       if (data.tasks) {
@@ -391,8 +482,16 @@ export async function runGeoGrid(params: {
       if (error instanceof DataForSEOAuthError) {
         throw error;
       }
-      console.error(`[DataForSEO] Geo grid batch failed:`, error);
+      failedBatches++;
+      console.warn(`[DataForSEO] Geo grid batch ${batchIdx + 1}/${batches.length} failed: ${error instanceof Error ? error.message : 'unknown'}`);
     }
+  }
+
+  if (failedBatches > 0 && failedBatches === batches.length) {
+    throw new Error(`DataForSEO: all ${batches.length} geo grid batches failed — no results available`);
+  }
+  if (failedBatches > 0) {
+    console.warn(`[DataForSEO] ${failedBatches}/${batches.length} geo grid batches failed — returning partial results`);
   }
 
   const gridResults: Record<string, GridPointResult[]> = {};

@@ -83,14 +83,14 @@ export class TokenBucketRateLimiter {
     this.lastRefill = Date.now();
   }
 
-  async acquire(): Promise<void> {
+  async acquire(count: number = 1): Promise<void> {
     this.refill();
-    if (this.tokens < 1) {
-      const waitMs = Math.ceil((1 - this.tokens) / this.refillRatePerMs);
+    if (this.tokens < count) {
+      const waitMs = Math.ceil((count - this.tokens) / this.refillRatePerMs);
       await new Promise(resolve => setTimeout(resolve, waitMs));
       this.refill();
     }
-    this.tokens -= 1;
+    this.tokens -= count;
   }
 
   private refill(): void {

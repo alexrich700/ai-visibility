@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { getAdminQueryFn, apiRequest } from "@/lib/queryClient";
@@ -29,10 +29,21 @@ interface StageInfo {
   label: string;
   shortLabel: string;
   icon: typeof Check;
-  status: "pending" | "running" | "complete" | "error";
+  status: "pending" | "running" | "complete" | "error" | "skipped";
   error?: string;
   startedAt?: number;
   completedAt?: number;
+}
+
+interface StageLog {
+  id: number;
+  auditId: number;
+  stage: string;
+  stageIndex: number;
+  status: string;
+  startedAt: string;
+  completedAt: string | null;
+  errorMessage: string | null;
 }
 
 const STAGE_CONFIG: Array<{ name: string; label: string; shortLabel: string; icon: typeof Check }> = [
@@ -50,6 +61,22 @@ const STAGE_CONFIG: Array<{ name: string; label: string; shortLabel: string; ico
   { name: "report_generation", label: "Report Generation", shortLabel: "Report", icon: Clock },
 ];
 
+const STAGE_LOOKUP: Record<string, string> = {};
+for (const s of STAGE_CONFIG) {
+  STAGE_LOOKUP[s.name] = s.name;
+  STAGE_LOOKUP[s.label] = s.name;
+}
+
+function mapLogStatus(logStatus: string): StageInfo["status"] {
+  switch (logStatus) {
+    case "completed": return "complete";
+    case "failed": return "error";
+    case "skipped": return "skipped";
+    case "running": return "running";
+    default: return "pending";
+  }
+}
+
 export default function SeoAuditProgress() {
   const [, params] = useRoute("/admin/seo-audits/:id/progress");
   const [, navigate] = useLocation();
@@ -58,6 +85,7 @@ export default function SeoAuditProgress() {
   const [pipelineComplete, setPipelineComplete] = useState(false);
   const [hadErrors, setHadErrors] = useState(false);
   const [activeStageDetail, setActiveStageDetail] = useState<StageInfo | null>(null);
+  const stageLogsLoaded = useRef(false);
 
   const [stages, setStages] = useState<StageInfo[]>(
     STAGE_CONFIG.map(s => ({ ...s, status: "pending" as const }))
@@ -70,16 +98,64 @@ export default function SeoAuditProgress() {
     refetchInterval: pipelineComplete ? false : 5000,
   });
 
+  const hydrateFromStageLogs = useCallback(async () => {
+    if (!auditId) return;
+    try {
+      const res = await apiRequest("GET", `/api/seo-audits/${auditId}/stage-logs`, undefined, { useAdminAuth: true });
+      const logs: StageLog[] = await res.json();
+      if (!logs || logs.length === 0) return;
+
+      setStages(prev => {
+        const updated = [...prev];
+        for (const log of logs) {
+          const stageName = STAGE_LOOKUP[log.stage] || log.stage;
+          const idx = updated.findIndex(s => s.name === stageName);
+          if (idx === -1) continue;
+          const mappedStatus = mapLogStatus(log.status);
+          if (updated[idx].status === "pending" || updated[idx].status === "running" || mappedStatus !== "pending") {
+            updated[idx] = {
+              ...updated[idx],
+              status: mappedStatus,
+              startedAt: log.startedAt ? new Date(log.startedAt).getTime() : undefined,
+              completedAt: log.completedAt ? new Date(log.completedAt).getTime() : undefined,
+              error: log.errorMessage || undefined,
+            };
+          }
+        }
+        return updated;
+      });
+
+      const hasErrors = logs.some(l => l.status === "failed");
+      if (hasErrors) setHadErrors(true);
+    } catch {
+    }
+  }, [auditId]);
+
+  useEffect(() => {
+    if (!auditId) return;
+    stageLogsLoaded.current = false;
+  }, [auditId]);
+
+  useEffect(() => {
+    if (!auditId) return;
+    if (stageLogsLoaded.current) return;
+    stageLogsLoaded.current = true;
+    hydrateFromStageLogs();
+  }, [auditId, hydrateFromStageLogs]);
+
   useEffect(() => {
     if (!auditId) return;
 
     if (audit?.status === "completed" || audit?.status === "completed_with_errors") {
-      setStages(prev => prev.map(s => ({ ...s, status: s.status === "pending" ? "complete" : s.status })));
+      hydrateFromStageLogs().then(() => {
+        setStages(prev => prev.map(s => ({ ...s, status: s.status === "pending" ? "complete" : s.status })));
+      });
       setPipelineComplete(true);
       setHadErrors(audit.status === "completed_with_errors");
       return;
     }
     if (audit?.status === "failed") {
+      hydrateFromStageLogs();
       setPipelineComplete(true);
       setHadErrors(true);
       return;
@@ -87,10 +163,14 @@ export default function SeoAuditProgress() {
 
     let cancelled = false;
     let retryCount = 0;
-    const MAX_RETRIES = 3;
+    const MAX_RETRIES = 5;
 
     const connectSSE = async () => {
       if (cancelled) return;
+
+      if (retryCount > 0) {
+        await hydrateFromStageLogs();
+      }
 
       let sseUrl = `/api/seo-audits/${auditId}/status`;
       try {
@@ -98,7 +178,6 @@ export default function SeoAuditProgress() {
         const { streamToken } = await tokenRes.json();
         sseUrl = `/api/seo-audits/${auditId}/status?streamToken=${streamToken}`;
       } catch {
-        // fall through
       }
 
       if (cancelled) return;
@@ -136,7 +215,6 @@ export default function SeoAuditProgress() {
             es.close();
           }
         } catch {
-          // ignore parse errors
         }
       };
 
@@ -159,9 +237,9 @@ export default function SeoAuditProgress() {
         eventSourceRef.current = null;
       }
     };
-  }, [auditId, audit?.status]);
+  }, [auditId, audit?.status, hydrateFromStageLogs]);
 
-  const completedCount = stages.filter(s => s.status === "complete").length;
+  const completedCount = stages.filter(s => s.status === "complete" || s.status === "skipped").length;
   const errorCount = stages.filter(s => s.status === "error").length;
   const progress = Math.round(((completedCount + errorCount) / stages.length) * 100);
   const runningStage = stages.find(s => s.status === "running");
@@ -255,7 +333,7 @@ export default function SeoAuditProgress() {
                         <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all ${
                           isActive
                             ? "border-[#ff5800] bg-[#ff5800] text-white shadow-lg shadow-orange-200 scale-110"
-                            : stage.status === "complete"
+                            : stage.status === "complete" || stage.status === "skipped"
                             ? "border-green-500 bg-green-500 text-white"
                             : stage.status === "error"
                             ? "border-red-500 bg-red-500 text-white"
@@ -263,7 +341,7 @@ export default function SeoAuditProgress() {
                         }`}>
                           {isActive ? (
                             <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : stage.status === "complete" ? (
+                          ) : stage.status === "complete" || stage.status === "skipped" ? (
                             <Check className="w-4 h-4" />
                           ) : stage.status === "error" ? (
                             <X className="w-4 h-4" />
@@ -273,7 +351,7 @@ export default function SeoAuditProgress() {
                         </div>
                         <span className={`text-[10px] font-medium text-center leading-tight ${
                           isActive ? "text-[#ff5800]" :
-                          stage.status === "complete" ? "text-green-600" :
+                          stage.status === "complete" || stage.status === "skipped" ? "text-green-600" :
                           stage.status === "error" ? "text-red-600" :
                           "text-gray-400"
                         }`}>
@@ -293,7 +371,7 @@ export default function SeoAuditProgress() {
                   </Tooltip>
                   {i < stages.length - 1 && (
                     <div className={`h-0.5 w-4 mx-0.5 flex-shrink-0 ${
-                      stage.status === "complete" ? "bg-green-400" :
+                      stage.status === "complete" || stage.status === "skipped" ? "bg-green-400" :
                       stage.status === "error" ? "bg-red-300" :
                       "bg-gray-200"
                     }`} />
@@ -312,7 +390,7 @@ export default function SeoAuditProgress() {
                   className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                     stage.status === "running"
                       ? "bg-blue-50 border border-blue-200"
-                      : stage.status === "complete"
+                      : stage.status === "complete" || stage.status === "skipped"
                       ? "bg-green-50"
                       : stage.status === "error"
                       ? "bg-red-50"
@@ -323,7 +401,7 @@ export default function SeoAuditProgress() {
                   <div className={`flex items-center justify-center w-8 h-8 rounded-full ${
                     stage.status === "running"
                       ? "bg-blue-500 text-white"
-                      : stage.status === "complete"
+                      : stage.status === "complete" || stage.status === "skipped"
                       ? "bg-green-500 text-white"
                       : stage.status === "error"
                       ? "bg-red-500 text-white"
@@ -331,7 +409,7 @@ export default function SeoAuditProgress() {
                   }`}>
                     {stage.status === "running" ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : stage.status === "complete" ? (
+                    ) : stage.status === "complete" || stage.status === "skipped" ? (
                       <Check className="w-4 h-4" />
                     ) : stage.status === "error" ? (
                       <X className="w-4 h-4" />
@@ -342,7 +420,7 @@ export default function SeoAuditProgress() {
 
                   <Icon className={`w-4 h-4 ${
                     stage.status === "running" ? "text-blue-600" :
-                    stage.status === "complete" ? "text-green-600" :
+                    stage.status === "complete" || stage.status === "skipped" ? "text-green-600" :
                     stage.status === "error" ? "text-red-600" :
                     "text-gray-400"
                   }`} />
@@ -350,7 +428,7 @@ export default function SeoAuditProgress() {
                   <div className="flex-1">
                     <span className={`text-sm font-medium ${
                       stage.status === "running" ? "text-blue-700" :
-                      stage.status === "complete" ? "text-green-700" :
+                      stage.status === "complete" || stage.status === "skipped" ? "text-green-700" :
                       stage.status === "error" ? "text-red-700" :
                       "text-gray-500"
                     }`}>
@@ -370,7 +448,7 @@ export default function SeoAuditProgress() {
                     {stage.status === "running" && (
                       <Badge variant="outline" className="text-xs border-blue-200 text-blue-600">Running</Badge>
                     )}
-                    {stage.status === "complete" && stage.startedAt && stage.completedAt && (
+                    {(stage.status === "complete" || stage.status === "skipped") && stage.startedAt && stage.completedAt && (
                       <span className="text-xs text-gray-400 tabular-nums" data-testid={`stage-duration-${stage.name}`}>
                         {Math.round((stage.completedAt - stage.startedAt) / 1000)}s
                       </span>

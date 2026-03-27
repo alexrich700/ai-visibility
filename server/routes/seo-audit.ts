@@ -282,6 +282,26 @@ router.post('/:id/run', requireAdminAuth, async (req: Request, res: Response) =>
   }
 });
 
+router.get('/:id/stage-logs', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      res.status(400).json({ error: 'Invalid audit ID' });
+      return;
+    }
+    const audit = await storage.getSeoAuditById(id);
+    if (!audit) {
+      res.status(404).json({ error: 'Audit not found' });
+      return;
+    }
+    const logs = await storage.getAuditStageLogsByAuditId(id);
+    res.json(logs);
+  } catch (error) {
+    console.error('[SeoAudit] Stage logs error:', error);
+    res.status(500).json({ error: 'Failed to fetch stage logs' });
+  }
+});
+
 const activeStreamTokens = new Map<string, { auditId: number; expires: number }>();
 
 router.post('/:id/stream-token', requireAdminAuth, async (req: Request, res: Response) => {

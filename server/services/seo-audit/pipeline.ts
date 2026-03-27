@@ -143,7 +143,7 @@ class SEOAuditPipeline extends EventEmitter {
       await storage.updateSeoAudit(auditId, { currentStage: stageName });
 
       try {
-        await runStageWithLogging(auditId, label, i, async () => {
+        await runStageWithLogging(auditId, stageName, i, async () => {
           const freshAudit = await storage.getSeoAuditById(auditId);
           if (!freshAudit) throw new Error(`Audit ${auditId} not found`);
           return await this.runStage(stageName, freshAudit);
