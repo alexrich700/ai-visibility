@@ -316,18 +316,24 @@ If information is not provided, use empty string or empty array as appropriate.`
     });
 
     const text = response.content[0].type === 'text' ? response.content[0].text : '';
-    const parsed = JSON.parse(stripCodeFences(text));
-    return {
-      businessName: parsed.businessName || '',
-      businessUrl: parsed.businessUrl || '',
-      industry: parsed.industry || '',
-      businessType: parsed.businessType === 'national' ? 'national' : 'local',
-      serviceAreaCities: Array.isArray(parsed.serviceAreaCities) ? parsed.serviceAreaCities : [],
-      primaryCategories: Array.isArray(parsed.primaryCategories) ? parsed.primaryCategories : [],
-    };
+    const raw: unknown = JSON.parse(stripCodeFences(text));
+    const businessSchema = z.object({
+      businessName: z.string().default(''),
+      businessUrl: z.string().default(''),
+      industry: z.string().default(''),
+      businessType: z.enum(['local', 'national']).default('local'),
+      serviceAreaCities: z.array(z.string()).default([]),
+      primaryCategories: z.array(z.string()).default([]),
+    });
+    const validated = businessSchema.safeParse(raw);
+    if (!validated.success) {
+      console.error('[LLM] Business parse schema validation failed:', validated.error);
+      throw new Error('Failed to parse business description: invalid AI response format');
+    }
+    return validated.data;
   } catch (error) {
     console.error('[LLM] Business description parsing failed:', error);
-    throw new Error('Failed to parse business description with AI');
+    throw error instanceof Error ? error : new Error('Failed to parse business description with AI');
   }
 }
 
@@ -385,7 +391,7 @@ Generate keyword research results for these service categories.`
     if (!Array.isArray(parsed)) return [];
     const keywordItemSchema = z.object({
       keyword: z.string(),
-      estVolume: z.number().default(0),
+      estVolume: z.coerce.number().default(0),
       intent: z.string().default('informational'),
       service: z.string().default(''),
     });
