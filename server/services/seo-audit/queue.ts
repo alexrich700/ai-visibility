@@ -139,11 +139,16 @@ class AuditJobQueue extends EventEmitter {
 
 export const auditQueue = new AuditJobQueue();
 
+export interface StageResult {
+  skipped?: boolean;
+  skipReason?: string;
+}
+
 export async function runStageWithLogging(
   auditId: number,
   stageName: string,
   stageIndex: number,
-  processor: () => Promise<void>
+  processor: () => Promise<StageResult | void>
 ): Promise<void> {
   const stageLog = await storage.createAuditStageLog({
     auditId,
@@ -153,12 +158,21 @@ export async function runStageWithLogging(
   });
 
   try {
-    await processor();
+    const result = await processor();
 
-    await storage.updateAuditStageLog(stageLog.id, {
-      status: 'completed',
-      completedAt: new Date(),
-    });
+    if (result?.skipped) {
+      await storage.updateAuditStageLog(stageLog.id, {
+        status: 'skipped',
+        errorMessage: result.skipReason || 'Stage skipped',
+        metadata: { skipped: true, skipReason: result.skipReason },
+        completedAt: new Date(),
+      });
+    } else {
+      await storage.updateAuditStageLog(stageLog.id, {
+        status: 'completed',
+        completedAt: new Date(),
+      });
+    }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
 

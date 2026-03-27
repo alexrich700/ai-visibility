@@ -6,6 +6,10 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return chunks;
 }
 
+function stripCodeFences(text: string): string {
+  return text.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?\s*```\s*$/, '').trim();
+}
+
 async function getAnthropicClient() {
   const Anthropic = (await import('@anthropic-ai/sdk')).default;
   return new Anthropic();
@@ -31,7 +35,7 @@ export async function classifyKeywords(
   for (const batch of batches) {
     try {
       const response = await client.messages.create({
-        model: 'claude-haiku-4-5-20251001',
+        model: 'claude-haiku-4-5',
         max_tokens: 4096,
         temperature: 0,
         system: `You are a keyword classification engine for local SEO.
@@ -54,7 +58,7 @@ Return JSON: [{"keyword": "...", "intent": "...", "page_type": "...", "target_se
       });
 
       const text = response.content[0].type === 'text' ? response.content[0].text : '';
-      const parsed = JSON.parse(text);
+      const parsed = JSON.parse(stripCodeFences(text));
       results.push(...parsed);
     } catch (error) {
       console.error('[LLM] Keyword classification batch failed:', error);
@@ -134,7 +138,7 @@ export async function scorePage(
 
   try {
     const response = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      model: 'claude-haiku-4-5',
       max_tokens: 2048,
       temperature: 0,
       system: [{
@@ -162,7 +166,7 @@ Score this page. Return JSON:
     });
 
     const text = response.content[0].type === 'text' ? response.content[0].text : '';
-    return JSON.parse(text);
+    return JSON.parse(stripCodeFences(text));
   } catch (error) {
     console.error('[LLM] Page scoring failed:', error);
     return {
@@ -191,7 +195,7 @@ export async function analyzeReviews(
 
   try {
     const response = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      model: 'claude-haiku-4-5',
       max_tokens: 1024,
       temperature: 0,
       messages: [{
@@ -213,7 +217,7 @@ Return JSON:
     });
 
     const text = response.content[0].type === 'text' ? response.content[0].text : '';
-    return JSON.parse(text);
+    return JSON.parse(stripCodeFences(text));
   } catch (error) {
     console.error('[LLM] Review analysis failed:', error);
     return {
@@ -246,7 +250,7 @@ export async function generateActionPlanNarrative(auditSummary: AuditSummaryForN
 
   try {
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-5-20241022',
+      model: 'claude-sonnet-4-5',
       max_tokens: 2048,
       temperature: 0.3,
       messages: [{
@@ -286,7 +290,7 @@ export async function extractServicesFromPages(pages: Array<{ url: string; title
     }));
 
     const response = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      model: 'claude-haiku-4-5',
       max_tokens: 2048,
       temperature: 0,
       messages: [{
@@ -304,7 +308,7 @@ Only return services that are clearly offered by this business. Return ONLY vali
     });
 
     const text = response.content[0].type === 'text' ? response.content[0].text : '';
-    return JSON.parse(text);
+    return JSON.parse(stripCodeFences(text));
   } catch (error) {
     console.error('[LLM] Service extraction failed:', error);
     return [];

@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 import { storage } from '../../storage';
-import { runStageWithLogging, auditQueue } from './queue';
+import { runStageWithLogging, auditQueue, type StageResult } from './queue';
 import {
   startSiteCrawl,
   getCrawlSummary,
@@ -9,6 +9,7 @@ import {
   runGeoGrid,
   getBacklinkSummary,
   getTopBacklinks,
+  DataForSEOAuthError,
   type CrawlSummary,
   type CrawlPage,
   type SerpResult,
@@ -107,6 +108,7 @@ interface GeoGridStageResult {
 class SEOAuditPipeline extends EventEmitter {
   private crawlSummary: CrawlSummary | null = null;
   private crawlPages: CrawlPage[] = [];
+  private crawlSkipped = false;
   private serpResults: SerpResult[] = [];
   private geoGridStageResults: GeoGridStageResult[] = [];
   private technicalFindings: TechnicalFinding[] = [];
@@ -144,7 +146,7 @@ class SEOAuditPipeline extends EventEmitter {
         await runStageWithLogging(auditId, label, i, async () => {
           const freshAudit = await storage.getSeoAuditById(auditId);
           if (!freshAudit) throw new Error(`Audit ${auditId} not found`);
-          await this.runStage(stageName, freshAudit);
+          return await this.runStage(stageName, freshAudit);
         });
 
         this.emit('event', {
@@ -185,7 +187,7 @@ class SEOAuditPipeline extends EventEmitter {
     } satisfies PipelineEvent);
   }
 
-  private async runStage(stage: StageName, audit: SeoAudit): Promise<void> {
+  private async runStage(stage: StageName, audit: SeoAudit): Promise<StageResult | void> {
     switch (stage) {
       case 'intake': return this.stageIntake(audit);
       case 'technical_audit': return this.stageTechnicalAudit(audit);
@@ -230,7 +232,7 @@ class SEOAuditPipeline extends EventEmitter {
     });
   }
 
-  private async stageIntake(audit: SeoAudit): Promise<void> {
+  private async stageIntake(audit: SeoAudit): Promise<StageResult | void> {
     if (!audit.businessLat || !audit.businessLng) {
       if (audit.businessAddress) {
         const coords = await geocodeAddress(audit.businessAddress);
@@ -243,52 +245,64 @@ class SEOAuditPipeline extends EventEmitter {
       }
     }
 
-    const taskId = await startSiteCrawl({ targetUrl: audit.businessUrl, maxPages: 200 });
-    await storage.updateSeoAudit(audit.id, { crawlTaskId: taskId });
+    try {
+      const taskId = await startSiteCrawl({ targetUrl: audit.businessUrl, maxPages: 200 });
+      await storage.updateSeoAudit(audit.id, { crawlTaskId: taskId });
 
-    let attempts = 0;
-    const maxAttempts = 30;
-    while (attempts < maxAttempts) {
-      await new Promise(r => setTimeout(r, 10000));
-      const summary = await getCrawlSummary(taskId);
-      if (summary && summary.crawl_progress === 'finished') {
-        this.crawlSummary = summary;
-        break;
+      let attempts = 0;
+      const maxAttempts = 30;
+      while (attempts < maxAttempts) {
+        await new Promise(r => setTimeout(r, 10000));
+        const summary = await getCrawlSummary(taskId);
+        if (summary && summary.crawl_progress === 'finished') {
+          this.crawlSummary = summary;
+          break;
+        }
+        attempts++;
       }
-      attempts++;
-    }
 
-    if (this.crawlSummary) {
-      const pages = await getCrawlPages(taskId);
-      this.crawlPages = pages;
+      if (this.crawlSummary) {
+        const pages = await getCrawlPages(taskId);
+        this.crawlPages = pages;
 
-      const pagesForExtraction = pages.slice(0, 50).map(p => ({
-        url: p.url,
-        title: p.meta?.title,
-        meta_description: p.meta?.description,
-      }));
+        const pagesForExtraction = pages.slice(0, 50).map(p => ({
+          url: p.url,
+          title: p.meta?.title,
+          meta_description: p.meta?.description,
+        }));
 
-      if (pagesForExtraction.length > 0) {
-        try {
-          const extractedServices = await extractServicesFromPages(pagesForExtraction);
-          const currentServices = (audit.services as string[]) || [];
-          const newServiceNames = extractedServices.map(s => s.name);
-          const uniqueServices: string[] = [];
-          const seen = new Set<string>();
-          for (const s of [...currentServices, ...newServiceNames]) {
-            if (!seen.has(s)) { seen.add(s); uniqueServices.push(s); }
+        if (pagesForExtraction.length > 0) {
+          try {
+            const extractedServices = await extractServicesFromPages(pagesForExtraction);
+            const currentServices = (audit.services as string[]) || [];
+            const newServiceNames = extractedServices.map(s => s.name);
+            const uniqueServices: string[] = [];
+            const seen = new Set<string>();
+            for (const s of [...currentServices, ...newServiceNames]) {
+              if (!seen.has(s)) { seen.add(s); uniqueServices.push(s); }
+            }
+            await storage.updateSeoAudit(audit.id, { services: uniqueServices });
+          } catch (e) {
+            console.error('[Pipeline] Service extraction failed:', e);
           }
-          await storage.updateSeoAudit(audit.id, { services: uniqueServices });
-        } catch (e) {
-          console.error('[Pipeline] Service extraction failed:', e);
         }
       }
+    } catch (error) {
+      if (error instanceof DataForSEOAuthError) {
+        console.warn('[Pipeline] DataForSEO credentials missing or invalid — skipping crawl/intake stage. Downstream stages will adapt.');
+        this.crawlSkipped = true;
+        return { skipped: true, skipReason: 'DataForSEO credentials missing or invalid — crawl skipped' };
+      }
+      throw error;
     }
   }
 
   private async stageTechnicalAudit(audit: SeoAudit): Promise<void> {
+    if (this.crawlSkipped) {
+      console.warn('[Pipeline] Technical audit running without crawl data (DataForSEO credentials missing)');
+    }
     const psiData = await getPageSpeedInsights(audit.businessUrl, 'mobile');
-    const findings = runTechnicalChecks(psiData, this.crawlSummary);
+    const findings = runTechnicalChecks(psiData, this.crawlSkipped ? null : this.crawlSummary);
     this.technicalFindings = findings;
     const grade = calculateSiteHealthGrade(findings);
 
@@ -379,7 +393,7 @@ class SEOAuditPipeline extends EventEmitter {
     }
   }
 
-  private async stageSerpRankings(audit: SeoAudit): Promise<void> {
+  private async stageSerpRankings(audit: SeoAudit): Promise<StageResult | void> {
     const keywords = await storage.getAuditKeywordsByAuditId(audit.id);
     if (keywords.length === 0) return;
 
@@ -391,7 +405,15 @@ class SEOAuditPipeline extends EventEmitter {
       locationName,
     }));
 
-    this.serpResults = await batchOrganicSerp(serpPairs);
+    try {
+      this.serpResults = await batchOrganicSerp(serpPairs);
+    } catch (error) {
+      if (error instanceof DataForSEOAuthError) {
+        console.warn('[Pipeline] DataForSEO credentials missing or invalid — skipping SERP rankings stage.');
+        return { skipped: true, skipReason: 'DataForSEO credentials missing or invalid — SERP rankings skipped' };
+      }
+      throw error;
+    }
 
     const clientDomain = extractDomain(audit.businessUrl);
     const competitors = (audit.competitors as Array<{ domain?: string; name?: string }>) || [];
@@ -455,7 +477,7 @@ class SEOAuditPipeline extends EventEmitter {
     }
   }
 
-  private async stageGeoGrid(audit: SeoAudit): Promise<void> {
+  private async stageGeoGrid(audit: SeoAudit): Promise<StageResult | void> {
     if (audit.businessType === 'national') return;
     if (!audit.businessLat || !audit.businessLng) return;
 
@@ -531,6 +553,10 @@ class SEOAuditPipeline extends EventEmitter {
         }
       }
     } catch (e) {
+      if (e instanceof DataForSEOAuthError) {
+        console.warn('[Pipeline] DataForSEO credentials missing or invalid — skipping geo grid stage.');
+        return { skipped: true, skipReason: 'DataForSEO credentials missing or invalid — geo grid skipped' };
+      }
       console.error(`[Pipeline] Geo grid failed:`, e);
       throw e;
     }

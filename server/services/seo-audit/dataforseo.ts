@@ -12,6 +12,27 @@ const MAX_RETRIES = 3;
 const RETRY_DELAYS = [1000, 2000, 4000];
 const BATCH_SIZE = 100;
 
+export class DataForSEOAuthError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DataForSEOAuthError';
+  }
+}
+
+function isRetryableError(error: unknown): boolean {
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase();
+    return msg.includes('fetch failed') ||
+           msg.includes('socket') ||
+           msg.includes('econnreset') ||
+           msg.includes('econnrefused') ||
+           msg.includes('etimedout') ||
+           msg.includes('network') ||
+           msg.includes('abort');
+  }
+  return false;
+}
+
 interface D4SeoApiResponse {
   status_code: number;
   status_message: string;
@@ -64,6 +85,9 @@ async function d4seoRequest(endpoint: string, body: unknown[], retries = MAX_RET
 
       if (!response.ok) {
         const text = await response.text();
+        if (response.status === 401) {
+          throw new DataForSEOAuthError(`DataForSEO authentication failed (401): credentials missing or invalid`);
+        }
         if (response.status === 429 && attempt < retries) {
           const delay = RETRY_DELAYS[attempt] || 4000;
           console.log(`[DataForSEO] Rate limited, retrying in ${delay}ms (attempt ${attempt + 1}/${retries})`);
@@ -79,9 +103,12 @@ async function d4seoRequest(endpoint: string, body: unknown[], retries = MAX_RET
       }
       return data;
     } catch (error) {
-      if (attempt < retries && !(error instanceof Error && error.message.includes('API error 4'))) {
+      if (error instanceof DataForSEOAuthError) {
+        throw error;
+      }
+      if (attempt < retries && (isRetryableError(error) || !(error instanceof Error && error.message.includes('API error 4')))) {
         const delay = RETRY_DELAYS[attempt] || 4000;
-        console.log(`[DataForSEO] Request failed, retrying in ${delay}ms (attempt ${attempt + 1}/${retries})`);
+        console.log(`[DataForSEO] Request failed (${error instanceof Error ? error.message : 'unknown'}), retrying in ${delay}ms (attempt ${attempt + 1}/${retries})`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
@@ -101,6 +128,9 @@ async function d4seoGet(endpoint: string): Promise<D4SeoApiResponse> {
     timeoutMs: 60000,
   });
 
+  if (response.status === 401) {
+    throw new DataForSEOAuthError(`DataForSEO authentication failed (401): credentials missing or invalid`);
+  }
   if (!response.ok) throw new Error(`DataForSEO GET error: ${response.status}`);
   return await response.json() as D4SeoApiResponse;
 }
@@ -358,6 +388,9 @@ export async function runGeoGrid(params: {
         }
       }
     } catch (error) {
+      if (error instanceof DataForSEOAuthError) {
+        throw error;
+      }
       console.error(`[DataForSEO] Geo grid batch failed:`, error);
     }
   }

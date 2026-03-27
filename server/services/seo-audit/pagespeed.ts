@@ -27,6 +27,9 @@ export interface PageSpeedData {
   };
 }
 
+const PSI_MAX_RETRIES = 3;
+const PSI_INITIAL_BACKOFF_MS = 2000;
+
 export async function getPageSpeedInsights(url: string, strategy: 'mobile' | 'desktop' = 'mobile'): Promise<PageSpeedData> {
   if (!pageSpeedDailyQuota.canMakeRequest()) {
     throw new Error(`PageSpeed Insights daily quota exhausted (${pageSpeedDailyQuota.getUsed()} used of 25,000/day). Try again tomorrow.`);
@@ -42,16 +45,31 @@ export async function getPageSpeedInsights(url: string, strategy: 'mobile' | 'de
   if (apiKey) params.append('key', apiKey);
 
   const requestUrl = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?${params.toString()}`;
-  const response = await fetchWithTimeout(requestUrl, { timeoutMs: 60000 });
 
-  pageSpeedDailyQuota.recordRequest();
+  for (let attempt = 0; attempt <= PSI_MAX_RETRIES; attempt++) {
+    const response = await fetchWithTimeout(requestUrl, { timeoutMs: 60000 });
 
-  if (!response.ok) {
+    pageSpeedDailyQuota.recordRequest();
+
+    if (response.ok) {
+      return await response.json() as PageSpeedData;
+    }
+
+    if (response.status === 429 && attempt < PSI_MAX_RETRIES) {
+      const delay = PSI_INITIAL_BACKOFF_MS * Math.pow(2, attempt);
+      console.warn(`[PageSpeed] Rate limited (429), retrying in ${delay}ms (attempt ${attempt + 1}/${PSI_MAX_RETRIES})`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      continue;
+    }
+
     const text = await response.text();
+    if (response.status === 429) {
+      throw new Error(`PageSpeed Insights rate limit exceeded after ${PSI_MAX_RETRIES} retries. The API quota may be exhausted — try again later.`);
+    }
     throw new Error(`PageSpeed Insights API error ${response.status}: ${text}`);
   }
 
-  return await response.json() as PageSpeedData;
+  throw new Error('PageSpeed Insights: max retries exceeded');
 }
 
 export function getPageSpeedQuotaStatus(): { used: number; remaining: number } {
