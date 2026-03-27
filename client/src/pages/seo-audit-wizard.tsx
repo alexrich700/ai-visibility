@@ -352,6 +352,7 @@ export default function SeoAuditWizard() {
   const [manualServiceInput, setManualServiceInput] = useState("");
   const [lastGenerationInputs, setLastGenerationInputs] = useState("");
   const [showOtherDescription, setShowOtherDescription] = useState(false);
+  
 
   const form = useForm<WizardFormData>({
     resolver: zodResolver(wizardSchema),
@@ -861,7 +862,7 @@ export default function SeoAuditWizard() {
                           </Button>
                         </div>
                       </div>
-                      {showOtherDescription && (
+                      {(showOtherDescription || (watchedData.otherBusinessDescription || "").trim().length > 0) && (
                         <div className="mt-3">
                           <Label className="text-sm font-medium">Describe this business</Label>
                           <FormField control={form.control} name="otherBusinessDescription" render={({ field }) => (
@@ -1044,8 +1045,8 @@ export default function SeoAuditWizard() {
 
                     <div className="flex items-center justify-between text-xs text-gray-500">
                       <span>{generatedGroups.filter(g => g.isActive).length} of {generatedGroups.length} selected</span>
-                      <Button type="button" variant="ghost" size="sm" className="text-xs" onClick={regenerateGroups} data-testid="button-regenerate-groups">
-                        <Loader2 className="w-3 h-3 mr-1" /> Regenerate
+                      <Button type="button" variant="ghost" size="sm" className="text-xs" onClick={regenerateGroups} disabled={isLoadingGroups} data-testid="button-regenerate-groups">
+                        <Loader2 className={`w-3 h-3 mr-1 ${isLoadingGroups ? "animate-spin" : ""}`} /> Regenerate
                       </Button>
                     </div>
                   </div>
@@ -1352,6 +1353,12 @@ export default function SeoAuditWizard() {
                           <div className="col-span-2">
                             <span className="text-gray-500">Categories:</span>{" "}
                             <span className="font-medium">{watchedData.primaryCategories.join(", ")}</span>
+                          </div>
+                        )}
+                        {(watchedData.otherBusinessDescription || "").trim() && (
+                          <div className="col-span-2">
+                            <span className="text-gray-500">Description:</span>{" "}
+                            <span className="font-medium">{watchedData.otherBusinessDescription}</span>
                           </div>
                         )}
                         {watchedData.businessAddress && <div className="col-span-2"><span className="text-gray-500">Address:</span> <span className="font-medium">{watchedData.businessAddress}</span></div>}
