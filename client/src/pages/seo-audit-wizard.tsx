@@ -4,7 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { apiRequest, queryClient, getAdminToken } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -286,27 +286,20 @@ export default function SeoAuditWizard() {
     if (!address || address.length < 5) return;
     setIsGeocoding(true);
     try {
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      const token = getAdminToken();
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-      }
-      const resp = await fetch("/api/seo-audits/geocode", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ address }),
-        credentials: "include",
-      });
-      if (resp.ok) {
-        const { lat, lng } = await resp.json();
-        form.setValue("businessLat", lat);
-        form.setValue("businessLng", lng);
-        toast({ title: "Location found", description: `Coordinates: ${lat.toFixed(4)}, ${lng.toFixed(4)}` });
-      } else {
+      const resp = await apiRequest("POST", "/api/seo-audits/geocode", { address }, { useAdminAuth: true });
+      const { lat, lng } = await resp.json();
+      form.setValue("businessLat", lat);
+      form.setValue("businessLng", lng);
+      toast({ title: "Location found", description: `Coordinates: ${lat.toFixed(4)}, ${lng.toFixed(4)}` });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "";
+      if (message.startsWith("401")) {
+        toast({ title: "Authentication error", description: "Please log in again to use geocoding.", variant: "destructive" });
+      } else if (message.startsWith("404")) {
         toast({ title: "Location not found", description: "Could not geocode this address. You can set coordinates manually.", variant: "destructive" });
+      } else {
+        toast({ title: "Geocoding failed", description: "An error occurred during geocoding. Please try again.", variant: "destructive" });
       }
-    } catch {
-      toast({ title: "Geocoding failed", description: "Network error during geocoding.", variant: "destructive" });
     } finally {
       setIsGeocoding(false);
     }
