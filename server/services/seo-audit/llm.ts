@@ -356,7 +356,7 @@ export async function generateKeywordResearch(params: {
   try {
     const response = await client.messages.create({
       model: 'claude-haiku-4-5',
-      max_tokens: 4096,
+      max_tokens: 16384,
       temperature: 0,
       system: `You are an SEO keyword research specialist. Generate relevant keywords for a business based on their service categories and location.
 
