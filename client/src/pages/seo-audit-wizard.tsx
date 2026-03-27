@@ -351,6 +351,7 @@ export default function SeoAuditWizard() {
   const [groupsGenerated, setGroupsGenerated] = useState(false);
   const [manualServiceInput, setManualServiceInput] = useState("");
   const [lastGenerationInputs, setLastGenerationInputs] = useState("");
+  const [showOtherDescription, setShowOtherDescription] = useState(false);
 
   const form = useForm<WizardFormData>({
     resolver: zodResolver(wizardSchema),
@@ -826,7 +827,8 @@ export default function SeoAuditWizard() {
                         <Select
                           value=""
                           onValueChange={(val) => {
-                            if (val === "Other") {
+                            if (val === "__other__") {
+                              setShowOtherDescription(true);
                               return;
                             }
                             const current = form.getValues("primaryCategories");
@@ -843,6 +845,7 @@ export default function SeoAuditWizard() {
                             {INDUSTRIES.filter(ind => ind !== "Other").map(ind => (
                               <SelectItem key={ind} value={ind}>{ind}</SelectItem>
                             ))}
+                            <SelectItem value="__other__">Other...</SelectItem>
                           </SelectContent>
                         </Select>
                         <div className="flex gap-1">
@@ -859,9 +862,9 @@ export default function SeoAuditWizard() {
                           </Button>
                         </div>
                       </div>
-                      {watchedData.primaryCategories.length === 0 && (
+                      {showOtherDescription && (
                         <div className="mt-3">
-                          <Label className="text-sm font-medium">Or describe this business</Label>
+                          <Label className="text-sm font-medium">Describe this business</Label>
                           <FormField control={form.control} name="otherBusinessDescription" render={({ field }) => (
                             <FormItem className="mt-1">
                               <FormControl>
@@ -994,8 +997,9 @@ export default function SeoAuditWizard() {
                           >
                             <Checkbox
                               checked={group.isActive}
-                              onCheckedChange={() => toggleGroupActive(idx)}
-                              className="mt-0.5"
+                              onCheckedChange={() => {}}
+                              onClick={(e) => e.stopPropagation()}
+                              className="mt-0.5 pointer-events-none"
                               data-testid={`checkbox-group-${idx}`}
                             />
                             <div className="flex-1 min-w-0">
@@ -1358,6 +1362,22 @@ export default function SeoAuditWizard() {
                         <div className="flex flex-wrap gap-1.5">
                           {watchedData.serviceAreaCities.map(c => (
                             <Badge key={c} variant="outline" className="text-xs">{c}</Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {generatedGroups.filter(g => g.isActive).length > 0 && (
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-2">
+                          AI Service Categories ({generatedGroups.filter(g => g.isActive).length})
+                        </h4>
+                        <div className="flex flex-wrap gap-1.5">
+                          {generatedGroups.filter(g => g.isActive).map(g => (
+                            <Badge key={g.name} variant="outline" className="text-xs">
+                              {g.name}
+                              {g.isHighLevelCategory && <span className="ml-1 text-gray-400">(category)</span>}
+                            </Badge>
                           ))}
                         </div>
                       </div>
