@@ -376,6 +376,7 @@ export default function SeoAuditWizard() {
   const [keywordsGenerated, setKeywordsGenerated] = useState(false);
   const [lastKeywordInputs, setLastKeywordInputs] = useState("");
   const [customGeoKeyword, setCustomGeoKeyword] = useState("");
+  const [customResearchKeyword, setCustomResearchKeyword] = useState("");
 
   const form = useForm<WizardFormData>({
     resolver: zodResolver(wizardSchema),
@@ -778,6 +779,20 @@ export default function SeoAuditWizard() {
     setKeywordResults(prev => prev.map((k, i) => i === index ? { ...k, selected: !k.selected } : k));
   };
 
+  const addCustomResearchKeyword = () => {
+    const trimmed = customResearchKeyword.trim();
+    if (trimmed && !keywordResults.some(k => k.keyword.toLowerCase() === trimmed.toLowerCase())) {
+      setKeywordResults(prev => [...prev, {
+        keyword: trimmed,
+        estVolume: 0,
+        intent: "transactional",
+        service: "Custom",
+        selected: true,
+      }]);
+      setCustomResearchKeyword("");
+    }
+  };
+
   const toggleGeoKeyword = (kw: string) => {
     const current = form.getValues("geoGridKeywords");
     if (current.includes(kw)) {
@@ -791,7 +806,7 @@ export default function SeoAuditWizard() {
     const kws: Array<{ keyword: string; source: string; service: string; estVolume: number }> = [];
     const seen = new Set<string>();
 
-    for (const kr of keywordResults.filter(k => k.selected)) {
+    for (const kr of keywordResults) {
       if (!seen.has(kr.keyword)) {
         kws.push({ keyword: kr.keyword, source: "research", service: kr.service, estVolume: kr.estVolume });
         seen.add(kr.keyword);
@@ -1379,22 +1394,48 @@ export default function SeoAuditWizard() {
                   )}
 
                   {!isLoadingKeywords && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="text-xs"
-                      onClick={() => {
-                        setIsLoadingKeywords(true);
-                        setKeywordsGenerated(false);
-                        setKeywordResults([]);
-                        keywordResearchMutation.mutate();
-                      }}
-                      disabled={isLoadingKeywords}
-                      data-testid="button-regenerate-keywords"
-                    >
-                      <Loader2 className={`w-3 h-3 mr-1 ${isLoadingKeywords ? "animate-spin" : ""}`} /> Regenerate Keywords
-                    </Button>
+                    <div className="space-y-3">
+                      <div className="flex gap-2">
+                        <Input
+                          value={customResearchKeyword}
+                          onChange={e => setCustomResearchKeyword(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              addCustomResearchKeyword();
+                            }
+                          }}
+                          placeholder="Add a custom keyword..."
+                          className="flex-1"
+                          data-testid="input-custom-research-keyword"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={addCustomResearchKeyword}
+                          disabled={!customResearchKeyword.trim()}
+                          data-testid="button-add-custom-research-keyword"
+                        >
+                          <Plus className="w-4 h-4 mr-1" /> Add
+                        </Button>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="text-xs"
+                        onClick={() => {
+                          setIsLoadingKeywords(true);
+                          setKeywordsGenerated(false);
+                          setKeywordResults([]);
+                          keywordResearchMutation.mutate();
+                        }}
+                        disabled={isLoadingKeywords}
+                        data-testid="button-regenerate-keywords"
+                      >
+                        <Loader2 className={`w-3 h-3 mr-1 ${isLoadingKeywords ? "animate-spin" : ""}`} /> Regenerate Keywords
+                      </Button>
+                    </div>
                   )}
                 </div>
               )}

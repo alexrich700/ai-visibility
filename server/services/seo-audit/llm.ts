@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 function chunk<T>(arr: T[], size: number): T[][] {
   const chunks: T[][] = [];
   for (let i = 0; i < arr.length; i += size) {
@@ -379,14 +381,22 @@ Generate keyword research results for these service categories.`
     });
 
     const text = response.content[0].type === 'text' ? response.content[0].text : '';
-    const parsed = JSON.parse(stripCodeFences(text));
+    const parsed: unknown = JSON.parse(stripCodeFences(text));
     if (!Array.isArray(parsed)) return [];
-    return parsed.map((k: any) => ({
-      keyword: String(k.keyword || ''),
-      estVolume: Number(k.estVolume) || 0,
-      intent: String(k.intent || 'informational'),
-      service: String(k.service || ''),
-    })).filter((k: KeywordResearchResult) => k.keyword.length > 0);
+    const keywordItemSchema = z.object({
+      keyword: z.string(),
+      estVolume: z.number().default(0),
+      intent: z.string().default('informational'),
+      service: z.string().default(''),
+    });
+    const results: KeywordResearchResult[] = [];
+    for (const item of parsed) {
+      const validated = keywordItemSchema.safeParse(item);
+      if (validated.success && validated.data.keyword.length > 0) {
+        results.push(validated.data);
+      }
+    }
+    return results;
   } catch (error) {
     console.error('[LLM] Keyword research generation failed:', error);
     throw new Error('Failed to generate keyword research with AI');
