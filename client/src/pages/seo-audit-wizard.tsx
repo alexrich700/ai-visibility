@@ -547,7 +547,12 @@ export default function SeoAuditWizard() {
     mutationFn: async (formData: WizardFormData) => {
       let url = formData.businessUrl;
       if (!/^https?:\/\//.test(url)) url = `https://${url}`;
-      const serviceNames = formData.services.map(s => s.name);
+
+      const allServices = new Set(formData.services.map(s => s.name));
+      const selectedKeywords = keywordResults.filter(k => k.selected);
+      for (const kw of selectedKeywords) {
+        allServices.add(kw.keyword);
+      }
 
       const res = await apiRequest("POST", "/api/seo-audits", {
         businessName: formData.businessName,
@@ -556,7 +561,7 @@ export default function SeoAuditWizard() {
         businessType: formData.businessType,
         industry: formData.primaryCategories.length > 0 ? formData.primaryCategories[0] : (formData.otherBusinessDescription || formData.industry || undefined),
         serviceAreaCities: formData.serviceAreaCities,
-        services: serviceNames,
+        services: Array.from(allServices),
         competitors: formData.competitors.filter(c => c.name || c.domain),
         geoGridKeywords: formData.geoGridKeywords,
         geoGridSize: formData.geoGridSize,
