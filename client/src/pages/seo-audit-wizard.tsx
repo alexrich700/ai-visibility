@@ -32,7 +32,8 @@ import {
 import {
   Building2, Globe, MapPin, ArrowRight, ArrowLeft,
   Plus, Trash2, Loader2, Check, DollarSign, Play,
-  Users, Grid3X3, Search, MapPinned, Sparkles, Info
+  Users, Grid3X3, Search, MapPinned, Sparkles, Info,
+  MessageSquare
 } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup, Rectangle, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
@@ -81,6 +82,14 @@ const wizardSchema = z.object({
 
 type WizardFormData = z.infer<typeof wizardSchema>;
 
+interface KeywordResult {
+  keyword: string;
+  estVolume: number;
+  intent: string;
+  service: string;
+  selected: boolean;
+}
+
 const INDUSTRIES = [
   "Plumbing", "HVAC", "Electrical", "Roofing", "Landscaping",
   "Dental", "Legal", "Real Estate", "Restaurant", "Auto Repair",
@@ -110,9 +119,9 @@ const STATE_NAME_TO_CODE: Record<string, string> = {
 };
 
 const GRID_SIZES = [
-  { value: 7, label: "7×7 (49 points)" },
-  { value: 13, label: "13×13 (169 points)" },
-  { value: 15, label: "15×15 (225 points)" },
+  { value: 7, label: "7x7 (49 points)" },
+  { value: 13, label: "13x13 (169 points)" },
+  { value: 15, label: "15x15 (225 points)" },
 ];
 
 const SPACING_OPTIONS = [
@@ -122,7 +131,16 @@ const SPACING_OPTIONS = [
   { value: 3, label: "3 mi" },
 ];
 
-const STEPS = ["Business Info", "Service Area", "Service Categories", "Services", "Competitors", "Geo Grid", "Review & Run"];
+const STEPS = [
+  "Describe Business",
+  "Business Info",
+  "Service Area",
+  "Service Categories",
+  "Keyword Research",
+  "Competitors",
+  "Geo Grid",
+  "Review & Run",
+];
 
 const geocodeCache: Record<string, [number, number] | null> = {};
 
@@ -340,10 +358,8 @@ export default function SeoAuditWizard() {
   const [step, setStep] = useState(0);
   const [cityInput, setCityInput] = useState("");
   const [cityState, setCityState] = useState("");
-  const [serviceInput, setServiceInput] = useState("");
   const [compName, setCompName] = useState("");
   const [compDomain, setCompDomain] = useState("");
-  const [customKwInput, setCustomKwInput] = useState<Record<number, string>>({});
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [newCategoryInput, setNewCategoryInput] = useState("");
   const [generatedGroups, setGeneratedGroups] = useState<Array<{ name: string; description: string; isActive: boolean; isHighLevelCategory: boolean }>>([]);
@@ -352,7 +368,14 @@ export default function SeoAuditWizard() {
   const [manualServiceInput, setManualServiceInput] = useState("");
   const [lastGenerationInputs, setLastGenerationInputs] = useState("");
   const [showOtherDescription, setShowOtherDescription] = useState(false);
-  
+  const [businessDescription, setBusinessDescription] = useState("");
+  const [isParsingBusiness, setIsParsingBusiness] = useState(false);
+  const [businessParsed, setBusinessParsed] = useState(false);
+  const [keywordResults, setKeywordResults] = useState<KeywordResult[]>([]);
+  const [isLoadingKeywords, setIsLoadingKeywords] = useState(false);
+  const [keywordsGenerated, setKeywordsGenerated] = useState(false);
+  const [lastKeywordInputs, setLastKeywordInputs] = useState("");
+  const [customGeoKeyword, setCustomGeoKeyword] = useState("");
 
   const form = useForm<WizardFormData>({
     resolver: zodResolver(wizardSchema),
@@ -371,11 +394,6 @@ export default function SeoAuditWizard() {
       geoGridSize: 13,
       geoGridSpacingMiles: 1,
     },
-  });
-
-  const { fields: serviceFields, append: appendService, remove: removeService } = useFieldArray({
-    control: form.control,
-    name: "services",
   });
 
   const { fields: competitorFields, append: appendCompetitor, remove: removeCompetitor } = useFieldArray({
@@ -448,6 +466,82 @@ export default function SeoAuditWizard() {
     },
   });
 
+  const parseBusinessMutation = useMutation({
+    mutationFn: async (description: string) => {
+      const response = await apiRequest("POST", "/api/seo-audits/parse-business", { description }, { useAdminAuth: true });
+      return await response.json() as {
+        businessName: string;
+        businessUrl: string;
+        industry: string;
+        businessType: "local" | "national";
+        serviceAreaCities: string[];
+        primaryCategories: string[];
+      };
+    },
+    onSuccess: (data) => {
+      const hasMeaningfulData = !!(data.businessName || data.businessUrl || data.primaryCategories?.length > 0);
+      if (data.businessName) form.setValue("businessName", data.businessName);
+      if (data.businessUrl) form.setValue("businessUrl", data.businessUrl);
+      if (data.industry) form.setValue("industry", data.industry);
+      if (data.businessType) form.setValue("businessType", data.businessType);
+      if (data.serviceAreaCities?.length > 0) form.setValue("serviceAreaCities", data.serviceAreaCities);
+      if (data.primaryCategories?.length > 0) {
+        form.setValue("primaryCategories", data.primaryCategories);
+        if (data.primaryCategories[0] && !data.industry) {
+          form.setValue("industry", data.primaryCategories[0]);
+        }
+      }
+      setIsParsingBusiness(false);
+      if (hasMeaningfulData) {
+        setBusinessParsed(true);
+        toast({ title: "Business info extracted", description: "We've pre-filled the form based on your description. Review and adjust as needed." });
+      } else {
+        setBusinessParsed(false);
+        toast({ title: "Couldn't extract info", description: "Try providing more detail about the business name, website, and services.", variant: "destructive" });
+      }
+    },
+    onError: (error: Error) => {
+      setIsParsingBusiness(false);
+      toast({ title: "Failed to parse description", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const keywordResearchMutation = useMutation({
+    mutationFn: async () => {
+      const activeGroups = generatedGroups.filter(g => g.isActive && !g.isHighLevelCategory);
+      const categories = activeGroups.map(g => g.name);
+      const response = await apiRequest("POST", "/api/seo-audits/keyword-research", {
+        categories,
+        businessName: form.getValues("businessName"),
+        businessUrl: form.getValues("businessUrl"),
+        businessType: form.getValues("businessType"),
+        cities: form.getValues("serviceAreaCities"),
+      }, { useAdminAuth: true });
+      return await response.json() as { keywords: Array<{ keyword: string; estVolume: number; intent: string; service: string }> };
+    },
+    onSuccess: (data) => {
+      const results = data.keywords.map(k => ({ ...k, selected: true }));
+      setKeywordResults(results);
+      setIsLoadingKeywords(false);
+      setKeywordsGenerated(true);
+
+      const services = form.getValues("services");
+      const serviceNames = new Set(services.map(s => s.name));
+      const newServices = [...services];
+      for (const kw of results) {
+        if (kw.service && !serviceNames.has(kw.service)) {
+          newServices.push({ name: kw.service, customKeywords: [] });
+          serviceNames.add(kw.service);
+        }
+      }
+      form.setValue("services", newServices);
+    },
+    onError: (error: Error) => {
+      setIsLoadingKeywords(false);
+      toast({ title: "Failed to generate keywords", description: error.message, variant: "destructive" });
+    },
+  });
+
   const createAndRunMutation = useMutation({
     mutationFn: async (formData: WizardFormData) => {
       let url = formData.businessUrl;
@@ -459,6 +553,19 @@ export default function SeoAuditWizard() {
           customKeywordsMap[svc.name] = svc.customKeywords;
         }
       }
+
+      const selectedKeywords = keywordResults.filter(k => k.selected);
+      for (const kw of selectedKeywords) {
+        if (kw.service) {
+          if (!customKeywordsMap[kw.service]) {
+            customKeywordsMap[kw.service] = [];
+          }
+          if (!customKeywordsMap[kw.service].includes(kw.keyword)) {
+            customKeywordsMap[kw.service].push(kw.keyword);
+          }
+        }
+      }
+
       const res = await apiRequest("POST", "/api/seo-audits", {
         businessName: formData.businessName,
         businessUrl: url,
@@ -497,28 +604,30 @@ export default function SeoAuditWizard() {
   });
 
   const stepFieldMap: Record<number, Array<keyof WizardFormData>> = {
-    0: ["businessName", "businessUrl"],
-    1: ["businessType", "serviceAreaCities"],
-    2: [],
-    3: ["services"],
+    0: [],
+    1: ["businessName", "businessUrl"],
+    2: ["businessType", "serviceAreaCities"],
+    3: [],
     4: [],
     5: [],
     6: [],
+    7: [],
   };
 
   const canAdvance = (): boolean => {
     switch (step) {
-      case 0: {
+      case 0: return true;
+      case 1: {
         const hasCats = watchedData.primaryCategories.length > 0;
         const hasOther = (watchedData.otherBusinessDescription || "").trim().length > 0;
         return watchedData.businessName.length > 0 && watchedData.businessUrl.length > 0 && (hasCats || hasOther);
       }
-      case 1: return watchedData.businessType === "national" || watchedData.serviceAreaCities.length > 0;
-      case 2: return generatedGroups.some(g => g.isActive && !g.isHighLevelCategory);
-      case 3: return watchedData.services.length > 0;
-      case 4: return true;
+      case 2: return watchedData.businessType === "national" || watchedData.serviceAreaCities.length > 0;
+      case 3: return generatedGroups.some(g => g.isActive && !g.isHighLevelCategory);
+      case 4: return keywordResults.some(k => k.selected);
       case 5: return true;
       case 6: return true;
+      case 7: return true;
       default: return false;
     }
   };
@@ -529,8 +638,14 @@ export default function SeoAuditWizard() {
       const valid = await form.trigger(fields);
       if (!valid) return;
     }
-    if (step === 1) {
-      setStep(2);
+
+    if (step === 0) {
+      setStep(1);
+      return;
+    }
+
+    if (step === 2) {
+      setStep(3);
       const currentInputs = JSON.stringify({
         url: form.getValues("businessUrl"),
         cats: form.getValues("primaryCategories"),
@@ -548,7 +663,8 @@ export default function SeoAuditWizard() {
       }
       return;
     }
-    if (step === 2) {
+
+    if (step === 3) {
       const activeGroups = generatedGroups.filter(g => g.isActive && !g.isHighLevelCategory);
       const allGroupNames = new Set(generatedGroups.map(g => g.name));
       const currentServices = form.getValues("services");
@@ -558,10 +674,37 @@ export default function SeoAuditWizard() {
         return existing || { name: g.name, customKeywords: [] as string[] };
       });
       form.setValue("services", [...groupServices, ...manualServices]);
-      setStep(3);
+
+      setStep(4);
+      const kwInputs = JSON.stringify({
+        groups: activeGroups.map(g => g.name),
+        name: form.getValues("businessName"),
+        url: form.getValues("businessUrl"),
+        type: form.getValues("businessType"),
+        cities: form.getValues("serviceAreaCities"),
+      });
+      const kwChanged = kwInputs !== lastKeywordInputs;
+      if (!keywordsGenerated || kwChanged) {
+        setIsLoadingKeywords(true);
+        setKeywordsGenerated(false);
+        setKeywordResults([]);
+        setLastKeywordInputs(kwInputs);
+        keywordResearchMutation.mutate();
+      }
       return;
     }
+
     setStep(s => s + 1);
+  };
+
+  const handleParseBusiness = () => {
+    if (!businessDescription.trim()) {
+      toast({ title: "Please describe the business", description: "Enter a description of the business to get started.", variant: "destructive" });
+      return;
+    }
+    setIsParsingBusiness(true);
+    setBusinessParsed(false);
+    parseBusinessMutation.mutate(businessDescription);
   };
 
   const addCategory = () => {
@@ -623,35 +766,16 @@ export default function SeoAuditWizard() {
     form.setValue("serviceAreaCities", current.filter(c => c !== city));
   };
 
-  const addService = () => {
-    const svc = serviceInput.trim();
-    if (svc && !watchedData.services.some(s => s.name === svc)) {
-      appendService({ name: svc, customKeywords: [] });
-    }
-    setServiceInput("");
-  };
-
-  const addCustomKeyword = (serviceIndex: number) => {
-    const kw = (customKwInput[serviceIndex] || "").trim();
-    if (!kw) return;
-    const current = form.getValues(`services.${serviceIndex}.customKeywords`) || [];
-    if (!current.includes(kw)) {
-      form.setValue(`services.${serviceIndex}.customKeywords`, [...current, kw]);
-    }
-    setCustomKwInput(prev => ({ ...prev, [serviceIndex]: "" }));
-  };
-
-  const removeCustomKeyword = (serviceIndex: number, kw: string) => {
-    const current = form.getValues(`services.${serviceIndex}.customKeywords`) || [];
-    form.setValue(`services.${serviceIndex}.customKeywords`, current.filter(k => k !== kw));
-  };
-
   const addCompetitor = () => {
     if ((compName.trim() || compDomain.trim()) && competitorFields.length < 3) {
       appendCompetitor({ name: compName.trim(), domain: compDomain.trim() });
     }
     setCompName("");
     setCompDomain("");
+  };
+
+  const toggleKeywordSelected = (index: number) => {
+    setKeywordResults(prev => prev.map((k, i) => i === index ? { ...k, selected: !k.selected } : k));
   };
 
   const toggleGeoKeyword = (kw: string) => {
@@ -663,18 +787,39 @@ export default function SeoAuditWizard() {
     }
   };
 
-  const allKeywords = useMemo(() => {
+  const allGeoKeywords = useMemo(() => {
     const kws: Array<{ keyword: string; source: string; service: string; estVolume: number }> = [];
-    for (const svc of watchedData.services) {
-      kws.push({ keyword: svc.name, source: "service", service: svc.name, estVolume: 720 });
-      kws.push({ keyword: `${svc.name} near me`, source: "auto", service: svc.name, estVolume: 480 });
-      kws.push({ keyword: `best ${svc.name}`, source: "auto", service: svc.name, estVolume: 320 });
-      for (const ck of (svc.customKeywords || [])) {
-        kws.push({ keyword: ck, source: "custom", service: svc.name, estVolume: 260 });
+    const seen = new Set<string>();
+
+    for (const kr of keywordResults.filter(k => k.selected)) {
+      if (!seen.has(kr.keyword)) {
+        kws.push({ keyword: kr.keyword, source: "research", service: kr.service, estVolume: kr.estVolume });
+        seen.add(kr.keyword);
       }
     }
+
+    for (const svc of watchedData.services) {
+      if (!seen.has(svc.name)) {
+        kws.push({ keyword: svc.name, source: "service", service: svc.name, estVolume: 0 });
+        seen.add(svc.name);
+      }
+    }
+
     return kws.sort((a, b) => b.estVolume - a.estVolume);
-  }, [watchedData.services]);
+  }, [keywordResults, watchedData.services]);
+
+  const keywordsByService = useMemo(() => {
+    const grouped: Record<string, KeywordResult[]> = {};
+    for (const kw of keywordResults) {
+      const svc = kw.service || "Other";
+      if (!grouped[svc]) grouped[svc] = [];
+      grouped[svc].push(kw);
+    }
+    for (const svc of Object.keys(grouped)) {
+      grouped[svc].sort((a, b) => b.estVolume - a.estVolume);
+    }
+    return grouped;
+  }, [keywordResults]);
 
   const cost = estimateCost(watchedData);
   const hasLatLng = watchedData.businessLat !== undefined && watchedData.businessLng !== undefined && watchedData.businessLat !== 0;
@@ -689,7 +834,7 @@ export default function SeoAuditWizard() {
 
       <div className="mb-8">
         <h1 className="text-2xl font-bold tracking-tight mb-4" data-testid="text-wizard-title">New SEO Audit</h1>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 flex-wrap">
           {STEPS.map((label, i) => (
             <div key={label} className="flex items-center">
               <button
@@ -717,7 +862,87 @@ export default function SeoAuditWizard() {
         <div>
           <Card className="border border-gray-200 shadow-sm">
             <CardContent className="p-6">
+
               {step === 0 && (
+                <div className="space-y-5">
+                  <CardHeader className="px-0 pt-0">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <MessageSquare className="w-5 h-5 text-[#ff5800]" />
+                      Describe the Business
+                    </CardTitle>
+                  </CardHeader>
+
+                  <div className="flex items-center gap-2 bg-blue-50 text-blue-700 text-sm rounded-lg px-4 py-3">
+                    <Sparkles className="w-4 h-4 shrink-0" />
+                    <span>
+                      Tell us about the business in your own words. We'll extract the key details and pre-fill the audit form for you. You can always adjust anything afterward.
+                    </span>
+                  </div>
+
+                  <div className="space-y-3">
+                    <Label className="text-sm font-medium">Business Description</Label>
+                    <Textarea
+                      value={businessDescription}
+                      onChange={e => setBusinessDescription(e.target.value)}
+                      placeholder={"Example: \"This is Acme Plumbing, a local plumbing company based in Minneapolis, MN. They also service St. Paul and Bloomington. Their website is acmeplumbing.com. They offer residential and commercial plumbing services including drain cleaning, water heater installation, and pipe repair.\""}
+                      rows={6}
+                      className="resize-none"
+                      data-testid="input-business-description-intake"
+                    />
+                    <div className="flex items-center gap-3">
+                      <Button
+                        type="button"
+                        onClick={handleParseBusiness}
+                        disabled={isParsingBusiness || !businessDescription.trim()}
+                        className="bg-[#ff5800] hover:bg-[#e04f00]"
+                        data-testid="button-parse-business"
+                      >
+                        {isParsingBusiness ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Analyzing...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-4 h-4 mr-2" />
+                            Extract Business Info
+                          </>
+                        )}
+                      </Button>
+                      {businessParsed && (
+                        <span className="text-sm text-green-600 flex items-center gap-1">
+                          <Check className="w-4 h-4" />
+                          Info extracted and pre-filled
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {businessParsed && (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 space-y-2">
+                      <h4 className="text-sm font-medium text-green-800">Pre-filled Information</h4>
+                      <div className="grid grid-cols-2 gap-2 text-sm text-green-700">
+                        {watchedData.businessName && <div><span className="font-medium">Name:</span> {watchedData.businessName}</div>}
+                        {watchedData.businessUrl && <div><span className="font-medium">URL:</span> {watchedData.businessUrl}</div>}
+                        {watchedData.businessType && <div><span className="font-medium">Type:</span> {watchedData.businessType}</div>}
+                        {watchedData.primaryCategories.length > 0 && (
+                          <div className="col-span-2"><span className="font-medium">Categories:</span> {watchedData.primaryCategories.join(", ")}</div>
+                        )}
+                        {watchedData.serviceAreaCities.length > 0 && (
+                          <div className="col-span-2"><span className="font-medium">Service Areas:</span> {watchedData.serviceAreaCities.join(", ")}</div>
+                        )}
+                      </div>
+                      <p className="text-xs text-green-600 mt-1">You can adjust these in the following steps.</p>
+                    </div>
+                  )}
+
+                  <p className="text-xs text-gray-400">
+                    You can also skip this step and fill in the details manually.
+                  </p>
+                </div>
+              )}
+
+              {step === 1 && (
                 <div className="space-y-5">
                   <CardHeader className="px-0 pt-0">
                     <CardTitle className="flex items-center gap-2 text-lg">
@@ -884,7 +1109,7 @@ export default function SeoAuditWizard() {
                 </div>
               )}
 
-              {step === 1 && (
+              {step === 2 && (
                 <div className="space-y-5">
                   <CardHeader className="px-0 pt-0">
                     <CardTitle className="flex items-center gap-2 text-lg">
@@ -961,7 +1186,7 @@ export default function SeoAuditWizard() {
                 </div>
               )}
 
-              {step === 2 && (
+              {step === 3 && (
                 <div className="space-y-5">
                   <CardHeader className="px-0 pt-0">
                     <CardTitle className="flex items-center gap-2 text-lg">
@@ -1053,98 +1278,128 @@ export default function SeoAuditWizard() {
                 </div>
               )}
 
-              {step === 3 && (
+              {step === 4 && (
                 <div className="space-y-5">
                   <CardHeader className="px-0 pt-0">
                     <CardTitle className="flex items-center gap-2 text-lg">
                       <Search className="w-5 h-5 text-[#ff5800]" />
-                      Services
+                      Keyword Research
                     </CardTitle>
                   </CardHeader>
 
-                  <div className="flex items-center gap-2 bg-blue-50 text-blue-700 text-sm rounded-lg px-4 py-3">
-                    <Sparkles className="w-4 h-4 shrink-0" />
-                    <span>
-                      The pipeline will auto-detect additional services from the website crawl. Add your primary services here to seed keyword research.
-                    </span>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Input
-                      value={serviceInput}
-                      onChange={e => setServiceInput(e.target.value)}
-                      placeholder="e.g. Drain Cleaning"
-                      onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addService())}
-                      className="flex-1"
-                      data-testid="input-service"
-                    />
-                    <Button type="button" onClick={addService} variant="outline" data-testid="button-add-service">
-                      <Plus className="w-4 h-4 mr-1" /> Add
-                    </Button>
-                  </div>
-
-                  {serviceFields.length > 0 ? (
-                    <div className="space-y-3">
-                      {serviceFields.map((field, i) => (
-                        <div key={field.id} className="bg-gray-50 rounded-lg px-4 py-3">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-medium">{watchedData.services[i]?.name}</span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const kw = watchedData.services[i]?.name;
-                                if (kw) {
-                                  const current = form.getValues("geoGridKeywords");
-                                  form.setValue("geoGridKeywords", current.filter(k => k !== kw));
-                                }
-                                removeService(i);
-                              }}
-                              className="text-gray-400 hover:text-red-500"
-                              data-testid={`button-remove-service-${i}`}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                          <div className="pl-2">
-                            <p className="text-xs text-gray-400 mb-1.5">Custom keywords (optional):</p>
-                            <div className="flex flex-wrap gap-1.5 mb-2">
-                              {(watchedData.services[i]?.customKeywords || []).map(kw => (
-                                <Badge key={kw} variant="outline" className="text-xs flex items-center gap-1">
-                                  {kw}
-                                  <button
-                                    type="button"
-                                    onClick={() => removeCustomKeyword(i, kw)}
-                                    className="hover:text-red-500"
-                                  >
-                                    <Trash2 className="w-3 h-3" />
-                                  </button>
-                                </Badge>
-                              ))}
-                            </div>
-                            <div className="flex gap-1.5">
-                              <Input
-                                value={customKwInput[i] || ""}
-                                onChange={e => setCustomKwInput(prev => ({ ...prev, [i]: e.target.value }))}
-                                onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addCustomKeyword(i))}
-                                placeholder="Add keyword"
-                                className="h-7 text-xs flex-1"
-                                data-testid={`input-custom-keyword-${i}`}
-                              />
-                              <Button type="button" variant="ghost" size="sm" className="h-7 px-2" onClick={() => addCustomKeyword(i)} data-testid={`button-add-keyword-${i}`}>
-                                <Plus className="w-3 h-3" />
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+                  {isLoadingKeywords && (
+                    <div className="text-center py-8">
+                      <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-[#ff5800]" />
+                      <p className="text-sm font-medium text-gray-700">Generating keyword research for your service categories...</p>
+                      <p className="text-xs text-gray-400 mt-1">This may take 15-30 seconds</p>
                     </div>
-                  ) : (
-                    <p className="text-sm text-gray-400">Add at least one service.</p>
+                  )}
+
+                  {!isLoadingKeywords && keywordResults.length > 0 && (
+                    <>
+                      <div className="flex items-center gap-2 bg-blue-50 text-blue-700 text-sm rounded-lg px-4 py-3">
+                        <Sparkles className="w-4 h-4 shrink-0" />
+                        <span>
+                          We generated keyword suggestions based on your service categories and location. Select the keywords you want to target. These will be used for SERP tracking and geo grid analysis.
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
+                        <span>{keywordResults.filter(k => k.selected).length} of {keywordResults.length} keywords selected</span>
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs"
+                            onClick={() => setKeywordResults(prev => prev.map(k => ({ ...k, selected: true })))}
+                            data-testid="button-select-all-keywords"
+                          >
+                            Select All
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs"
+                            onClick={() => setKeywordResults(prev => prev.map(k => ({ ...k, selected: false })))}
+                            data-testid="button-deselect-all-keywords"
+                          >
+                            Deselect All
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
+                        {Object.entries(keywordsByService).map(([service, keywords]) => (
+                          <div key={service} className="border border-gray-200 rounded-lg overflow-hidden">
+                            <div className="bg-gray-50 px-4 py-2 flex items-center justify-between">
+                              <span className="text-sm font-medium text-gray-700">{service}</span>
+                              <Badge variant="outline" className="text-xs">{keywords.filter(k => k.selected).length}/{keywords.length}</Badge>
+                            </div>
+                            <div className="divide-y divide-gray-100">
+                              {keywords.map((kw) => {
+                                const globalIndex = keywordResults.indexOf(kw);
+                                return (
+                                  <div
+                                    key={`${kw.keyword}-${globalIndex}`}
+                                    className="flex items-center justify-between px-4 py-2 hover:bg-gray-50"
+                                  >
+                                    <div className="flex items-center space-x-2">
+                                      <Checkbox
+                                        checked={kw.selected}
+                                        onCheckedChange={() => toggleKeywordSelected(globalIndex)}
+                                        data-testid={`checkbox-keyword-${globalIndex}`}
+                                      />
+                                      <span className="text-sm">{kw.keyword}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs text-gray-400 tabular-nums">
+                                        ~{kw.estVolume.toLocaleString()}/mo
+                                      </span>
+                                      <Badge variant="outline" className="text-[10px]">
+                                        {kw.intent}
+                                      </Badge>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+
+                  {!isLoadingKeywords && keywordResults.length === 0 && keywordsGenerated && (
+                    <div className="flex items-center gap-2 bg-amber-50 text-amber-700 text-sm rounded-lg px-4 py-3">
+                      <Info className="w-4 h-4 shrink-0" />
+                      <span>No keywords were generated. Go back and adjust your service categories, then try again.</span>
+                    </div>
+                  )}
+
+                  {!isLoadingKeywords && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="text-xs"
+                      onClick={() => {
+                        setIsLoadingKeywords(true);
+                        setKeywordsGenerated(false);
+                        setKeywordResults([]);
+                        keywordResearchMutation.mutate();
+                      }}
+                      disabled={isLoadingKeywords}
+                      data-testid="button-regenerate-keywords"
+                    >
+                      <Loader2 className={`w-3 h-3 mr-1 ${isLoadingKeywords ? "animate-spin" : ""}`} /> Regenerate Keywords
+                    </Button>
                   )}
                 </div>
               )}
 
-              {step === 4 && (
+              {step === 5 && (
                 <div className="space-y-5">
                   <CardHeader className="px-0 pt-0">
                     <CardTitle className="flex items-center gap-2 text-lg">
@@ -1185,7 +1440,7 @@ export default function SeoAuditWizard() {
                         <div key={field.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-2.5">
                           <div className="flex items-center gap-3">
                             <Building2 className="w-4 h-4 text-gray-400" />
-                            <span className="text-sm font-medium">{watchedData.competitors[i]?.name || "—"}</span>
+                            <span className="text-sm font-medium">{watchedData.competitors[i]?.name || "\u2014"}</span>
                             <span className="text-sm text-gray-400">{watchedData.competitors[i]?.domain}</span>
                           </div>
                           <button
@@ -1205,7 +1460,7 @@ export default function SeoAuditWizard() {
                 </div>
               )}
 
-              {step === 5 && (
+              {step === 6 && (
                 <div className="space-y-5">
                   <CardHeader className="px-0 pt-0">
                     <CardTitle className="flex items-center gap-2 text-lg">
@@ -1228,11 +1483,11 @@ export default function SeoAuditWizard() {
                         </Label>
                         <p className="text-xs text-gray-500 mb-2 flex items-center gap-1">
                           <Info className="w-3 h-3" />
-                          Keywords ranked by estimated search volume. Actual volumes will be resolved during the pipeline.
+                          Keywords from your keyword research. Select the ones you want to track on the geo grid.
                         </p>
-                        {allKeywords.length > 0 ? (
+                        {allGeoKeywords.length > 0 ? (
                           <div className="space-y-1.5 max-h-64 overflow-y-auto pr-2">
-                            {allKeywords.map((item, idx) => (
+                            {allGeoKeywords.map((item, idx) => (
                               <div key={`${item.keyword}-${idx}`} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-gray-50">
                                 <div className="flex items-center space-x-2">
                                   <Checkbox
@@ -1245,19 +1500,58 @@ export default function SeoAuditWizard() {
                                   <Label htmlFor={`geo-kw-${idx}`} className="font-normal text-sm">{item.keyword}</Label>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                  <span className="text-xs text-gray-400 tabular-nums" data-testid={`volume-${idx}`}>
-                                    ~{item.estVolume}/mo
-                                  </span>
+                                  {item.estVolume > 0 && (
+                                    <span className="text-xs text-gray-400 tabular-nums" data-testid={`volume-${idx}`}>
+                                      ~{item.estVolume.toLocaleString()}/mo
+                                    </span>
+                                  )}
                                   <Badge variant="outline" className="text-[10px]">
-                                    {item.source === "service" ? "Primary" : item.source === "auto" ? "Auto" : "Custom"}
+                                    {item.source === "research" ? "Research" : "Service"}
                                   </Badge>
                                 </div>
                               </div>
                             ))}
                           </div>
                         ) : (
-                          <p className="text-sm text-gray-400">No services added. Go back to Step 4 to add services.</p>
+                          <p className="text-sm text-gray-400">No keywords available. Complete the keyword research step first.</p>
                         )}
+
+                        <div className="flex gap-2 mt-3">
+                          <Input
+                            value={customGeoKeyword}
+                            onChange={e => setCustomGeoKeyword(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                const kw = customGeoKeyword.trim();
+                                if (kw && watchedData.geoGridKeywords.length < 5) {
+                                  toggleGeoKeyword(kw);
+                                  setCustomGeoKeyword("");
+                                }
+                              }
+                            }}
+                            placeholder="Add a custom keyword..."
+                            className="flex-1"
+                            data-testid="input-custom-geo-keyword"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const kw = customGeoKeyword.trim();
+                              if (kw && watchedData.geoGridKeywords.length < 5) {
+                                toggleGeoKeyword(kw);
+                                setCustomGeoKeyword("");
+                              }
+                            }}
+                            disabled={watchedData.geoGridKeywords.length >= 5}
+                            data-testid="button-add-custom-geo-keyword"
+                          >
+                            <Plus className="w-4 h-4" />
+                          </Button>
+                        </div>
+
                         <p className="text-xs text-gray-400 mt-2">
                           {watchedData.geoGridKeywords.length}/5 selected
                         </p>
@@ -1302,7 +1596,7 @@ export default function SeoAuditWizard() {
                             Grid Preview
                           </div>
                           <p className="text-sm text-blue-600">
-                            {watchedData.geoGridKeywords.length} keyword{watchedData.geoGridKeywords.length !== 1 ? "s" : ""} × {watchedData.geoGridSize}×{watchedData.geoGridSize} grid ({watchedData.geoGridSize * watchedData.geoGridSize} points) @ {watchedData.geoGridSpacingMiles}mi spacing
+                            {watchedData.geoGridKeywords.length} keyword{watchedData.geoGridKeywords.length !== 1 ? "s" : ""} x {watchedData.geoGridSize}x{watchedData.geoGridSize} grid ({watchedData.geoGridSize * watchedData.geoGridSize} points) @ {watchedData.geoGridSpacingMiles}mi spacing
                           </p>
                           <p className="text-xs text-blue-500 mt-1">
                             Total API calls: {watchedData.geoGridKeywords.length * watchedData.geoGridSize * watchedData.geoGridSize}
@@ -1324,7 +1618,7 @@ export default function SeoAuditWizard() {
                         <div className="flex items-start gap-2 bg-amber-50 text-amber-700 text-sm rounded-lg px-4 py-3">
                           <Info className="w-4 h-4 shrink-0 mt-0.5" />
                           <span>
-                            Set a business address in Step 1 and geocode it to see the grid overlay on the map.
+                            Set a business address in Step 2 and geocode it to see the grid overlay on the map.
                           </span>
                         </div>
                       )}
@@ -1333,7 +1627,7 @@ export default function SeoAuditWizard() {
                 </div>
               )}
 
-              {step === 6 && (
+              {step === 7 && (
                 <div className="space-y-5">
                   <CardHeader className="px-0 pt-0">
                     <CardTitle className="flex items-center gap-2 text-lg">
@@ -1380,7 +1674,7 @@ export default function SeoAuditWizard() {
                     {generatedGroups.filter(g => g.isActive).length > 0 && (
                       <div className="bg-gray-50 rounded-lg p-4">
                         <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-2">
-                          AI Service Categories ({generatedGroups.filter(g => g.isActive).length})
+                          Service Categories ({generatedGroups.filter(g => g.isActive).length})
                         </h4>
                         <div className="flex flex-wrap gap-1.5">
                           {generatedGroups.filter(g => g.isActive).map(g => (
@@ -1393,21 +1687,20 @@ export default function SeoAuditWizard() {
                       </div>
                     )}
 
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-2">Services ({watchedData.services.length})</h4>
-                      <div className="space-y-1">
-                        {watchedData.services.map(s => (
-                          <div key={s.name} className="text-sm">
-                            <span className="font-medium">{s.name}</span>
-                            {s.customKeywords.length > 0 && (
-                              <span className="text-gray-400 ml-2">
-                                + {s.customKeywords.length} custom keyword{s.customKeywords.length !== 1 ? "s" : ""}
-                              </span>
-                            )}
-                          </div>
-                        ))}
+                    {keywordResults.filter(k => k.selected).length > 0 && (
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-2">
+                          Target Keywords ({keywordResults.filter(k => k.selected).length})
+                        </h4>
+                        <div className="flex flex-wrap gap-1.5">
+                          {keywordResults.filter(k => k.selected).map(k => (
+                            <Badge key={k.keyword} variant="outline" className="text-xs">
+                              {k.keyword}
+                            </Badge>
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     {watchedData.competitors.length > 0 && (
                       <div className="bg-gray-50 rounded-lg p-4">
@@ -1423,78 +1716,78 @@ export default function SeoAuditWizard() {
                         <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-2">Geo Grid</h4>
                         <div className="text-sm space-y-1">
                           <div><span className="text-gray-500">Keywords:</span> {watchedData.geoGridKeywords.join(", ")}</div>
-                          <div><span className="text-gray-500">Grid:</span> {watchedData.geoGridSize}×{watchedData.geoGridSize} @ {watchedData.geoGridSpacingMiles}mi</div>
+                          <div><span className="text-gray-500">Grid:</span> {watchedData.geoGridSize}x{watchedData.geoGridSize} @ {watchedData.geoGridSpacingMiles}mi</div>
                         </div>
                       </div>
                     )}
 
-                    <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
-                      <h4 className="text-sm font-bold text-orange-700 uppercase tracking-wider mb-2 flex items-center gap-1">
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                      <h4 className="text-sm font-bold text-amber-800 uppercase tracking-wider mb-2 flex items-center gap-2">
                         <DollarSign className="w-4 h-4" />
                         Estimated Cost
                       </h4>
                       <div className="space-y-1">
-                        {Object.entries(cost.breakdown).filter(([, v]) => v > 0).map(([k, v]) => (
+                        {Object.entries(cost.breakdown).map(([k, v]) => (
                           <div key={k} className="flex justify-between text-sm">
-                            <span className="text-orange-700">{k}</span>
-                            <span className="font-medium text-orange-800">${v.toFixed(2)}</span>
+                            <span className="text-amber-700">{k}</span>
+                            <span className="font-medium text-amber-900">${v.toFixed(2)}</span>
                           </div>
                         ))}
-                        <div className="flex justify-between text-sm font-bold border-t border-orange-200 pt-1 mt-1">
-                          <span className="text-orange-800">Total</span>
-                          <span className="text-orange-900">${cost.total.toFixed(2)}</span>
+                        <div className="border-t border-amber-300 pt-1 flex justify-between text-sm font-bold">
+                          <span className="text-amber-800">Total</span>
+                          <span className="text-amber-900">${cost.total.toFixed(2)}</span>
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
               )}
-
-              <div className="flex justify-between mt-8 pt-4 border-t">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setStep(s => s - 1)}
-                  disabled={step === 0}
-                  data-testid="button-prev-step"
-                >
-                  <ArrowLeft className="w-4 h-4 mr-1" /> Back
-                </Button>
-
-                {step < STEPS.length - 1 ? (
-                  <Button
-                    type="button"
-                    onClick={handleNext}
-                    disabled={!canAdvance()}
-                    className="bg-[#ff5800] hover:bg-[#e04f00]"
-                    data-testid="button-next-step"
-                  >
-                    Next <ArrowRight className="w-4 h-4 ml-1" />
-                  </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    onClick={() => form.handleSubmit((d) => createAndRunMutation.mutate(d))()}
-                    disabled={createAndRunMutation.isPending}
-                    className="bg-[#ff5800] hover:bg-[#e04f00]"
-                    data-testid="button-run-audit"
-                  >
-                    {createAndRunMutation.isPending ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Starting...
-                      </>
-                    ) : (
-                      <>
-                        <Play className="w-4 h-4 mr-2" />
-                        Run Audit
-                      </>
-                    )}
-                  </Button>
-                )}
-              </div>
             </CardContent>
           </Card>
+
+          <div className="flex justify-between mt-6">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setStep(s => s - 1)}
+              disabled={step === 0}
+              data-testid="button-prev"
+            >
+              <ArrowLeft className="w-4 h-4 mr-1" /> Back
+            </Button>
+
+            {step < STEPS.length - 1 ? (
+              <Button
+                type="button"
+                onClick={handleNext}
+                disabled={!canAdvance() || generateGroupsMutation.isPending}
+                className="bg-[#ff5800] hover:bg-[#e04f00]"
+                data-testid="button-next"
+              >
+                Next <ArrowRight className="w-4 h-4 ml-1" />
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                onClick={() => createAndRunMutation.mutate(form.getValues())}
+                disabled={createAndRunMutation.isPending}
+                className="bg-green-600 hover:bg-green-700"
+                data-testid="button-run-audit"
+              >
+                {createAndRunMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Starting...
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-4 h-4 mr-2" />
+                    Run Audit
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
         </div>
       </Form>
     </div>

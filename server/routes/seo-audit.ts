@@ -5,6 +5,7 @@ import { requireAdminAuth, isAdminRequest } from '../middleware/auth';
 import { enqueuePipelineRun, getPipelineEmitter, type PipelineEvent } from '../services/seo-audit/pipeline';
 import { auditQueue } from '../services/seo-audit/queue';
 import { geocodeAddress } from '../services/seo-audit/google-places';
+import { parseBusinessDescription, generateKeywordResearch } from '../services/seo-audit/llm';
 
 const router = Router();
 
@@ -82,6 +83,43 @@ router.post('/', requireAdminAuth, async (req: Request, res: Response) => {
     }
     console.error('[SeoAudit] Create error:', error);
     res.status(500).json({ error: 'Failed to create audit' });
+  }
+});
+
+router.post('/parse-business', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const { description } = req.body;
+    if (!description || typeof description !== 'string') {
+      res.status(400).json({ error: 'Description text is required' });
+      return;
+    }
+    const result = await parseBusinessDescription(description);
+    res.json(result);
+  } catch (error) {
+    console.error('[SeoAudit] Parse business error:', error);
+    res.status(500).json({ error: 'Failed to parse business description' });
+  }
+});
+
+router.post('/keyword-research', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const schema = z.object({
+      categories: z.array(z.string()).min(1),
+      businessName: z.string().min(1),
+      businessUrl: z.string().default(''),
+      businessType: z.enum(['local', 'national']).default('local'),
+      cities: z.array(z.string()).default([]),
+    });
+    const body = schema.parse(req.body);
+    const result = await generateKeywordResearch(body);
+    res.json({ keywords: result });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: 'Validation failed', details: error.errors });
+      return;
+    }
+    console.error('[SeoAudit] Keyword research error:', error);
+    res.status(500).json({ error: 'Failed to generate keyword research' });
   }
 });
 
