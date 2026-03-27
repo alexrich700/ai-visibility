@@ -188,8 +188,9 @@ function MapClickHandler({ onAddCity, onError }: { onAddCity: (cityLabel: string
         const data = await res.json();
         const addr = data.address;
         const city = addr?.city || addr?.town || addr?.village || addr?.hamlet || addr?.county;
-        const rawState = addr?.["ISO3166-2-lvl4"]?.split("-")[1] || addr?.state_code || addr?.state;
-        const stateCode = rawState && (US_STATES.includes(rawState) ? rawState : STATE_NAME_TO_CODE[rawState]);
+        const rawState = (addr?.["ISO3166-2-lvl4"]?.split("-")[1] || addr?.state_code || addr?.state || "").trim();
+        const upperRaw = rawState.toUpperCase();
+        const stateCode = rawState && (US_STATES.includes(upperRaw) ? upperRaw : STATE_NAME_TO_CODE[rawState]);
         if (city && stateCode) {
           onAddCity(`${city}, ${stateCode}`);
         } else {
