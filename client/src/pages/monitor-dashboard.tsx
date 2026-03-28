@@ -2181,14 +2181,14 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
                 <TabsList className="w-full">
                   <TabsTrigger value="chatgpt" className="flex-1" data-testid="tab-chatgpt-response">
                     <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${selectedResult.chatgptFound ? "bg-green-500" : "bg-red-500"}`} />
+                      <div className={`w-2 h-2 rounded-full ${selectedResult.chatgptFound ? "bg-emerald-600" : "bg-destructive"}`} />
                       ChatGPT
                       {selectedResult.chatgptCited && <Badge variant="secondary" className="text-xs ml-1">Cited</Badge>}
                     </div>
                   </TabsTrigger>
                   <TabsTrigger value="googleai" className="flex-1" data-testid="tab-googleai-response">
                     <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${selectedResult.googleAIFound ? "bg-green-500" : "bg-red-500"}`} />
+                      <div className={`w-2 h-2 rounded-full ${selectedResult.googleAIFound ? "bg-emerald-600" : "bg-destructive"}`} />
                       Google AI
                       {selectedResult.googleAICited && <Badge variant="secondary" className="text-xs ml-1">Cited</Badge>}
                     </div>

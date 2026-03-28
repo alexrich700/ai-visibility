@@ -309,7 +309,7 @@ export default function SeoAuditProgress() {
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div
                 className={`h-2 rounded-full transition-all duration-500 ${
-                  hadErrors ? "bg-orange-500" : pipelineComplete ? "bg-green-500" : "bg-[#ff5800]"
+                  hadErrors ? "bg-orange-500" : pipelineComplete ? "bg-emerald-600" : "bg-[#ff5800]"
                 }`}
                 style={{ width: `${progress}%` }}
                 data-testid="progress-bar"
@@ -317,7 +317,7 @@ export default function SeoAuditProgress() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-0 mb-8 overflow-x-auto py-4">
+          <div className="flex items-center justify-between gap-1 mb-8 overflow-x-auto py-4">
             {stages.map((stage, i) => {
               const Icon = stage.icon;
               const isActive = stage.status === "running";
@@ -335,10 +335,10 @@ export default function SeoAuditProgress() {
                           isActive
                             ? "border-[#ff5800] bg-[#ff5800] text-white shadow-lg shadow-orange-200 scale-110"
                             : stage.status === "complete" || stage.status === "skipped"
-                            ? "border-green-500 bg-green-500 text-white"
+                            ? "border-emerald-600 bg-emerald-600 text-white"
                             : stage.status === "error"
-                            ? "border-red-500 bg-red-500 text-white"
-                            : "border-gray-300 bg-white text-gray-400"
+                            ? "border-destructive bg-destructive text-white"
+                            : "border-gray-300 bg-background text-gray-400"
                         }`}>
                           {isActive ? (
                             <Loader2 className="w-4 h-4 animate-spin" />
@@ -352,8 +352,8 @@ export default function SeoAuditProgress() {
                         </div>
                         <span className={`text-[10px] font-medium text-center leading-tight ${
                           isActive ? "text-[#ff5800]" :
-                          stage.status === "complete" || stage.status === "skipped" ? "text-green-600" :
-                          stage.status === "error" ? "text-red-600" :
+                          stage.status === "complete" || stage.status === "skipped" ? "text-emerald-600" :
+                          stage.status === "error" ? "text-destructive" :
                           "text-gray-400"
                         }`}>
                           {stage.shortLabel}
@@ -372,7 +372,7 @@ export default function SeoAuditProgress() {
                   </Tooltip>
                   {i < stages.length - 1 && (
                     <div className={`h-0.5 w-4 mx-0.5 flex-shrink-0 ${
-                      stage.status === "complete" || stage.status === "skipped" ? "bg-green-400" :
+                      stage.status === "complete" || stage.status === "skipped" ? "bg-emerald-400" :
                       stage.status === "error" ? "bg-red-300" :
                       "bg-gray-200"
                     }`} />
@@ -390,22 +390,22 @@ export default function SeoAuditProgress() {
                   key={stage.name}
                   className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                     stage.status === "running"
-                      ? "bg-blue-50 border border-blue-200"
+                      ? "bg-orange-50 border border-orange-200"
                       : stage.status === "complete" || stage.status === "skipped"
-                      ? "bg-green-50"
+                      ? "bg-emerald-50"
                       : stage.status === "error"
                       ? "bg-red-50"
-                      : "bg-gray-50"
+                      : "bg-muted"
                   }`}
                   data-testid={`stage-${stage.name}`}
                 >
                   <div className={`flex items-center justify-center w-8 h-8 rounded-full ${
                     stage.status === "running"
-                      ? "bg-blue-500 text-white"
+                      ? "bg-[#ff5800] text-white"
                       : stage.status === "complete" || stage.status === "skipped"
-                      ? "bg-green-500 text-white"
+                      ? "bg-emerald-600 text-white"
                       : stage.status === "error"
-                      ? "bg-red-500 text-white"
+                      ? "bg-destructive text-white"
                       : "bg-gray-200 text-gray-500"
                   }`}>
                     {stage.status === "running" ? (
@@ -420,23 +420,23 @@ export default function SeoAuditProgress() {
                   </div>
 
                   <Icon className={`w-4 h-4 ${
-                    stage.status === "running" ? "text-blue-600" :
-                    stage.status === "complete" || stage.status === "skipped" ? "text-green-600" :
-                    stage.status === "error" ? "text-red-600" :
+                    stage.status === "running" ? "text-[#ff5800]" :
+                    stage.status === "complete" || stage.status === "skipped" ? "text-emerald-600" :
+                    stage.status === "error" ? "text-destructive" :
                     "text-gray-400"
                   }`} />
 
                   <div className="flex-1">
                     <span className={`text-sm font-medium ${
-                      stage.status === "running" ? "text-blue-700" :
-                      stage.status === "complete" || stage.status === "skipped" ? "text-green-700" :
+                      stage.status === "running" ? "text-[#ff5800]" :
+                      stage.status === "complete" || stage.status === "skipped" ? "text-emerald-700" :
                       stage.status === "error" ? "text-red-700" :
                       "text-gray-500"
                     }`}>
                       {stage.label}
                     </span>
                     {stage.error && (
-                      <p className="text-xs text-red-500 mt-0.5 truncate max-w-md">{stage.error}</p>
+                      <p className="text-xs text-destructive mt-0.5 truncate max-w-md">{stage.error}</p>
                     )}
                   </div>
 

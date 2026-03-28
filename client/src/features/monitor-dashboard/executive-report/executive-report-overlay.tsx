@@ -248,7 +248,7 @@ export function ExecutiveReportOverlay({ data, mode, enabledSlides, onClose }: E
   }, [totalSlides]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-gray-100">
+    <div className="fixed inset-0 z-50 bg-gray-100" style={{ height: "100dvh" }}>
       {/* Persistent gradient bar */}
       <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#ff5800] to-[#ffb41c] z-20" />
 

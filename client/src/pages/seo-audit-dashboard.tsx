@@ -238,12 +238,12 @@ const SECTIONS = [
 type SectionId = typeof SECTIONS[number]["id"];
 
 const RANK_COLOR = (rank: number | null) => {
-  if (rank === null) return "bg-gray-100 text-gray-400";
+  if (rank === null) return "bg-muted text-gray-400";
   if (rank <= 3) return "bg-green-100 text-green-700";
   if (rank <= 7) return "bg-yellow-100 text-yellow-700";
   if (rank <= 10) return "bg-orange-100 text-orange-700";
   if (rank <= 20) return "bg-red-100 text-red-600";
-  return "bg-gray-100 text-gray-500";
+  return "bg-muted text-gray-500";
 };
 
 const rankFillColor = (r: number | null) => {
@@ -371,7 +371,7 @@ export default function SeoAuditDashboard({ isClientView = false, magicToken }: 
   if (!audit) {
     return (
       <div className="flex items-center justify-center min-h-screen flex-col gap-4">
-        <AlertTriangle className="w-12 h-12 text-red-500" />
+        <AlertTriangle className="w-12 h-12 text-destructive" />
         <h1 className="text-xl font-bold">Audit Not Found</h1>
         <Button onClick={() => navigate("/admin/seo-audits")} data-testid="button-back-list"><ArrowLeft className="w-4 h-4 mr-2" /> Back to Audits</Button>
       </div>
@@ -384,7 +384,7 @@ export default function SeoAuditDashboard({ isClientView = false, magicToken }: 
     <>
       <div className="flex h-[calc(100vh-64px)]" data-testid="seo-dashboard">
         {!isClientView && (
-          <aside className="w-60 border-r bg-white flex-shrink-0 overflow-y-auto" data-testid="dashboard-sidebar">
+          <aside className="w-60 border-r bg-background flex-shrink-0 overflow-y-auto" data-testid="dashboard-sidebar">
             <div className="p-4 border-b">
               <Button variant="ghost" size="sm" onClick={() => navigate("/admin/seo-audits")} data-testid="button-back-audits" className="mb-2 -ml-2">
                 <ArrowLeft className="w-4 h-4 mr-1" /> Audits
@@ -397,10 +397,10 @@ export default function SeoAuditDashboard({ isClientView = false, magicToken }: 
                 const Icon = s.icon;
                 const hasData = !!sectionDataMap[s.id];
                 return (
-                  <button key={s.id} onClick={() => scrollToSection(s.id)} className={`w-full flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-gray-50 transition-colors ${activeSection === s.id ? "bg-orange-50 text-[#ff5800] font-medium border-r-2 border-[#ff5800]" : "text-gray-600"}`} data-testid={`nav-${s.id}`}>
+                  <button key={s.id} onClick={() => scrollToSection(s.id)} className={`w-full flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-muted transition-colors ${activeSection === s.id ? "bg-orange-50 text-[#ff5800] font-medium border-r-2 border-[#ff5800]" : "text-muted-foreground"}`} data-testid={`nav-${s.id}`}>
                     <Icon className="w-4 h-4 flex-shrink-0" />
                     <span className="truncate">{s.label}</span>
-                    {hasData && <CheckCircle className="w-3 h-3 text-green-500 ml-auto flex-shrink-0" />}
+                    {hasData && <CheckCircle className="w-3 h-3 text-emerald-600 ml-auto flex-shrink-0" />}
                   </button>
                 );
               })}
@@ -408,8 +408,8 @@ export default function SeoAuditDashboard({ isClientView = false, magicToken }: 
           </aside>
         )}
 
-        <main className="flex-1 overflow-y-auto bg-gray-50" data-testid="dashboard-main">
-          <header className="sticky top-0 z-10 bg-white border-b px-6 py-3 flex items-center justify-between" data-testid="dashboard-header">
+        <main className="flex-1 overflow-y-auto bg-muted" data-testid="dashboard-main">
+          <header className="sticky top-0 z-10 bg-background border-b px-6 py-3 flex items-center justify-between" data-testid="dashboard-header">
             <div className="flex items-center gap-4">
               {isClientView && <img src={logoIcon} alt="Motivent" className="h-6" data-testid="client-logo" />}
               <div>
@@ -492,7 +492,7 @@ function SectionCard({ icon: Icon, title, impact, children }: { icon: typeof Tar
 }
 
 function StatBadge({ label, value, color = "text-gray-900", testId }: { label: string; value: string | number; color?: string; testId?: string }) {
-  return (<div className="text-center px-4 py-3 bg-gray-50 rounded-lg" data-testid={testId}><p className={`text-2xl font-bold ${color}`}>{value}</p><p className="text-xs text-gray-500 mt-0.5">{label}</p></div>);
+  return (<div className="text-center px-4 py-3 bg-muted rounded-lg" data-testid={testId}><p className={`text-2xl font-bold ${color}`}>{value}</p><p className="text-xs text-gray-500 mt-0.5">{label}</p></div>);
 }
 
 function SnapshotSection({ data, audit, backlinksData }: { data: SnapshotData; audit: AuditRecord; backlinksData: BacklinksData | undefined }) {
@@ -557,7 +557,7 @@ function SnapshotSection({ data, audit, backlinksData }: { data: SnapshotData; a
           </thead>
           <tbody>
             {compMetrics.map((m, i) => (
-              <tr key={m.name} className={`border-b border-gray-100 ${i === 0 ? "bg-orange-50/50 font-medium" : "hover:bg-gray-50"}`} data-testid={`snapshot-row-${i}`}>
+              <tr key={m.name} className={`border-b border-gray-100 ${i === 0 ? "bg-orange-50/50 font-medium" : "hover:bg-muted"}`} data-testid={`snapshot-row-${i}`}>
                 <td className="py-2 px-3">{m.name}{i === 0 && <Badge className="ml-2 bg-[#ff5800] text-[10px]">You</Badge>}</td>
                 <td className="py-2 px-3 text-center">{m["Domain Rating"]}</td>
                 <td className="py-2 px-3 text-center">{m["Organic KWs"].toLocaleString()}</td>
@@ -590,7 +590,7 @@ function SnapshotSection({ data, audit, backlinksData }: { data: SnapshotData; a
         </div>
       )}
 
-      <div className="bg-gray-50 rounded-lg p-3">
+      <div className="bg-muted rounded-lg p-3">
         <p className="text-sm text-gray-700" data-testid="snapshot-verdict"><strong>Verdict:</strong> {verdict}</p>
       </div>
     </SectionCard>
@@ -651,7 +651,7 @@ function GeoGridSection({ data, auditId, authParam, isClientView }: { data: GeoG
         <p className="text-gray-500 text-sm py-4">No geo grid data available.</p>
       )}
       {activeGrid && (
-        <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-3 bg-gray-50 rounded-lg p-3" data-testid="geogrid-summary-bar">
+        <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-3 bg-muted rounded-lg p-3" data-testid="geogrid-summary-bar">
           <div className="text-center"><p className="text-xs text-gray-500">Your SoLV</p><p className="text-sm font-bold text-[#ff5800]">{Math.round((activeGrid.clientSolv ?? 0) * 100)}%</p></div>
           {activeGrid.competitorName && <div className="text-center"><p className="text-xs text-gray-500">{activeGrid.competitorName} SoLV</p><p className="text-sm font-bold text-gray-600">{Math.round((activeGrid.competitorSolv ?? 0) * 100)}%</p></div>}
           <div className="text-center"><p className="text-xs text-gray-500">Delta</p><p className={`text-sm font-bold ${(activeGrid.clientSolv ?? 0) >= (activeGrid.competitorSolv ?? 0) ? "text-green-600" : "text-red-600"}`}>{((activeGrid.clientSolv ?? 0) - (activeGrid.competitorSolv ?? 0) > 0 ? "+" : "")}{Math.round(((activeGrid.clientSolv ?? 0) - (activeGrid.competitorSolv ?? 0)) * 100)}%</p></div>
@@ -659,10 +659,10 @@ function GeoGridSection({ data, auditId, authParam, isClientView }: { data: GeoG
         </div>
       )}
       <div className="mt-3 flex items-center gap-4 text-xs text-gray-500" data-testid="geogrid-legend">
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-green-500 inline-block" /> #1-3</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-emerald-600 inline-block" /> #1-3</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-yellow-500 inline-block" /> #4-7</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-orange-500 inline-block" /> #8-10</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-red-500 inline-block" /> #11-20</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-destructive inline-block" /> #11-20</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-gray-400 inline-block" /> Not Found</span>
       </div>
     </SectionCard>
@@ -682,7 +682,7 @@ function GeoGridMap({ auditId, keyword, authParam, isClientView, showField }: { 
     enabled: !!keyword,
   });
 
-  if (!gridData?.points?.length) return <div className="h-64 flex items-center justify-center bg-gray-50 rounded text-gray-400 text-sm">No grid points available</div>;
+  if (!gridData?.points?.length) return <div className="h-64 flex items-center justify-center bg-muted rounded text-gray-400 text-sm">No grid points available</div>;
 
   const points = gridData.points;
   const center: [number, number] = [
@@ -762,7 +762,7 @@ function GeoVisibilitySection({ data }: { data: GeoVisData }) {
               const svcGaps = gapsByService.filter(g => g.service === svc);
               const foundCount = svcGaps.filter(g => g.found).length;
               return (
-                <div key={svc} className="flex items-center justify-between py-2 px-3 bg-gray-50 rounded text-sm" data-testid={`ai-gap-${svc}`}>
+                <div key={svc} className="flex items-center justify-between py-2 px-3 bg-muted rounded text-sm" data-testid={`ai-gap-${svc}`}>
                   <span className="font-medium">{svc}</span>
                   <div className="flex items-center gap-2">
                     <span className={foundCount > 0 ? "text-green-600" : "text-red-600"}>{foundCount}/{svcGaps.length} found</span>
@@ -847,7 +847,7 @@ function RankingsSection({ data }: { data: RankingsData }) {
                 <Fragment key={svc}>
                   <tr><td colSpan={2 + Math.max(visibleCities.length, 1)} className="pt-3 pb-1 px-2 font-semibold text-[#ff5800] text-xs uppercase tracking-wide">{svc}</td></tr>
                   {svcKws.map((kw, i) => (
-                    <tr key={`${kw.keyword}-${i}`} className="border-b border-gray-100 hover:bg-gray-50" data-testid={`ranking-row-${kw.keyword}`}>
+                    <tr key={`${kw.keyword}-${i}`} className="border-b border-gray-100 hover:bg-muted" data-testid={`ranking-row-${kw.keyword}`}>
                       <td className="py-1.5 px-2 max-w-[200px]">
                         <span className="truncate block">{kw.keyword}</span>
                         {kw.inAiOverview && <Badge variant="outline" className="text-[9px] mt-0.5 border-blue-200 text-blue-600">AI</Badge>}
@@ -889,7 +889,7 @@ function RankingsSection({ data }: { data: RankingsData }) {
               );
             })}
             {services.length === 0 && filtered.map((kw, i) => (
-              <tr key={i} className="border-b border-gray-100 hover:bg-gray-50" data-testid={`ranking-row-${i}`}>
+              <tr key={i} className="border-b border-gray-100 hover:bg-muted" data-testid={`ranking-row-${i}`}>
                 <td className="py-1.5 px-2">{kw.keyword}{kw.inAiOverview && <Badge variant="outline" className="text-[9px] ml-1 border-blue-200 text-blue-600">AI</Badge>}</td>
                 <td className="py-1.5 px-2 text-center text-gray-400">{kw.searchVolume ?? "—"}</td>
                 <td className="py-1.5 px-2 text-center"><span className={`inline-block w-8 py-0.5 rounded text-xs font-bold ${RANK_COLOR(kw.currentOrganicRank)}`}>{kw.currentOrganicRank ?? "—"}</span></td>
@@ -989,7 +989,7 @@ function RevenueSection({ data }: { data: RevenueData }) {
               </tr></thead>
               <tbody>
                 {forecasts.slice(0, 10).map((f, i) => (
-                  <tr key={i} className="border-b border-gray-100 hover:bg-gray-50" data-testid={`forecast-row-${i}`}>
+                  <tr key={i} className="border-b border-gray-100 hover:bg-muted" data-testid={`forecast-row-${i}`}>
                     <td className="py-1.5 px-2">{f.keyword}</td>
                     <td className="py-1.5 px-2 text-right text-gray-500">{f.searchVolume?.toLocaleString() || "—"}</td>
                     <td className="py-1.5 px-2 text-right">{f.estimatedClicks?.toLocaleString() || "—"}</td>
@@ -1029,7 +1029,7 @@ function TechnicalSection({ data }: { data: TechnicalData }) {
   return (
     <SectionCard icon={Shield} title="Site Health" impact="Technical issues silently prevent search engines from finding and ranking your pages.">
       <div className="flex items-center gap-6 mb-6">
-        <div className={`w-20 h-20 rounded-2xl border-2 flex items-center justify-center text-4xl font-bold ${GRADE_COLOR[grade] || "text-gray-600 bg-gray-50 border-gray-200"}`} data-testid="site-health-grade">{grade}</div>
+        <div className={`w-20 h-20 rounded-2xl border-2 flex items-center justify-center text-4xl font-bold ${GRADE_COLOR[grade] || "text-gray-600 bg-muted border-gray-200"}`} data-testid="site-health-grade">{grade}</div>
         <div>
           <p className="text-sm text-gray-500" data-testid="total-checks">{data.totalChecks || 0} checks performed</p>
           <p className="text-sm"><span className="text-green-600 font-medium" data-testid="pass-count">{data.passCount || 0} passed</span> &middot; <span className="text-red-600 font-medium" data-testid="fail-count">{data.failCount || 0} failed</span></p>
@@ -1050,8 +1050,8 @@ function TechnicalSection({ data }: { data: TechnicalData }) {
                 <div className="mt-3 pt-3 border-t space-y-1.5">
                   {cat.items.map((item, i) => (
                     <div key={i} className="flex items-start gap-2 text-xs" data-testid={`finding-${cat.key}-${i}`}>
-                      {item.status === "pass" ? <CheckCircle className="w-3.5 h-3.5 text-green-500 mt-0.5 flex-shrink-0" /> :
-                       item.status === "fail" ? <XCircle className="w-3.5 h-3.5 text-red-500 mt-0.5 flex-shrink-0" /> :
+                      {item.status === "pass" ? <CheckCircle className="w-3.5 h-3.5 text-emerald-600 mt-0.5 flex-shrink-0" /> :
+                       item.status === "fail" ? <XCircle className="w-3.5 h-3.5 text-destructive mt-0.5 flex-shrink-0" /> :
                        <AlertTriangle className="w-3.5 h-3.5 text-yellow-500 mt-0.5 flex-shrink-0" />}
                       <div><p className="font-medium">{item.checkName}</p>{item.detail && <p className="text-gray-500 mt-0.5">{item.detail}</p>}</div>
                     </div>
@@ -1097,7 +1097,7 @@ function ContentGapsSection({ data }: { data: ContentGapsData }) {
           <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
             {serviceGaps.map((g, i) => (
               <div key={i} className={`flex items-center gap-2 p-2 rounded text-sm ${g.exists ? "bg-green-50" : "bg-red-50"}`} data-testid={`service-gap-${i}`}>
-                {g.exists ? <CheckCircle className="w-3.5 h-3.5 text-green-500 flex-shrink-0" /> : <XCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />}
+                {g.exists ? <CheckCircle className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" /> : <XCircle className="w-3.5 h-3.5 text-destructive flex-shrink-0" />}
                 <span className="truncate">{g.suggestedTitle || g.targetKeyword || g.service || "—"}</span>
               </div>
             ))}
@@ -1111,7 +1111,7 @@ function ContentGapsSection({ data }: { data: ContentGapsData }) {
           <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
             {cityGaps.slice(0, 12).map((g, i) => (
               <div key={i} className={`text-center p-2 rounded text-xs ${g.exists ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`} data-testid={`city-gap-${i}`}>
-                {g.exists ? <CheckCircle className="w-3 h-3 mx-auto mb-1 text-green-500" /> : <XCircle className="w-3 h-3 mx-auto mb-1 text-red-500" />}
+                {g.exists ? <CheckCircle className="w-3 h-3 mx-auto mb-1 text-emerald-600" /> : <XCircle className="w-3 h-3 mx-auto mb-1 text-destructive" />}
                 {g.city || g.suggestedTitle || "—"}
               </div>
             ))}
@@ -1146,7 +1146,7 @@ function ContentGapsSection({ data }: { data: ContentGapsData }) {
                       const exists = gap?.exists ?? false;
                       return (
                         <td key={city} className="py-1.5 px-1 text-center">
-                          {exists ? <CheckCircle className="w-4 h-4 text-green-600 mx-auto" /> : <XCircle className="w-4 h-4 text-red-500 mx-auto" />}
+                          {exists ? <CheckCircle className="w-4 h-4 text-emerald-600 mx-auto" /> : <XCircle className="w-4 h-4 text-destructive mx-auto" />}
                         </td>
                       );
                     })}
@@ -1161,9 +1161,9 @@ function ContentGapsSection({ data }: { data: ContentGapsData }) {
       {gaps.length > 0 && serviceGaps.length === 0 && cityGaps.length === 0 && services.length === 0 && (
         <div className="space-y-1 max-h-64 overflow-y-auto">
           {gaps.slice(0, 20).map((g, i) => (
-            <div key={i} className="flex items-center justify-between py-1.5 px-2 hover:bg-gray-50 rounded text-sm" data-testid={`gap-item-${i}`}>
+            <div key={i} className="flex items-center justify-between py-1.5 px-2 hover:bg-muted rounded text-sm" data-testid={`gap-item-${i}`}>
               <div className="flex items-center gap-2">
-                {g.exists ? <CheckCircle className="w-3.5 h-3.5 text-green-500" /> : <XCircle className="w-3.5 h-3.5 text-red-500" />}
+                {g.exists ? <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> : <XCircle className="w-3.5 h-3.5 text-destructive" />}
                 <span>{g.suggestedTitle || g.targetKeyword || "—"}</span>
               </div>
               <Badge variant="outline" className="text-[10px]">{typeLabels[g.gapType] || g.gapType}</Badge>
@@ -1263,7 +1263,7 @@ function BacklinksSection({ data, audit }: { data: BacklinksData; audit: AuditRe
       )}
 
       {competitors.length > 0 && (
-        <div className="bg-gray-50 rounded-lg p-3 mt-4">
+        <div className="bg-muted rounded-lg p-3 mt-4">
           <p className="text-sm text-gray-700" data-testid="backlinks-assessment">
             <strong>Assessment:</strong> {competitors[0]?.domainRating && competitors[0].domainRating > 30
               ? `Your top competitor (${competitors[0]?.businessName || competitors[0]?.domain}) has a DR of ${competitors[0]?.domainRating}, indicating a strong backlink profile. Building quality links should be a priority.`
@@ -1308,7 +1308,7 @@ function ReviewsSection({ data }: { data: ReviewsData }) {
               <h5 className="text-xs font-semibold text-gray-500 mb-2">Platform Breakdown</h5>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                 {platformData.map(p => (
-                  <div key={p.name} className="bg-gray-50 rounded p-2 text-center" data-testid={`platform-${p.name}`}>
+                  <div key={p.name} className="bg-muted rounded p-2 text-center" data-testid={`platform-${p.name}`}>
                     <p className="text-xs font-medium capitalize">{p.name}</p>
                     <p className="text-lg font-bold">{p.count}</p>
                     {p.rating > 0 && <p className="text-xs text-gray-400 flex items-center justify-center gap-0.5"><Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />{p.rating.toFixed(1)}</p>}
@@ -1321,7 +1321,7 @@ function ReviewsSection({ data }: { data: ReviewsData }) {
           {client.sentimentSummary && (
             <div className="mt-4">
               <h5 className="text-xs font-semibold text-gray-500 mb-2">Sentiment Themes</h5>
-              <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded" data-testid="sentiment-summary">{client.sentimentSummary}</p>
+              <p className="text-sm text-muted-foreground bg-muted p-3 rounded" data-testid="sentiment-summary">{client.sentimentSummary}</p>
             </div>
           )}
         </div>
@@ -1334,7 +1334,7 @@ function ReviewsSection({ data }: { data: ReviewsData }) {
           <h4 className="font-medium text-sm mb-3">Competitor Reviews</h4>
           <div className="space-y-2">
             {competitors.map((c, i) => (
-              <div key={i} className="flex items-center justify-between py-2 px-3 bg-gray-50 rounded text-sm" data-testid={`competitor-review-${i}`}>
+              <div key={i} className="flex items-center justify-between py-2 px-3 bg-muted rounded text-sm" data-testid={`competitor-review-${i}`}>
                 <span className="font-medium">{c.businessName || `Competitor ${i + 1}`}</span>
                 <div className="flex items-center gap-4">
                   <span data-testid={`comp-review-count-${i}`}>{c.totalReviews ?? 0} reviews</span>
@@ -1354,7 +1354,7 @@ function ActionPlanSection({ data }: { data: ActionPlanData }) {
   const phases = data.phases || {};
   const deliverables = data.deliverables || [];
   const phaseLabels: Record<number, string> = { 1: "Phase 1: Foundation (Months 1-3)", 2: "Phase 2: Growth (Months 4-6)", 3: "Phase 3: Dominance (Months 7-12)" };
-  const priorityColor: Record<string, string> = { critical: "bg-red-100 text-red-700", high: "bg-orange-100 text-orange-700", medium: "bg-yellow-100 text-yellow-700", low: "bg-gray-100 text-gray-600" };
+  const priorityColor: Record<string, string> = { critical: "bg-red-100 text-red-700", high: "bg-orange-100 text-orange-700", medium: "bg-yellow-100 text-yellow-700", low: "bg-muted text-muted-foreground" };
 
   const monthlyInvestment = data.estimatedMonthlyInvestment ?? 0;
   const totalHours = data.estimatedTotalHours ?? 0;
@@ -1385,7 +1385,7 @@ function ActionPlanSection({ data }: { data: ActionPlanData }) {
           <h4 className="font-semibold text-sm mb-3 text-gray-800">{phaseLabels[Number(phase)] || `Phase ${phase}`}</h4>
           <div className="space-y-2">
             {items.map((d, i) => (
-              <div key={i} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors" data-testid={`deliverable-${phase}-${i}`}>
+              <div key={i} className="flex items-start gap-3 p-3 bg-muted rounded-lg hover:bg-muted/80 transition-colors" data-testid={`deliverable-${phase}-${i}`}>
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="font-medium text-sm">{d.title}</span>
@@ -1428,11 +1428,11 @@ function PresentModeOverlay({ audit, sectionDataMap, currentSlide, setCurrentSli
   auditId: number; authParam: string; isClientView: boolean;
 }) {
   return (
-    <div className="fixed inset-0 z-50 bg-gradient-to-br from-gray-900 to-gray-950" data-testid="present-mode">
+    <div className="fixed inset-0 z-50 bg-gradient-to-br from-gray-900 to-gray-950" style={{ height: "100dvh" }} data-testid="present-mode">
       <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#ff5800] to-[#ffb41c]" />
-      <button onClick={onClose} className="absolute top-4 right-6 z-20 w-10 h-10 flex items-center justify-center rounded-full bg-white hover:bg-gray-50 shadow-md" data-testid="button-close-present"><X className="w-5 h-5 text-gray-500" /></button>
-      {currentSlide > 0 && (<button onClick={() => setCurrentSlide(s => Math.max(s - 1, 0))} className="absolute left-6 top-1/2 -translate-y-1/2 z-20 w-12 h-12 flex items-center justify-center rounded-full bg-white hover:bg-gray-50 shadow-md" data-testid="button-prev-slide"><ChevronLeft className="w-6 h-6 text-gray-600" /></button>)}
-      {currentSlide < SECTIONS.length - 1 && (<button onClick={() => setCurrentSlide(s => Math.min(s + 1, SECTIONS.length - 1))} className="absolute right-6 top-1/2 -translate-y-1/2 z-20 w-12 h-12 flex items-center justify-center rounded-full bg-white hover:bg-gray-50 shadow-md" data-testid="button-next-slide"><ChevronRight className="w-6 h-6 text-gray-600" /></button>)}
+      <button onClick={onClose} className="absolute top-4 right-6 z-20 w-10 h-10 flex items-center justify-center rounded-full bg-white hover:bg-muted shadow-md transition-colors" aria-label="Close presentation" data-testid="button-close-present"><X className="w-5 h-5 text-gray-500" /></button>
+      {currentSlide > 0 && (<button onClick={() => setCurrentSlide(s => Math.max(s - 1, 0))} className="absolute left-6 top-1/2 -translate-y-1/2 z-20 w-12 h-12 flex items-center justify-center rounded-full bg-white hover:bg-muted shadow-md transition-colors" aria-label="Previous slide" data-testid="button-prev-slide"><ChevronLeft className="w-6 h-6 text-gray-600" /></button>)}
+      {currentSlide < SECTIONS.length - 1 && (<button onClick={() => setCurrentSlide(s => Math.min(s + 1, SECTIONS.length - 1))} className="absolute right-6 top-1/2 -translate-y-1/2 z-20 w-12 h-12 flex items-center justify-center rounded-full bg-white hover:bg-muted shadow-md transition-colors" aria-label="Next slide" data-testid="button-next-slide"><ChevronRight className="w-6 h-6 text-gray-600" /></button>)}
       <div className="h-full flex flex-col pt-2">
         <div className="flex-1 min-h-0 mx-16 mt-4 mb-14 bg-white rounded-2xl shadow-sm border border-gray-200 overflow-y-auto flex flex-col">
           <div className="flex items-center justify-between px-8 pt-4 pb-0">

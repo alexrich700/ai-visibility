@@ -77,10 +77,11 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between py-5 text-left group"
+        className="w-full flex items-center justify-between py-5 text-left group transition-colors hover:bg-muted/50 px-1 rounded"
+        aria-expanded={open}
         data-testid={`faq-toggle-${question.slice(0, 20).replace(/\s+/g, '-').toLowerCase()}`}
       >
-        <span className="text-[#010400] font-semibold text-base pr-4">{question}</span>
+        <span className="text-foreground font-semibold text-base pr-4">{question}</span>
         <ChevronDown
           size={20}
           className={`text-gray-400 transition-transform duration-200 flex-shrink-0 ${open ? "rotate-180" : ""}`}
@@ -273,7 +274,7 @@ export default function Home() {
 
   if (step === "input") {
     return (
-      <div className="min-h-screen bg-white flex flex-col font-sans text-[#010400] selection:bg-[#ff5800] selection:text-white">
+      <div className="min-h-screen bg-background flex flex-col font-sans text-foreground selection:bg-[#ff5800] selection:text-white">
         <div className="bg-[#010400] text-white text-center py-2.5 px-4">
           <p className="text-sm font-medium tracking-wide" data-testid="text-urgency-banner">
             <Zap size={14} className="inline mr-1.5 text-[#ffb41c]" />
@@ -298,7 +299,7 @@ export default function Home() {
             <div className="max-w-3xl mx-auto">
               <div className="text-center space-y-6 mb-10">
                 <h1
-                  className="text-4xl md:text-5xl font-bold text-[#010400] tracking-tight leading-[1.1]"
+                  className="text-4xl md:text-5xl font-bold text-foreground tracking-tight leading-[1.1]"
                   data-testid="text-headline"
                 >
                   Is AI Recommending Your Business{" "}
@@ -311,28 +312,28 @@ export default function Home() {
                 <div className="flex flex-wrap items-center justify-center gap-5 pt-2">
                   <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-full px-4 py-2">
                     <Eye size={16} className="text-[#ff5800]" />
-                    <span className="text-sm text-[#010400] font-medium" data-testid="text-benefit-1">See exactly what AI says about you</span>
+                    <span className="text-sm text-foreground font-medium" data-testid="text-benefit-1">See exactly what AI says about you</span>
                   </div>
                   <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-full px-4 py-2">
                     <Target size={16} className="text-[#ff5800]" />
-                    <span className="text-sm text-[#010400] font-medium" data-testid="text-benefit-2">Uncover gaps in your AI strategy</span>
+                    <span className="text-sm text-foreground font-medium" data-testid="text-benefit-2">Uncover gaps in your AI strategy</span>
                   </div>
                   <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-full px-4 py-2">
                     <BarChart3 size={16} className="text-[#ff5800]" />
-                    <span className="text-sm text-[#010400] font-medium" data-testid="text-benefit-3">Outrank competitors in AI search</span>
+                    <span className="text-sm text-foreground font-medium" data-testid="text-benefit-3">Outrank competitors in AI search</span>
                   </div>
                 </div>
 
                 <div className="flex items-center justify-center gap-6 text-sm text-gray-400 font-medium pt-1">
-                  <span className="flex items-center gap-2"><CheckCircle size={15} className="text-green-500" /> ChatGPT</span>
-                  <span className="flex items-center gap-2"><CheckCircle size={15} className="text-green-500" /> Google AI Overviews</span>
+                  <span className="flex items-center gap-2"><CheckCircle size={15} className="text-emerald-600" /> ChatGPT</span>
+                  <span className="flex items-center gap-2"><CheckCircle size={15} className="text-emerald-600" /> Google AI Overviews</span>
                 </div>
               </div>
 
               <div id="audit-form" className="scroll-mt-8">
                   <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-2xl shadow-black/[0.06]">
                     <div className="bg-gray-50 border-b border-gray-200 px-6 py-4 text-center">
-                      <h2 className="text-lg font-bold text-[#010400]" data-testid="text-form-title">Get Your Free AI Visibility Audit</h2>
+                      <h2 className="text-lg font-bold text-foreground" data-testid="text-form-title">Get Your Free AI Visibility Audit</h2>
                       <p className="text-sm text-gray-400 mt-0.5">Takes 30 seconds. No credit card required.</p>
                     </div>
 
@@ -343,7 +344,7 @@ export default function Home() {
                           onClick={() => setScope("local")}
                           className={`flex-1 py-3.5 text-sm font-bold tracking-widest uppercase transition-all flex items-center justify-center gap-2 ${
                             scope === "local"
-                              ? "bg-white text-[#010400] border-b-2 border-[#ff5800]"
+                              ? "bg-white text-foreground border-b-2 border-[#ff5800]"
                               : "bg-gray-50 text-gray-400 hover:text-gray-600"
                           }`}
                           data-testid="button-scope-local"
@@ -355,7 +356,7 @@ export default function Home() {
                           onClick={() => setScope("national")}
                           className={`flex-1 py-3.5 text-sm font-bold tracking-widest uppercase transition-all flex items-center justify-center gap-2 ${
                             scope === "national"
-                              ? "bg-white text-[#010400] border-b-2 border-[#ff5800]"
+                              ? "bg-white text-foreground border-b-2 border-[#ff5800]"
                               : "bg-gray-50 text-gray-400 hover:text-gray-600"
                           }`}
                           data-testid="button-scope-national"
@@ -462,11 +463,11 @@ export default function Home() {
             </div>
           </section>
 
-          <section className="bg-gray-50 border-t border-gray-100 py-16 md:py-20 px-4">
+          <section className="bg-muted border-t border-gray-100 py-16 md:py-20 px-4">
             <div className="max-w-4xl mx-auto">
               <div className="text-center mb-12">
                 <p className="text-sm font-bold text-[#ff5800] uppercase tracking-widest mb-3" data-testid="text-how-it-works-label">How It Works</p>
-                <h2 className="text-3xl md:text-4xl font-bold text-[#010400] tracking-tight" data-testid="text-how-it-works-title">
+                <h2 className="text-3xl md:text-4xl font-bold text-foreground tracking-tight" data-testid="text-how-it-works-title">
                   Your AI Visibility Report in 3 Steps
                 </h2>
               </div>
@@ -479,7 +480,7 @@ export default function Home() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-center gap-2">
                       <span className="text-xs font-bold text-[#ff5800] bg-[#ff5800]/10 px-2 py-0.5 rounded-full">1</span>
-                      <h3 className="font-bold text-[#010400]" data-testid="text-step-1-title">Enter Your URL</h3>
+                      <h3 className="font-bold text-foreground" data-testid="text-step-1-title">Enter Your URL</h3>
                     </div>
                     <p className="text-gray-500 text-sm leading-relaxed" data-testid="text-step-1-desc">
                       Drop your website link to begin the rapid AI discovery scan.
@@ -494,7 +495,7 @@ export default function Home() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-center gap-2">
                       <span className="text-xs font-bold text-[#ffb41c] bg-[#ffb41c]/10 px-2 py-0.5 rounded-full">2</span>
-                      <h3 className="font-bold text-[#010400]" data-testid="text-step-2-title">AI Engines Scanned</h3>
+                      <h3 className="font-bold text-foreground" data-testid="text-step-2-title">AI Engines Scanned</h3>
                     </div>
                     <p className="text-gray-500 text-sm leading-relaxed" data-testid="text-step-2-desc">
                       We analyze ChatGPT and Google AI Overviews for your brand.
@@ -503,13 +504,13 @@ export default function Home() {
                 </div>
 
                 <div className="text-center space-y-4">
-                  <div className="w-14 h-14 rounded-2xl bg-green-500/10 flex items-center justify-center mx-auto">
-                    <FileText size={24} className="text-green-500" />
+                  <div className="w-14 h-14 rounded-2xl bg-emerald-600/10 flex items-center justify-center mx-auto">
+                    <FileText size={24} className="text-emerald-600" />
                   </div>
                   <div className="space-y-2">
                     <div className="flex items-center justify-center gap-2">
-                      <span className="text-xs font-bold text-green-500 bg-green-500/10 px-2 py-0.5 rounded-full">3</span>
-                      <h3 className="font-bold text-[#010400]" data-testid="text-step-3-title">Get Your Report</h3>
+                      <span className="text-xs font-bold text-emerald-600 bg-emerald-600/10 px-2 py-0.5 rounded-full">3</span>
+                      <h3 className="font-bold text-foreground" data-testid="text-step-3-title">Get Your Report</h3>
                     </div>
                     <p className="text-gray-500 text-sm leading-relaxed" data-testid="text-step-3-desc">
                       Receive a customized breakdown of your AI visibility and improvement steps.
@@ -520,10 +521,10 @@ export default function Home() {
             </div>
           </section>
 
-          <section className="py-16 md:py-20 px-4 bg-white">
+          <section className="py-16 md:py-20 px-4 bg-background">
             <div className="max-w-2xl mx-auto">
               <div className="text-center mb-10">
-                <h2 className="text-3xl md:text-4xl font-bold text-[#010400] tracking-tight" data-testid="text-faq-title">
+                <h2 className="text-3xl md:text-4xl font-bold text-foreground tracking-tight" data-testid="text-faq-title">
                   Frequently Asked Questions
                 </h2>
               </div>
@@ -565,7 +566,7 @@ export default function Home() {
             </div>
           </section>
 
-          <footer className="bg-white border-t border-gray-100 py-8 px-4">
+          <footer className="bg-background border-t border-gray-100 py-8 px-4">
             <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
               <Branding />
               <p className="text-xs text-gray-400">Developed by Motivent Marketing's growth team.</p>
@@ -577,7 +578,7 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-white flex flex-col items-center justify-center px-4 font-mono">
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4 font-mono">
       <div className="max-w-xl w-full space-y-12">
         <div className="text-center space-y-6">
           <div className="relative w-24 h-24 mx-auto">
@@ -589,7 +590,7 @@ export default function Home() {
           </div>
 
           <div className="space-y-3">
-            <h2 className="text-3xl font-bold text-[#010400] tracking-tight" data-testid="text-scan-status">{scanStatus}</h2>
+            <h2 className="text-3xl font-bold text-foreground tracking-tight" data-testid="text-scan-status">{scanStatus}</h2>
             <div className="h-8">
               <p className="text-gray-500 text-sm font-medium animate-pulse border border-gray-100 inline-block px-3 py-1 bg-gray-50 rounded-md" data-testid="text-scan-prompt">
                 {activePrompt}

@@ -185,7 +185,7 @@ export default function AdminAuditView() {
   const getScoreColorFull = (score: number) => {
     if (score >= 70) return "text-green-600";
     if (score >= 40) return "text-[#ffb41c]";
-    return "text-red-500";
+    return "text-destructive";
   };
 
   const getScoreLabelFull = (score: number) => {
@@ -209,7 +209,7 @@ export default function AdminAuditView() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="text-center">
-          <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <AlertTriangle className="w-12 h-12 text-destructive mx-auto mb-4" />
           <h1 className="text-xl font-bold text-gray-900 mb-2">Audit Not Found</h1>
           <p className="text-gray-500 mb-6">The audit you're looking for doesn't exist or has been deleted.</p>
           <Link href="/admin">
