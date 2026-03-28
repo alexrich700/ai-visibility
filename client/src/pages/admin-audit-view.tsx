@@ -476,10 +476,10 @@ export default function AdminAuditView() {
                     <tr key={rowKey} className="hover:bg-gray-50 transition-colors align-top" data-testid={`full-prompt-result-${idx}-${promptLogTab}`}>
                       <td className="p-4 text-center">
                         {platformData.found ? (
-                          <CheckCircle className="text-green-500 mx-auto" size={20} />
+                          <CheckCircle className="text-emerald-600 mx-auto" size={20} />
                         ) : (
                           <div className="w-5 h-5 mx-auto rounded-full border-2 border-red-200 flex items-center justify-center">
-                            <X className="w-3 h-3 text-red-500" />
+                            <X className="w-3 h-3 text-destructive" />
                           </div>
                         )}
                       </td>
@@ -532,18 +532,18 @@ export default function AdminAuditView() {
                       {auditResults.sentimentAnalysis.overall.charAt(0).toUpperCase() + auditResults.sentimentAnalysis.overall.slice(1)}
                     </p>
                   </div>
-                  {auditResults.sentimentAnalysis.overall === "positive" && <ThumbsUp size={32} className="text-green-500" />}
-                  {auditResults.sentimentAnalysis.overall === "negative" && <ThumbsDown size={32} className="text-red-500" />}
+                  {auditResults.sentimentAnalysis.overall === "positive" && <ThumbsUp size={32} className="text-emerald-600" />}
+                  {auditResults.sentimentAnalysis.overall === "negative" && <ThumbsDown size={32} className="text-destructive" />}
                   {auditResults.sentimentAnalysis.overall === "neutral" && <Minus size={32} className="text-gray-400" />}
                 </div>
 
                 <div className="space-y-3">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="flex items-center gap-2"><ThumbsUp size={16} className="text-green-500" /> Positive Signals</span>
+                    <span className="flex items-center gap-2"><ThumbsUp size={16} className="text-emerald-600" /> Positive Signals</span>
                     <span className="font-bold" data-testid="full-sentiment-positive">{auditResults.sentimentAnalysis.positiveCount}</span>
                   </div>
                   <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-                    <div className="bg-green-500 h-full" style={{ width: `${(auditResults.sentimentAnalysis.positiveCount / 10) * 100}%` }}></div>
+                    <div className="bg-emerald-600 h-full" style={{ width: `${(auditResults.sentimentAnalysis.positiveCount / 10) * 100}%` }}></div>
                   </div>
 
                   <div className="flex items-center justify-between text-sm pt-2">
@@ -555,11 +555,11 @@ export default function AdminAuditView() {
                   </div>
 
                   <div className="flex items-center justify-between text-sm pt-2">
-                    <span className="flex items-center gap-2"><ThumbsDown size={16} className="text-red-500" /> Negative Signals</span>
+                    <span className="flex items-center gap-2"><ThumbsDown size={16} className="text-destructive" /> Negative Signals</span>
                     <span className="font-bold" data-testid="full-sentiment-negative">{auditResults.sentimentAnalysis.negativeCount}</span>
                   </div>
                   <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-                    <div className="bg-red-500 h-full" style={{ width: `${(auditResults.sentimentAnalysis.negativeCount / 10) * 100}%` }}></div>
+                    <div className="bg-destructive h-full" style={{ width: `${(auditResults.sentimentAnalysis.negativeCount / 10) * 100}%` }}></div>
                   </div>
                 </div>
               </div>

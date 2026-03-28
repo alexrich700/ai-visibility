@@ -310,15 +310,15 @@ export default function Home() {
                 </p>
 
                 <div className="flex flex-wrap items-center justify-center gap-5 pt-2">
-                  <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-full px-4 py-2">
+                  <div className="flex items-center gap-3 bg-muted border border-gray-100 rounded-full px-4 py-2">
                     <Eye size={16} className="text-[#ff5800]" />
                     <span className="text-sm text-foreground font-medium" data-testid="text-benefit-1">See exactly what AI says about you</span>
                   </div>
-                  <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-full px-4 py-2">
+                  <div className="flex items-center gap-3 bg-muted border border-gray-100 rounded-full px-4 py-2">
                     <Target size={16} className="text-[#ff5800]" />
                     <span className="text-sm text-foreground font-medium" data-testid="text-benefit-2">Uncover gaps in your AI strategy</span>
                   </div>
-                  <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-full px-4 py-2">
+                  <div className="flex items-center gap-3 bg-muted border border-gray-100 rounded-full px-4 py-2">
                     <BarChart3 size={16} className="text-[#ff5800]" />
                     <span className="text-sm text-foreground font-medium" data-testid="text-benefit-3">Outrank competitors in AI search</span>
                   </div>
@@ -331,8 +331,8 @@ export default function Home() {
               </div>
 
               <div id="audit-form" className="scroll-mt-8">
-                  <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-2xl shadow-black/[0.06]">
-                    <div className="bg-gray-50 border-b border-gray-200 px-6 py-4 text-center">
+                  <div className="bg-background rounded-2xl border border-gray-200 overflow-hidden shadow-2xl shadow-black/[0.06]">
+                    <div className="bg-muted border-b border-gray-200 px-6 py-4 text-center">
                       <h2 className="text-lg font-bold text-foreground" data-testid="text-form-title">Get Your Free AI Visibility Audit</h2>
                       <p className="text-sm text-gray-400 mt-0.5">Takes 30 seconds. No credit card required.</p>
                     </div>
@@ -344,8 +344,8 @@ export default function Home() {
                           onClick={() => setScope("local")}
                           className={`flex-1 py-3.5 text-sm font-bold tracking-widest uppercase transition-all flex items-center justify-center gap-2 ${
                             scope === "local"
-                              ? "bg-white text-foreground border-b-2 border-[#ff5800]"
-                              : "bg-gray-50 text-gray-400 hover:text-gray-600"
+                              ? "bg-background text-foreground border-b-2 border-[#ff5800]"
+                              : "bg-muted text-gray-400 hover:text-gray-600"
                           }`}
                           data-testid="button-scope-local"
                         >
@@ -356,8 +356,8 @@ export default function Home() {
                           onClick={() => setScope("national")}
                           className={`flex-1 py-3.5 text-sm font-bold tracking-widest uppercase transition-all flex items-center justify-center gap-2 ${
                             scope === "national"
-                              ? "bg-white text-foreground border-b-2 border-[#ff5800]"
-                              : "bg-gray-50 text-gray-400 hover:text-gray-600"
+                              ? "bg-background text-foreground border-b-2 border-[#ff5800]"
+                              : "bg-muted text-gray-400 hover:text-gray-600"
                           }`}
                           data-testid="button-scope-national"
                         >
@@ -368,7 +368,7 @@ export default function Home() {
                       <div className="p-6 space-y-3.5">
                         {errorMessage && (
                           <div className="rounded-lg border border-red-100 bg-red-50 p-3 text-left flex items-start gap-2" data-testid="audit-error-message">
-                            <AlertCircle size={16} className="text-red-500 mt-0.5" />
+                            <AlertCircle size={16} className="text-destructive mt-0.5" />
                             <p className="text-sm text-red-700 font-medium">{errorMessage}</p>
                           </div>
                         )}
@@ -380,7 +380,7 @@ export default function Home() {
                           <input
                             type="text"
                             placeholder="Business Name"
-                            className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 focus:border-[#ff5800] focus:ring-1 focus:ring-[#ff5800] outline-none transition-all font-medium rounded-lg text-sm"
+                            className="w-full pl-11 pr-4 py-3.5 bg-muted border border-gray-200 focus:border-[#ff5800] focus:ring-1 focus:ring-[#ff5800] outline-none transition-all font-medium rounded-lg text-sm"
                             value={businessName}
                             onChange={(e) => setBusinessName(e.target.value)}
                             data-testid="input-business-name"
@@ -395,7 +395,7 @@ export default function Home() {
                           <input
                             type="text"
                             placeholder="Website (e.g. motiventmarketing.com)"
-                            className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 focus:border-[#ff5800] focus:ring-1 focus:ring-[#ff5800] outline-none transition-all font-medium rounded-lg text-sm"
+                            className="w-full pl-11 pr-4 py-3.5 bg-muted border border-gray-200 focus:border-[#ff5800] focus:ring-1 focus:ring-[#ff5800] outline-none transition-all font-medium rounded-lg text-sm"
                             value={url}
                             onChange={(e) => setUrl(e.target.value)}
                             data-testid="input-url"
@@ -410,7 +410,7 @@ export default function Home() {
                           <input
                             type="text"
                             placeholder="Main Service (e.g. Plumber, SEO Agency)"
-                            className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 focus:border-[#ff5800] focus:ring-1 focus:ring-[#ff5800] outline-none transition-all font-medium rounded-lg text-sm"
+                            className="w-full pl-11 pr-4 py-3.5 bg-muted border border-gray-200 focus:border-[#ff5800] focus:ring-1 focus:ring-[#ff5800] outline-none transition-all font-medium rounded-lg text-sm"
                             value={keyword}
                             onChange={(e) => setKeyword(e.target.value)}
                             data-testid="input-keyword"
@@ -426,7 +426,7 @@ export default function Home() {
                             <input
                               type="text"
                               placeholder="Target City (e.g. Dallas, TX)"
-                              className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 focus:border-[#ff5800] focus:ring-1 focus:ring-[#ff5800] outline-none transition-all font-medium rounded-lg text-sm"
+                              className="w-full pl-11 pr-4 py-3.5 bg-muted border border-gray-200 focus:border-[#ff5800] focus:ring-1 focus:ring-[#ff5800] outline-none transition-all font-medium rounded-lg text-sm"
                               value={city}
                               onChange={(e) => setCity(e.target.value)}
                               data-testid="input-city"
@@ -592,7 +592,7 @@ export default function Home() {
           <div className="space-y-3">
             <h2 className="text-3xl font-bold text-foreground tracking-tight" data-testid="text-scan-status">{scanStatus}</h2>
             <div className="h-8">
-              <p className="text-gray-500 text-sm font-medium animate-pulse border border-gray-100 inline-block px-3 py-1 bg-gray-50 rounded-md" data-testid="text-scan-prompt">
+              <p className="text-gray-500 text-sm font-medium animate-pulse border border-gray-100 inline-block px-3 py-1 bg-muted rounded-md" data-testid="text-scan-prompt">
                 {activePrompt}
               </p>
             </div>
@@ -604,7 +604,7 @@ export default function Home() {
             <span>Progress</span>
             <span data-testid="text-scan-progress">{scanProgress}%</span>
           </div>
-          <div className="bg-gray-100 h-1.5 w-full overflow-hidden rounded-full">
+          <div className="bg-muted h-1.5 w-full overflow-hidden rounded-full">
             <div
               className="bg-[#ff5800] h-full transition-all duration-300 ease-out rounded-full"
               style={{ width: `${scanProgress}%` }}

@@ -1105,7 +1105,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
                 {isGeneratingLink ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : linkCopied ? (
-                  <Check className="w-4 h-4 text-green-500" />
+                  <Check className="w-4 h-4 text-emerald-600" />
                 ) : (
                   <Share2 className="w-4 h-4" />
                 )}
@@ -1565,7 +1565,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
           <Card className="shadow-2xl shadow-orange-900/5">
             <CardHeader className="pb-2">
               <div className="flex items-center gap-2">
-                <Award className="w-4 h-4 text-green-500" />
+                <Award className="w-4 h-4 text-emerald-600" />
                 <CardTitle className="text-sm font-bold tracking-tight flex items-center">
                   Prominence
                   <MetricInfo tooltip={METRIC_TOOLTIPS.prominence} id="prominence" />
@@ -1684,7 +1684,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
                                   key={level}
                                   className={`w-4 h-2 rounded-sm ${
                                     level <= narrative.strength 
-                                      ? 'bg-green-500' 
+                                      ? 'bg-emerald-600' 
                                       : 'bg-gray-200'
                                   }`}
                                 />
@@ -1914,7 +1914,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
                       {/* ChatGPT status */}
                       <div className="flex items-center justify-center gap-1.5" data-testid={`status-chatgpt-${result.id}`}>
                         <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
-                          result.chatgptCited ? "bg-green-500" :
+                          result.chatgptCited ? "bg-emerald-600" :
                           result.chatgptFound ? "bg-orange-500" :
                           "bg-gray-300"
                         }`} />
@@ -1930,7 +1930,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
                       {/* Google AI status */}
                       <div className="flex items-center justify-center gap-1.5" data-testid={`status-googleai-${result.id}`}>
                         <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
-                          result.googleAICited ? "bg-green-500" :
+                          result.googleAICited ? "bg-emerald-600" :
                           result.googleAIFound ? "bg-orange-500" :
                           "bg-gray-300"
                         }`} />
