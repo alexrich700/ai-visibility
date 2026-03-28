@@ -1917,9 +1917,9 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
                           result.chatgptCited ? "bg-emerald-600" :
                           result.chatgptFound ? "bg-orange-500" :
                           "bg-gray-300"
-                        }`} />
+                        }`} aria-hidden="true" />
                         <span className={`text-xs font-medium ${
-                          result.chatgptCited ? "text-green-700" :
+                          result.chatgptCited ? "text-emerald-700" :
                           result.chatgptFound ? "text-orange-600" :
                           "text-gray-400"
                         }`}>
@@ -1933,9 +1933,9 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
                           result.googleAICited ? "bg-emerald-600" :
                           result.googleAIFound ? "bg-orange-500" :
                           "bg-gray-300"
-                        }`} />
+                        }`} aria-hidden="true" />
                         <span className={`text-xs font-medium ${
-                          result.googleAICited ? "text-green-700" :
+                          result.googleAICited ? "text-emerald-700" :
                           result.googleAIFound ? "text-orange-600" :
                           "text-gray-400"
                         }`}>
@@ -2181,15 +2181,15 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
                 <TabsList className="w-full">
                   <TabsTrigger value="chatgpt" className="flex-1" data-testid="tab-chatgpt-response">
                     <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${selectedResult.chatgptFound ? "bg-emerald-600" : "bg-destructive"}`} />
-                      ChatGPT
+                      <div className={`w-2 h-2 rounded-full ${selectedResult.chatgptFound ? "bg-emerald-600" : "bg-destructive"}`} aria-hidden="true" />
+                      ChatGPT <span className="sr-only">({selectedResult.chatgptFound ? "found" : "not found"})</span>
                       {selectedResult.chatgptCited && <Badge variant="secondary" className="text-xs ml-1">Cited</Badge>}
                     </div>
                   </TabsTrigger>
                   <TabsTrigger value="googleai" className="flex-1" data-testid="tab-googleai-response">
                     <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${selectedResult.googleAIFound ? "bg-emerald-600" : "bg-destructive"}`} />
-                      Google AI
+                      <div className={`w-2 h-2 rounded-full ${selectedResult.googleAIFound ? "bg-emerald-600" : "bg-destructive"}`} aria-hidden="true" />
+                      Google AI <span className="sr-only">({selectedResult.googleAIFound ? "found" : "not found"})</span>
                       {selectedResult.googleAICited && <Badge variant="secondary" className="text-xs ml-1">Cited</Badge>}
                     </div>
                   </TabsTrigger>

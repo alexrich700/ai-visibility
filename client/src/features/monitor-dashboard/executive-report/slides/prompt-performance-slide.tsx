@@ -131,15 +131,15 @@ function ResponseModal({ prompt, businessName, onClose }: { prompt: PromptPerfor
             <TabsList className="w-full">
               <TabsTrigger value="chatgpt" className="flex-1">
                 <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${prompt.chatgptFound ? "bg-emerald-600" : "bg-destructive"}`} />
-                  ChatGPT
+                  <div className={`w-2 h-2 rounded-full ${prompt.chatgptFound ? "bg-emerald-600" : "bg-destructive"}`} aria-hidden="true" />
+                  ChatGPT <span className="sr-only">({prompt.chatgptFound ? "found" : "not found"})</span>
                   {prompt.chatgptCited && <Badge variant="secondary" className="text-xs ml-1">Cited</Badge>}
                 </div>
               </TabsTrigger>
               <TabsTrigger value="googleai" className="flex-1">
                 <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${prompt.googleAIFound ? "bg-emerald-600" : "bg-destructive"}`} />
-                  Google AI
+                  <div className={`w-2 h-2 rounded-full ${prompt.googleAIFound ? "bg-emerald-600" : "bg-destructive"}`} aria-hidden="true" />
+                  Google AI <span className="sr-only">({prompt.googleAIFound ? "found" : "not found"})</span>
                   {prompt.googleAICited && <Badge variant="secondary" className="text-xs ml-1">Cited</Badge>}
                 </div>
               </TabsTrigger>
@@ -217,7 +217,7 @@ export function PromptPerformanceSlide({ topPrompts, bottomPrompts, businessName
         {/* Top Performers */}
         <div className="flex flex-col h-full">
           <div className="flex items-center gap-2 mb-4 px-2">
-            <div className="w-3 h-3 rounded-full bg-emerald-600" />
+            <div className="w-3 h-3 rounded-full bg-emerald-600" aria-hidden="true" />
             <h3 className="text-lg font-bold text-emerald-700">{isPitch ? "Where You're Showing Up" : "Top Performers"}</h3>
           </div>
           <div className="space-y-3 overflow-y-auto pr-2 flex-1">
@@ -234,7 +234,7 @@ export function PromptPerformanceSlide({ topPrompts, bottomPrompts, businessName
         {/* Needs Attention */}
         <div className="flex flex-col h-full">
           <div className="flex items-center gap-2 mb-4 px-2">
-            <div className="w-3 h-3 rounded-full bg-destructive" />
+            <div className="w-3 h-3 rounded-full bg-destructive" aria-hidden="true" />
             <h3 className="text-lg font-bold text-red-700">{isPitch ? "Where You're Not" : "Needs Attention"}</h3>
           </div>
           <div className="space-y-3 overflow-y-auto pr-2 flex-1">
