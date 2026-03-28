@@ -1678,7 +1678,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
                               )}
                               <p className="text-sm text-gray-700 leading-relaxed">{narrative.text}</p>
                             </div>
-                            <div className="flex gap-0.5 flex-shrink-0 mt-0.5">
+                            <div className="flex gap-1 flex-shrink-0 mt-0.5">
                               {[1, 2, 3, 4, 5].map((level) => (
                                 <div
                                   key={level}
@@ -1730,7 +1730,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
                               )}
                               <p className="text-sm text-gray-700 leading-relaxed">{narrative.text}</p>
                             </div>
-                            <div className="flex gap-0.5 flex-shrink-0 mt-0.5">
+                            <div className="flex gap-1 flex-shrink-0 mt-0.5">
                               {[1, 2, 3, 4, 5].map((level) => (
                                 <div
                                   key={level}
@@ -1887,7 +1887,7 @@ function MonitorDashboardContent({ isAdminUser }: { isAdminUser: boolean }) {
                   })();
                   const globalIdx = (currentPage - 1) * ITEMS_PER_PAGE + idx + 1;
                   const visScore = getVisibilityScore(result);
-                  const borderColor = visScore === 3 ? "border-l-green-500" : visScore === 2 ? "border-l-amber-400" : "border-l-transparent";
+                  const borderColor = visScore === 3 ? "border-l-emerald-600" : visScore === 2 ? "border-l-amber-400" : "border-l-transparent";
 
                   return (
                     <button

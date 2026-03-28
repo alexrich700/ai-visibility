@@ -859,7 +859,7 @@ function RankingsSection({ data }: { data: RankingsData }) {
                           <td key={city} className="py-1.5 px-2 text-center">
                             <span className={`inline-block w-8 py-0.5 rounded text-xs font-bold ${RANK_COLOR(rank)}`}>{rank ?? "—"}</span>
                             {kw.competitorRanks && kw.targetCity === city && Object.keys(kw.competitorRanks).length > 0 && (
-                              <div className="flex justify-center gap-0.5 mt-0.5">
+                              <div className="flex justify-center gap-1 mt-0.5">
                                 {Object.entries(kw.competitorRanks).slice(0, 2).map(([name, cr]) => (
                                   <TooltipProvider key={name}><Tooltip><TooltipTrigger asChild>
                                     <span className="text-[9px] text-gray-400 cursor-help">{cr}</span>
@@ -1311,7 +1311,7 @@ function ReviewsSection({ data }: { data: ReviewsData }) {
                   <div key={p.name} className="bg-muted rounded p-2 text-center" data-testid={`platform-${p.name}`}>
                     <p className="text-xs font-medium capitalize">{p.name}</p>
                     <p className="text-lg font-bold">{p.count}</p>
-                    {p.rating > 0 && <p className="text-xs text-gray-400 flex items-center justify-center gap-0.5"><Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />{p.rating.toFixed(1)}</p>}
+                    {p.rating > 0 && <p className="text-xs text-gray-400 flex items-center justify-center gap-1"><Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />{p.rating.toFixed(1)}</p>}
                   </div>
                 ))}
               </div>

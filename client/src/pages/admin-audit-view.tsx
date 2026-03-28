@@ -361,7 +361,7 @@ export default function AdminAuditView() {
               </p>
               
               {auditResults.overallScore < 40 && (
-                <div className="bg-red-50 border-l-4 border-red-500 p-6 rounded-r-lg space-y-2">
+                <div className="bg-red-50 border-l-4 border-destructive p-6 rounded-r-lg space-y-2">
                   <h4 className="font-bold text-red-900 flex items-center gap-2">
                     <AlertTriangle size={18} /> Primary Issue Detected
                   </h4>
@@ -381,7 +381,7 @@ export default function AdminAuditView() {
                 </div>
               )}
               {auditResults.overallScore >= 70 && (
-                <div className="bg-green-50 border-l-4 border-green-500 p-6 rounded-r-lg space-y-2">
+                <div className="bg-emerald-50 border-l-4 border-emerald-600 p-6 rounded-r-lg space-y-2">
                   <h4 className="font-bold text-green-900 flex items-center gap-2">
                     <CheckCircle size={18} /> Strong AI Presence
                   </h4>
