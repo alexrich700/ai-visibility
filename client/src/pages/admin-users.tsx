@@ -11,6 +11,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
@@ -24,7 +25,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Plus, Mail, Calendar, Loader2, User, Trash2 } from "lucide-react";
+import { Users, Plus, Mail, Calendar, Loader2, Trash2, UserPlus, Shield } from "lucide-react";
 import { format } from "date-fns";
 
 interface AdminUser {
@@ -32,6 +33,31 @@ interface AdminUser {
   email: string;
   name: string;
   createdAt: string;
+}
+
+function getInitials(name: string): string {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
+
+const avatarColors = [
+  "bg-orange-100 text-orange-700",
+  "bg-blue-100 text-blue-700",
+  "bg-emerald-100 text-emerald-700",
+  "bg-purple-100 text-purple-700",
+  "bg-rose-100 text-rose-700",
+  "bg-amber-100 text-amber-700",
+  "bg-cyan-100 text-cyan-700",
+  "bg-indigo-100 text-indigo-700",
+];
+
+function getAvatarColor(id: number): string {
+  return avatarColors[id % avatarColors.length];
 }
 
 export default function AdminUsers() {
@@ -97,15 +123,22 @@ export default function AdminUsers() {
   };
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight" data-testid="text-page-title">Team Members</h1>
+    <div className="p-6 md:p-8 max-w-4xl mx-auto">
+      <div className="flex items-start justify-between mb-8">
+        <div className="space-y-1">
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold tracking-tight text-gray-900" data-testid="text-page-title">Team Members</h1>
+            {!isLoading && users.length > 0 && (
+              <span className="inline-flex items-center rounded-full bg-orange-50 px-2.5 py-0.5 text-xs font-semibold text-[#ff5800] border border-orange-200" data-testid="text-user-count">
+                {users.length} {users.length === 1 ? "member" : "members"}
+              </span>
+            )}
+          </div>
           <p className="text-muted-foreground text-sm">Manage who has access to the admin portal</p>
         </div>
         <Button
           onClick={() => setInviteOpen(true)}
-          className="bg-[#ff5800] hover:bg-[#e04f00]"
+          className="bg-[#ff5800] hover:bg-[#e04f00] shadow-sm hover:shadow-md transition-all duration-200"
           data-testid="button-invite-user"
         >
           <Plus className="w-4 h-4 mr-2" />
@@ -115,85 +148,93 @@ export default function AdminUsers() {
 
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <Loader2 className="w-8 h-8 animate-spin text-[#ff5800]" />
         </div>
       ) : users.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <Users className="w-12 h-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No team members</h3>
-            <p className="text-muted-foreground text-center max-w-md">
-              Add your first team member to get started.
+        <Card className="border-dashed border-2 border-gray-200 bg-gray-50/50 shadow-none">
+          <CardContent className="flex flex-col items-center justify-center py-20">
+            <div className="w-16 h-16 rounded-2xl bg-orange-50 flex items-center justify-center mb-5">
+              <UserPlus className="w-8 h-8 text-[#ff5800]" />
+            </div>
+            <h3 className="text-lg font-semibold mb-2 text-gray-900">No team members yet</h3>
+            <p className="text-muted-foreground text-center max-w-sm mb-6">
+              Invite your first team member to collaborate on the admin portal.
             </p>
+            <Button
+              onClick={() => setInviteOpen(true)}
+              className="bg-[#ff5800] hover:bg-[#e04f00]"
+              data-testid="button-invite-user-empty"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Your First Member
+            </Button>
           </CardContent>
         </Card>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-500">Name</th>
-                <th className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-500">Email</th>
-                <th className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-500">Joined</th>
-                <th className="text-center px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-500"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {users.map((u) => (
-                <tr key={u.id} className="hover:bg-gray-50 transition-colors" data-testid={`row-user-${u.id}`}>
-                  <td className="px-4 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                        <User className="w-4 h-4 text-primary" />
-                      </div>
-                      <div>
-                        <div className="font-medium text-gray-900">{u.name}</div>
-                        {u.id === currentUser?.id && (
-                          <span className="text-xs text-primary font-medium">You</span>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-4">
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <Mail className="w-4 h-4 text-gray-400" />
-                      {u.email}
-                    </div>
-                  </td>
-                  <td className="px-4 py-4">
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <Calendar className="w-4 h-4 text-gray-400" />
-                      {format(new Date(u.createdAt), "MMM d, yyyy")}
-                    </div>
-                  </td>
-                  <td className="px-4 py-4 text-center">
-                    {u.id !== currentUser?.id && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-gray-400 hover:text-red-500 hover:bg-red-50"
-                        onClick={() => setDeleteTarget(u)}
-                        data-testid={`button-delete-user-${u.id}`}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="space-y-3">
+          {users.map((u) => (
+            <div
+              key={u.id}
+              className="group bg-white rounded-xl border border-gray-200 px-5 py-4 flex items-center gap-4 hover:border-gray-300 hover:shadow-md transition-all duration-200 cursor-default"
+              data-testid={`row-user-${u.id}`}
+            >
+              <div className={`w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${getAvatarColor(u.id)}`}>
+                {getInitials(u.name)}
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-gray-900 truncate">{u.name}</span>
+                  {u.id === currentUser?.id && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[#ff5800]/10 px-2 py-0.5 text-[10px] font-semibold text-[#ff5800] uppercase tracking-wide">
+                      <Shield className="w-3 h-3" />
+                      You
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <Mail className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                  <span className="text-sm text-gray-500 truncate">{u.email}</span>
+                </div>
+              </div>
+
+              <div className="hidden sm:flex items-center gap-1.5 text-sm text-gray-400 shrink-0">
+                <Calendar className="w-3.5 h-3.5" />
+                <span>{format(new Date(u.createdAt), "MMM d, yyyy")}</span>
+              </div>
+
+              <div className="shrink-0 w-9">
+                {u.id !== currentUser?.id && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all duration-200 h-9 w-9 rounded-lg"
+                    onClick={() => setDeleteTarget(u)}
+                    data-testid={`button-delete-user-${u.id}`}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Add Team Member</DialogTitle>
+            <div className="w-12 h-12 rounded-xl bg-orange-50 flex items-center justify-center mb-2">
+              <UserPlus className="w-6 h-6 text-[#ff5800]" />
+            </div>
+            <DialogTitle className="text-xl">Add Team Member</DialogTitle>
+            <DialogDescription>
+              They'll receive access to the admin portal immediately.
+            </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleInvite} className="space-y-4">
+          <form onSubmit={handleInvite} className="space-y-4 mt-2">
             <div className="space-y-2">
-              <Label htmlFor="invite-name">Name</Label>
+              <Label htmlFor="invite-name" className="text-sm font-medium">Name</Label>
               <Input
                 id="invite-name"
                 placeholder="Full name"
@@ -201,10 +242,11 @@ export default function AdminUsers() {
                 onChange={(e) => setInviteName(e.target.value)}
                 data-testid="input-invite-name"
                 required
+                className="h-10"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="invite-email">Email</Label>
+              <Label htmlFor="invite-email" className="text-sm font-medium">Email</Label>
               <Input
                 id="invite-email"
                 type="email"
@@ -213,10 +255,11 @@ export default function AdminUsers() {
                 onChange={(e) => setInviteEmail(e.target.value)}
                 data-testid="input-invite-email"
                 required
+                className="h-10"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="invite-password">Password</Label>
+              <Label htmlFor="invite-password" className="text-sm font-medium">Password</Label>
               <Input
                 id="invite-password"
                 type="password"
@@ -226,23 +269,33 @@ export default function AdminUsers() {
                 data-testid="input-invite-password"
                 required
                 minLength={6}
+                className="h-10"
               />
               <p className="text-xs text-muted-foreground">They can change their password at any time from their profile.</p>
             </div>
             {inviteError && (
-              <p className="text-red-500 text-sm" data-testid="text-invite-error">{inviteError}</p>
+              <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                <p className="text-red-600 text-sm" data-testid="text-invite-error">{inviteError}</p>
+              </div>
             )}
-            <DialogFooter>
+            <DialogFooter className="pt-2">
               <Button type="button" variant="outline" onClick={() => setInviteOpen(false)} data-testid="button-cancel-invite">
                 Cancel
               </Button>
               <Button
                 type="submit"
-                className="bg-[#ff5800] hover:bg-[#e04f00]"
+                className="bg-[#ff5800] hover:bg-[#e04f00] shadow-sm"
                 disabled={inviteMutation.isPending}
                 data-testid="button-confirm-invite"
               >
-                {inviteMutation.isPending ? "Adding..." : "Add User"}
+                {inviteMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Adding...
+                  </>
+                ) : (
+                  "Add User"
+                )}
               </Button>
             </DialogFooter>
           </form>
