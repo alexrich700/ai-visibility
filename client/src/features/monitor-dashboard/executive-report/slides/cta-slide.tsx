@@ -1,6 +1,6 @@
 import { Search, FileText, Globe } from "lucide-react";
 import { SlideLayout } from "../components/slide-layout";
-import logoFull from "@assets/Motivent_Logo_-_Primary_1774297429560.png";
+import logoFull from "@assets/BBM-Primary-Logo-300x69_1775234014796.png";
 
 interface CtaSlideProps {
   businessName: string;

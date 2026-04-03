@@ -149,7 +149,7 @@ async function geocodeCityAsync(city: string): Promise<[number, number] | null> 
   try {
     const resp = await fetch(
       `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(city)}&limit=1&countrycodes=us`,
-      { headers: { "User-Agent": "MotiventSEOAudit/1.0" } }
+      { headers: { "User-Agent": "BBMSEOAudit/1.0" } }
     );
     const results = await resp.json();
     if (results.length > 0) {
@@ -200,7 +200,7 @@ function MapClickHandler({ onAddCity, onError }: { onAddCity: (cityLabel: string
         const { lat, lng } = e.latlng;
         const res = await fetch(
           `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10&addressdetails=1`,
-          { headers: { "Accept-Language": "en", "User-Agent": "MotivientSEOAuditTool/1.0" } }
+          { headers: { "Accept-Language": "en", "User-Agent": "BBMSEOAuditTool/1.0" } }
         );
         if (!res.ok) {
           onError?.("Could not look up that location. Please try again.");

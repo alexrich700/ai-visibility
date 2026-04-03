@@ -6,7 +6,7 @@
 ## Brand Identity
 
 ### Logo & Branding
-- **Company Name**: Motivent Marketing
+- **Company Name**: Building Brands Marketing
 - **Logo**: Orange/yellow abstract geometric design (8x8 rounded square)
 - **Typography**: Montserrat font family, bold weight
 

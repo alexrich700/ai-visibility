@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import type { AuditRequest, AuditResults } from "@shared/schema";
 import { LEAD_GEN_TOTAL_PROMPTS } from "@shared/audit-constants";
-import logoIcon from "@assets/Motivent_Logo_-_Tertiary_1774297439930.png";
+import logoIcon from "@assets/BBM-Primary-Logo-300x69_1775234014796.png";
 
 type Step = "input" | "scanning";
 
@@ -264,7 +264,7 @@ export default function Home() {
 
   const Branding = () => (
     <div className="flex items-center">
-      <img src={logoIcon} alt="Motivent Marketing" className="h-12 object-contain" />
+      <img src={logoIcon} alt="Building Brands Marketing" className="h-12 object-contain" />
     </div>
   );
 
@@ -394,7 +394,7 @@ export default function Home() {
                           </div>
                           <input
                             type="text"
-                            placeholder="Website (e.g. motiventmarketing.com)"
+                            placeholder="Website (e.g. buildingbrandsmarketing.com)"
                             className="w-full pl-11 pr-4 py-3.5 bg-muted border border-gray-200 focus:border-[#ff5800] focus:ring-1 focus:ring-[#ff5800] outline-none transition-all font-medium rounded-lg text-sm"
                             value={url}
                             onChange={(e) => setUrl(e.target.value)}
@@ -569,7 +569,7 @@ export default function Home() {
           <footer className="bg-background border-t border-gray-100 py-8 px-4">
             <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
               <Branding />
-              <p className="text-xs text-gray-400">Developed by Motivent Marketing's growth team.</p>
+              <p className="text-xs text-gray-400">Developed by Building Brands Marketing's growth team.</p>
             </div>
           </footer>
         </main>

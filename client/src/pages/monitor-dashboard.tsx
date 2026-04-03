@@ -42,7 +42,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
-import logoIcon from "@assets/Motivent_Logo_-_Tertiary_1774297439930.png";
+import logoIcon from "@assets/BBM-Primary-Logo-300x69_1775234014796.png";
 import type { MonitoringClient, MonitoringGroup, CheckSession, CheckResult } from "@shared/schema";
 import { ExecutiveReportOverlay } from "@/features/monitor-dashboard/executive-report/executive-report-overlay";
 import { PresentationModeDialog } from "@/features/monitor-dashboard/executive-report/components/presentation-mode-dialog";

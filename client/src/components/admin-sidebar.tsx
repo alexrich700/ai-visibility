@@ -21,7 +21,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { FileText, Monitor, Users, User, LogOut, ChevronUp, ExternalLink, Search } from "lucide-react";
-import logoIcon from "@assets/Motivent_Logo_-_Tertiary_1774297439930.png";
+import logoIcon from "@assets/BBM-Primary-Logo-300x69_1775234014796.png";
 
 const mainNav = [
   { title: "Audit Submissions", url: "/admin", icon: FileText },
@@ -52,7 +52,7 @@ export function AdminSidebar() {
     <Sidebar>
       <SidebarHeader>
         <div className="flex items-center gap-3 px-2 py-2">
-          <img src={logoIcon} alt="Motivent Marketing" className="h-6 object-contain" />
+          <img src={logoIcon} alt="Building Brands Marketing" className="h-6 object-contain" />
           <div className="flex flex-col">
             <span className="text-sm font-bold tracking-tight">Admin Portal</span>
             <span className="text-xs text-muted-foreground">Internal Dashboard</span>

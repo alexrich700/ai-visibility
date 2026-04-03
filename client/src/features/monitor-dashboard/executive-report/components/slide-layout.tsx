@@ -1,4 +1,4 @@
-import logoIcon from "@assets/Motivent_Logo_-_Tertiary_1774297439930.png";
+import logoIcon from "@assets/BBM-Primary-Logo-300x69_1775234014796.png";
 
 interface SlideLayoutProps {
   title?: string;
@@ -15,7 +15,7 @@ export function SlideLayout({ title, subtitle, slideNumber, totalSlides, childre
       <div className="flex-1 min-h-0 mx-28 mt-6 mb-16 bg-white rounded-2xl shadow-sm border border-gray-200 overflow-y-auto flex flex-col">
         {/* Top bar: logo left, slide counter right */}
         <div className="flex-shrink-0 flex items-center justify-between px-8 pt-5 pb-0">
-          <img src={logoIcon} alt="Motivent Marketing" className="h-5 object-contain opacity-60" />
+          <img src={logoIcon} alt="Building Brands Marketing" className="h-5 object-contain opacity-60" />
           <span className="text-xs text-gray-400 font-medium">
             {slideNumber} / {totalSlides}
           </span>
