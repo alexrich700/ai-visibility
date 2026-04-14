@@ -458,7 +458,7 @@ export default function AuditView(props: AuditViewProps = {}) {
           td p { white-space: normal !important; }
           #full-report, #full-report * { overflow: visible !important; overflow-x: visible !important; overflow-y: visible !important; height: auto !important; max-height: none !important; min-height: 0 !important; }
           #full-report { display: block !important; }
-          #full-report section { break-inside: avoid; page-break-inside: avoid; }
+          #full-report .break-inside-avoid { break-inside: avoid; page-break-inside: avoid; }
         }
       `}</style>
 
