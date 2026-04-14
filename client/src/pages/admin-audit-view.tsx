@@ -218,9 +218,9 @@ export default function AdminAuditView() {
     printOnlyEls.forEach(el => (el as HTMLElement).style.display = 'block');
 
     try {
-      const filename = `AI-Visibility-Audit-${auditResults.businessName.replace(/[^a-zA-Z0-9]/g, '-')}.pdf`;
+      const filename = `AI-Visibility-Audit-${auditResults?.businessName?.replace(/[^a-zA-Z0-9]/g, '-') || 'Report'}.pdf`;
 
-      await html2pdf().set({
+      await (html2pdf() as any).set({
         margin: [10, 10, 10, 10],
         filename,
         image: { type: 'jpeg', quality: 0.98 },
