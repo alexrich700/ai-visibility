@@ -456,6 +456,7 @@ export default function AuditView(props: AuditViewProps = {}) {
           .no-print { display: none !important; }
           .print-break { page-break-before: always; }
           td p { white-space: normal !important; }
+          #full-report, #full-report > div { overflow: visible !important; height: auto !important; min-height: 0 !important; }
         }
       `}</style>
 
@@ -601,7 +602,7 @@ export default function AuditView(props: AuditViewProps = {}) {
       </div>
 
       {/* Main Report Container */}
-      <div className="max-w-5xl mx-auto bg-white shadow-xl min-h-[1200px] overflow-hidden print:shadow-none">
+      <div className="max-w-5xl mx-auto bg-white shadow-xl min-h-[1200px] overflow-hidden print:shadow-none print:overflow-visible">
         
         {/* 1. Header / Cover */}
         <header className="bg-[#010400] text-white p-12 relative overflow-hidden">
