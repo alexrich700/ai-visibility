@@ -174,11 +174,28 @@ export default function AdminAuditView() {
     return cleaned.length > 150 ? cleaned.substring(0, 150) + "..." : cleaned;
   };
 
+  useEffect(() => {
+    const handleBeforePrint = () => {
+      setIsPrinting(true);
+    };
+    
+    const handleAfterPrint = () => {
+      setIsPrinting(false);
+    };
+
+    window.addEventListener('beforeprint', handleBeforePrint);
+    window.addEventListener('afterprint', handleAfterPrint);
+
+    return () => {
+      window.removeEventListener('beforeprint', handleBeforePrint);
+      window.removeEventListener('afterprint', handleAfterPrint);
+    };
+  }, []);
+
   const handlePrintReport = () => {
     setIsPrinting(true);
     setTimeout(() => {
       window.print();
-      setIsPrinting(false);
     }, 100);
   };
 
@@ -417,8 +434,8 @@ export default function AdminAuditView() {
           </div>
         </section>
 
-        {/* 3. Simulated Prompt Log with Tabs */}
-        <section className="p-12 border-b border-gray-200 bg-gray-50">
+        {/* 3. Simulated Prompt Log - Web View with Tabs (hidden when printing) */}
+        <section className="p-12 border-b border-gray-200 bg-gray-50 no-print">
           <SectionHeader title="Simulated Prompt Log" icon={Cpu} />
           <p className="mb-4 text-gray-600">We simulated the following user queries to test brand presence across AI platforms.</p>
           <div className="bg-orange-50 border border-orange-100 rounded-lg p-4 mb-6">
@@ -514,6 +531,75 @@ export default function AdminAuditView() {
             <div className="p-4 bg-gray-50 text-center border-t border-gray-200 text-sm text-gray-500 font-medium">
               {auditResults.promptResults?.length || 20} prompts analyzed across ChatGPT and Google AI
             </div>
+          </div>
+        </section>
+
+        {/* 3. Simulated Prompt Log - Print View (shows BOTH platforms with full responses) */}
+        <section className="print-only p-8 border-b border-gray-200 bg-gray-50">
+          <SectionHeader title="Simulated Prompt Log" icon={Cpu} />
+          <p className="mb-4 text-gray-600 text-sm">We simulated the following user queries to test brand presence across AI platforms.</p>
+          <div className="bg-orange-50 border border-orange-100 rounded-lg p-3 mb-6">
+            <p className="text-xs text-gray-700">
+              <span className="font-bold text-[#ff5800]">How to read this:</span> These are generic questions users might ask AI—your brand name is not included in the prompt. 
+              If AI doesn't recommend you here, it means you're invisible to organic AI-assisted discovery.
+            </p>
+          </div>
+
+          <div className="space-y-6">
+            {auditResults.promptResults?.map((result, idx) => (
+              <div key={idx} className="bg-white rounded-lg border border-gray-200 overflow-hidden break-inside-avoid">
+                <div className="bg-gray-50 p-4 border-b border-gray-200">
+                  <p className="font-bold text-[#010400] text-sm">Prompt {idx + 1}:</p>
+                  <p className="text-gray-700 text-sm mt-1">"{result.prompt}"</p>
+                </div>
+                
+                <div className="p-4 border-b border-gray-100">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Cpu size={14} className="text-[#ff5800]" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-gray-500">ChatGPT Response</span>
+                    <span className="ml-auto">
+                      {result.chatgpt.found ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium">
+                          <CheckCircle size={12} /> Found
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs text-destructive font-medium">
+                          <X size={12} /> Not Found
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="text-sm text-gray-700 pl-5">
+                    {result.chatgpt.response ? renderMarkdown(result.chatgpt.response) : <span className="text-gray-400 italic">No response captured.</span>}
+                  </div>
+                </div>
+                
+                <div className="p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Globe size={14} className="text-[#ffb41c]" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Google AI Response</span>
+                    <span className="ml-auto">
+                      {result.googleAI.found ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium">
+                          <CheckCircle size={12} /> Found
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs text-destructive font-medium">
+                          <X size={12} /> Not Found
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="text-sm text-gray-700 pl-5">
+                    {result.googleAI.response ? renderMarkdown(result.googleAI.response) : <span className="text-gray-400 italic">No response captured.</span>}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          <div className="mt-6 text-center text-sm text-gray-500 font-medium">
+            {auditResults.promptResults?.length || 20} prompts analyzed across ChatGPT and Google AI
           </div>
         </section>
 
