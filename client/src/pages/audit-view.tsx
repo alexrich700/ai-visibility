@@ -361,12 +361,48 @@ export default function AuditView(props: AuditViewProps = {}) {
     return cleaned.length > 150 ? cleaned.substring(0, 150) + "..." : cleaned;
   };
 
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+
   const handlePrintReport = () => {
+    window.print();
+  };
+
+  const handleDownloadPDF = async () => {
+    setIsGeneratingPDF(true);
     setIsPrinting(true);
-    setTimeout(() => {
-      window.print();
+
+    await new Promise(resolve => setTimeout(resolve, 300));
+
+    const element = document.getElementById('full-report');
+    if (!element) { setIsPrinting(false); setIsGeneratingPDF(false); return; }
+
+    const noPrintEls = element.querySelectorAll('.no-print');
+    const printOnlyEls = element.querySelectorAll('.print-only');
+    const savedNoPrint = Array.from(noPrintEls).map(el => (el as HTMLElement).style.display);
+    const savedPrintOnly = Array.from(printOnlyEls).map(el => (el as HTMLElement).style.display);
+    noPrintEls.forEach(el => (el as HTMLElement).style.display = 'none');
+    printOnlyEls.forEach(el => (el as HTMLElement).style.display = 'block');
+
+    try {
+      const html2pdf = (await import('html2pdf.js')).default;
+      const filename = `AI-Visibility-Audit-${auditResults?.businessName?.replace(/[^a-zA-Z0-9]/g, '-') || 'Report'}.pdf`;
+
+      await html2pdf().set({
+        margin: [10, 10, 10, 10],
+        filename,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, logging: false, scrollY: 0, windowWidth: 1024 },
+        jsPDF: { unit: 'mm', format: 'letter', orientation: 'portrait' },
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+      }).from(element).save();
+    } catch (err) {
+      console.error('PDF generation failed:', err);
+    } finally {
+      noPrintEls.forEach((el, i) => (el as HTMLElement).style.display = savedNoPrint[i]);
+      printOnlyEls.forEach((el, i) => (el as HTMLElement).style.display = savedPrintOnly[i]);
       setIsPrinting(false);
-    }, 100);
+      setIsGeneratingPDF(false);
+    }
   };
 
   const getScoreColorFull = (score: number) => {
@@ -570,11 +606,16 @@ export default function AuditView(props: AuditViewProps = {}) {
               </button>
               <div className="w-px h-4 bg-gray-700"></div>
               <button 
-                onClick={handlePrintReport}
-                className="flex items-center gap-2 hover:text-[#ff5800] transition-colors text-sm font-bold"
+                onClick={handleDownloadPDF}
+                disabled={isGeneratingPDF}
+                className="flex items-center gap-2 hover:text-[#ff5800] transition-colors text-sm font-bold disabled:opacity-50"
                 data-testid="button-download-pdf"
               >
-                <Download size={16} /> Download PDF
+                {isGeneratingPDF ? (
+                  <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Generating...</>
+                ) : (
+                  <><Download size={16} /> Download PDF</>
+                )}
               </button>
               <div className="w-px h-4 bg-gray-700"></div>
               <button 
