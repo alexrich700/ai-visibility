@@ -387,7 +387,7 @@ export default function AuditView(props: AuditViewProps = {}) {
     try {
       const filename = `AI-Visibility-Audit-${auditResults?.businessName?.replace(/[^a-zA-Z0-9]/g, '-') || 'Report'}.pdf`;
 
-      await (html2pdf() as any).set({
+      await html2pdf().set({
         margin: [10, 10, 10, 10],
         filename,
         image: { type: 'jpeg', quality: 0.98 },
