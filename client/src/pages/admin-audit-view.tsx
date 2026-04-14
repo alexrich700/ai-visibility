@@ -28,6 +28,8 @@ import {
 import { format } from "date-fns";
 import type { AuditResults, PromptResult } from "@shared/schema";
 
+import html2pdf from "html2pdf.js";
+import { useToast } from "@/hooks/use-toast";
 import logoIcon from "@assets/BBM-Primary-Logo-300x69_1775234014796.png";
 
 interface AuditWithLead {
@@ -54,6 +56,7 @@ interface AuditWithLead {
 export default function AdminAuditView() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
   const [isPrinting, setIsPrinting] = useState(false);
   const [promptLogTab, setPromptLogTab] = useState<"chatgpt" | "google">("chatgpt");
@@ -215,7 +218,6 @@ export default function AdminAuditView() {
     printOnlyEls.forEach(el => (el as HTMLElement).style.display = 'block');
 
     try {
-      const html2pdf = (await import('html2pdf.js')).default;
       const filename = `AI-Visibility-Audit-${auditResults.businessName.replace(/[^a-zA-Z0-9]/g, '-')}.pdf`;
 
       await html2pdf().set({
@@ -228,6 +230,7 @@ export default function AdminAuditView() {
       }).from(element).save();
     } catch (err) {
       console.error('PDF generation failed:', err);
+      toast({ title: "PDF generation failed", description: "Please try again or use the Print button instead.", variant: "destructive" });
     } finally {
       noPrintEls.forEach((el, i) => (el as HTMLElement).style.display = savedNoPrint[i]);
       printOnlyEls.forEach((el, i) => (el as HTMLElement).style.display = savedPrintOnly[i]);

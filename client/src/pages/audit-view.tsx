@@ -35,6 +35,7 @@ import {
 import { format } from "date-fns";
 import type { AuditResults, SentimentResult } from "@shared/schema";
 
+import html2pdf from "html2pdf.js";
 import logoIcon from "@assets/BBM-Primary-Logo-300x69_1775234014796.png";
 
 interface NegativeSignal {
@@ -384,7 +385,6 @@ export default function AuditView(props: AuditViewProps = {}) {
     printOnlyEls.forEach(el => (el as HTMLElement).style.display = 'block');
 
     try {
-      const html2pdf = (await import('html2pdf.js')).default;
       const filename = `AI-Visibility-Audit-${auditResults?.businessName?.replace(/[^a-zA-Z0-9]/g, '-') || 'Report'}.pdf`;
 
       await html2pdf().set({
@@ -397,6 +397,7 @@ export default function AuditView(props: AuditViewProps = {}) {
       }).from(element).save();
     } catch (err) {
       console.error('PDF generation failed:', err);
+      toast({ title: "PDF generation failed", description: "Please try again or use the Print button instead.", variant: "destructive" });
     } finally {
       noPrintEls.forEach((el, i) => (el as HTMLElement).style.display = savedNoPrint[i]);
       printOnlyEls.forEach((el, i) => (el as HTMLElement).style.display = savedPrintOnly[i]);
