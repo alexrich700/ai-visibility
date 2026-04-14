@@ -193,10 +193,7 @@ export default function AdminAuditView() {
   }, []);
 
   const handlePrintReport = () => {
-    setIsPrinting(true);
-    setTimeout(() => {
-      window.print();
-    }, 100);
+    window.print();
   };
 
   const getScoreColorFull = (score: number) => {
