@@ -220,13 +220,13 @@ export default function AdminAuditView() {
     try {
       const filename = `AI-Visibility-Audit-${auditResults?.businessName?.replace(/[^a-zA-Z0-9]/g, '-') || 'Report'}.pdf`;
 
-      await html2pdf().set({
+      const worker = new html2pdf.Worker();
+      await worker.set({
         margin: [10, 10, 10, 10],
         filename,
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: { scale: 2, useCORS: true, logging: false, scrollY: 0, windowWidth: 1024 },
         jsPDF: { unit: 'mm', format: 'letter', orientation: 'portrait' },
-        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
       }).from(element).save();
     } catch (err) {
       console.error('PDF generation failed:', err);
