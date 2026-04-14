@@ -320,4 +320,18 @@
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
+
+  /* Force all report containers to allow content to flow across pages */
+  #full-report,
+  #full-report * {
+    overflow: visible !important;
+    overflow-x: visible !important;
+    overflow-y: visible !important;
+  }
+
+  #full-report > div {
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+  }
 }

@@ -284,7 +284,9 @@ export default function AdminAuditView() {
           .no-print { display: none !important; }
           .print-break { page-break-before: always; }
           td p { white-space: normal !important; }
-          #full-report, #full-report > div { overflow: visible !important; height: auto !important; min-height: 0 !important; }
+          #full-report, #full-report * { overflow: visible !important; overflow-x: visible !important; overflow-y: visible !important; height: auto !important; max-height: none !important; min-height: 0 !important; }
+          #full-report { display: block !important; }
+          #full-report section { break-inside: avoid; page-break-inside: avoid; }
         }
       `}</style>
 
@@ -317,7 +319,7 @@ export default function AdminAuditView() {
       </div>
 
       {/* Main Report Container */}
-      <div className="max-w-5xl mx-auto bg-white shadow-xl min-h-[1200px] overflow-hidden print:shadow-none print:overflow-visible">
+      <div className="max-w-5xl mx-auto bg-white shadow-xl min-h-[1200px] overflow-x-hidden print:shadow-none">
         
         {/* 1. Header / Cover */}
         <header className="bg-[#010400] text-white p-12 relative overflow-hidden">
