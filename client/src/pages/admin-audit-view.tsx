@@ -212,10 +212,13 @@ export default function AdminAuditView() {
 
     const noPrintEls = element.querySelectorAll('.no-print');
     const printOnlyEls = element.querySelectorAll('.print-only');
-    const savedNoPrint = Array.from(noPrintEls).map(el => (el as HTMLElement).style.display);
-    const savedPrintOnly = Array.from(printOnlyEls).map(el => (el as HTMLElement).style.display);
-    noPrintEls.forEach(el => (el as HTMLElement).style.display = 'none');
-    printOnlyEls.forEach(el => (el as HTMLElement).style.display = 'block');
+    const allEls = [...Array.from(noPrintEls), ...Array.from(printOnlyEls)];
+    const savedStyles = allEls.map(el => ({
+      value: (el as HTMLElement).style.getPropertyValue('display'),
+      priority: (el as HTMLElement).style.getPropertyPriority('display'),
+    }));
+    noPrintEls.forEach(el => (el as HTMLElement).style.setProperty('display', 'none', 'important'));
+    printOnlyEls.forEach(el => (el as HTMLElement).style.setProperty('display', 'block', 'important'));
 
     try {
       const filename = `AI-Visibility-Audit-${auditResults?.businessName?.replace(/[^a-zA-Z0-9]/g, '-') || 'Report'}.pdf`;
@@ -232,8 +235,13 @@ export default function AdminAuditView() {
       console.error('PDF generation failed:', err);
       toast({ title: "PDF generation failed", description: "Please try again or use the Print button instead.", variant: "destructive" });
     } finally {
-      noPrintEls.forEach((el, i) => (el as HTMLElement).style.display = savedNoPrint[i]);
-      printOnlyEls.forEach((el, i) => (el as HTMLElement).style.display = savedPrintOnly[i]);
+      allEls.forEach((el, i) => {
+        if (savedStyles[i].value) {
+          (el as HTMLElement).style.setProperty('display', savedStyles[i].value, savedStyles[i].priority);
+        } else {
+          (el as HTMLElement).style.removeProperty('display');
+        }
+      });
       setIsPrinting(false);
       setIsGeneratingPDF(false);
     }
