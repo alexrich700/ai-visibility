@@ -1,4 +1,4 @@
-import logoFull from "@assets/BBM-Primary-Logo-300x69_1775234014796.png";
+import logoFull from "@assets/Motivent_Logo_-_Tertiary_1781054476626.png";
 import type { PresentationMode } from "../types";
 
 interface TitleSlideProps {
@@ -18,7 +18,7 @@ export function TitleSlide({ businessName, scanDate, city, mode }: TitleSlidePro
 
   return (
     <div className="h-full flex flex-col items-center justify-center text-center pt-1.5">
-      <img src={logoFull} alt="Logo" className="h-12 mb-12 object-contain" />
+      <img src={logoFull} alt="Motivent Marketing Inc" className="h-12 mb-12 object-contain" />
 
       <div className="h-1 w-40 bg-gradient-to-r from-[#ff5800] to-[#ffb41c] rounded-full mb-12" />
 

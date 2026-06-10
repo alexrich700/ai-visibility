@@ -36,7 +36,7 @@ import { format } from "date-fns";
 import type { AuditResults, SentimentResult } from "@shared/schema";
 
 import html2pdf from "html2pdf.js";
-import logoIcon from "@assets/BBM-Primary-Logo-300x69_1775234014796.png";
+import logoIcon from "@assets/Motivent_Logo_-_Tertiary_1781054476626.png";
 
 interface NegativeSignal {
   platform: "ChatGPT" | "Google AI";
@@ -664,7 +664,7 @@ export default function AuditView(props: AuditViewProps = {}) {
           <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-8">
             <div className="space-y-6">
               <div className="flex items-center gap-3">
-                <img src={logoIcon} alt="Building Brands Marketing" className="h-10 object-contain invert" />
+                <img src={logoIcon} alt="Motivent Marketing Inc" className="h-10 object-contain brightness-0 invert" />
               </div>
               <div>
                 <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-2" data-testid="full-report-title">AI Visibility Audit</h1>
@@ -1065,10 +1065,10 @@ export default function AuditView(props: AuditViewProps = {}) {
         {/* 5. Footer */}
         <footer className="p-12 bg-gray-50 border-t border-gray-200 text-center">
           <div className="flex items-center justify-center gap-3 mb-4">
-            <img src={logoIcon} alt="Building Brands Marketing" className="h-8 object-contain" />
+            <img src={logoIcon} alt="Motivent Marketing Inc" className="h-8 object-contain" />
           </div>
           <p className="text-gray-500 text-sm">
-            Prepared by Building Brands Marketing | AI Visibility Audit Report
+            Prepared by Motivent Marketing Inc | AI Visibility Audit Report
           </p>
           <p className="text-gray-400 text-xs mt-2">
             Audit ID: {audit.id} | Generated: {currentDate}

@@ -24,7 +24,7 @@ import {
   Cpu, Clock, Globe, Users,
 } from "lucide-react";
 import { format } from "date-fns";
-import logoIcon from "@assets/BBM-Primary-Logo-300x69_1775234014796.png";
+import logoIcon from "@assets/Motivent_Logo_-_Tertiary_1781054476626.png";
 
 interface AuditRecord {
   id: number;
@@ -411,7 +411,7 @@ export default function SeoAuditDashboard({ isClientView = false, magicToken }: 
         <main className="flex-1 overflow-y-auto bg-muted" data-testid="dashboard-main">
           <header className="sticky top-0 z-10 bg-background border-b px-6 py-3 flex items-center justify-between" data-testid="dashboard-header">
             <div className="flex items-center gap-4">
-              {isClientView && <img src={logoIcon} alt="Building Brands Marketing" className="h-6" data-testid="client-logo" />}
+              {isClientView && <img src={logoIcon} alt="Motivent Marketing Inc" className="h-6" data-testid="client-logo" />}
               <div>
                 <h1 className="text-lg font-bold" data-testid="header-business-name">{audit.businessName}</h1>
                 <p className="text-xs text-gray-500">SEO Audit &middot; {format(new Date(audit.createdAt), "MMMM d, yyyy")}</p>
@@ -1436,7 +1436,7 @@ function PresentModeOverlay({ audit, sectionDataMap, currentSlide, setCurrentSli
       <div className="h-full flex flex-col pt-2">
         <div className="flex-1 min-h-0 mx-16 mt-4 mb-14 bg-background rounded-2xl shadow-sm border border-gray-200 overflow-y-auto flex flex-col">
           <div className="flex items-center justify-between px-8 pt-4 pb-0">
-            <img src={logoIcon} alt="Building Brands Marketing" className="h-5 opacity-60" />
+            <img src={logoIcon} alt="Motivent Marketing Inc" className="h-5 opacity-60" />
             <span className="text-xs text-gray-400" data-testid="slide-counter">{currentSlide + 1} / {SECTIONS.length}</span>
           </div>
           <div className="text-center px-12 pt-3 pb-4">

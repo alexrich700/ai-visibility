@@ -209,7 +209,7 @@ FILE FORMATS
 - JSON files are formatted for readability
 - All timestamps are in ISO 8601 format
 
-For support, contact Building Brands Marketing.
+For support, contact Motivent Marketing Inc.
 `;
 }
 
@@ -386,7 +386,7 @@ function generateGoogleAICSV(data: ExportData): string {
 function generateMetadata(): object {
   return {
     version: "2.0",
-    generatedBy: "Building Brands Marketing AI Visibility Audit Tool",
+    generatedBy: "Motivent Marketing Inc AI Visibility Audit Tool",
     fields: {
       summary: {
         clientName: "The business name being monitored",
@@ -733,7 +733,7 @@ HOW TO USE
 3. Filter by "Found = No" to identify visibility gaps
 4. Compare ChatGPT vs Google AI results for each prompt
 
-For support, contact Building Brands Marketing.
+For support, contact Motivent Marketing Inc.
 `;
 
   archive.append(readmeContent, { name: "README.txt" });

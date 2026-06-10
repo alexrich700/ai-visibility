@@ -1,6 +1,6 @@
 import { Search, FileText, Globe } from "lucide-react";
 import { SlideLayout } from "../components/slide-layout";
-import logoFull from "@assets/BBM-Primary-Logo-300x69_1775234014796.png";
+import logoFull from "@assets/Motivent_Logo_-_Tertiary_1781054476626.png";
 
 interface CtaSlideProps {
   businessName: string;
@@ -91,7 +91,7 @@ export function CtaSlide({ businessName, slideNumber, totalSlides }: CtaSlidePro
       <div className="mt-6">
         <div className="bg-gradient-to-r from-[#ff5800] to-[#ffb41c] rounded-2xl p-6">
           <div className="flex items-center justify-center gap-4">
-            <img src={logoFull} alt="Logo" className="h-7 object-contain brightness-0 invert" />
+            <img src={logoFull} alt="Motivent Marketing Inc" className="h-7 object-contain brightness-0 invert" />
             <div className="w-px h-7 bg-white/30" />
             <p className="text-white text-base font-medium">
               This is the playbook. Let's talk about making it happen.
