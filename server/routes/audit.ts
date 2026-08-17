@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { storage } from "../storage";
 import { runAudit, ProgressCallback, WarningCallback } from "../ai-services";
 import { auditRequestSchema } from "@shared/schema";
+import { sendSoftLeadNotification } from "../email";
 import crypto from "crypto";
 import { withDatabaseRetry } from "../db-utils";
 import { logError, getSafeErrorResponse } from "../utils/error-sanitizer";
@@ -126,6 +127,16 @@ export async function handleAuditStream(
       })
     );
 
+    // Fire-and-forget soft lead notification (never blocks the visitor flow)
+    sendSoftLeadNotification({
+      businessName,
+      url: url || null,
+      keyword,
+      scope,
+      city: city || null,
+      auditId: audit.id,
+    }).catch(err => console.error('[EMAIL] Soft lead notification error (stream):', err));
+
     // Send final result
     sendEvent("complete", {
       auditId: audit.id,
@@ -194,6 +205,16 @@ router.post("/", async (req, res) => {
         fullResults: JSON.stringify(results),
       })
     );
+
+    // Fire-and-forget soft lead notification (never blocks the visitor flow)
+    sendSoftLeadNotification({
+      businessName,
+      url: url || null,
+      keyword,
+      scope,
+      city: city || null,
+      auditId: audit.id,
+    }).catch(err => console.error('[EMAIL] Soft lead notification error:', err));
 
     res.json({
       auditId: audit.id,

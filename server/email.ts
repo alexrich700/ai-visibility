@@ -42,8 +42,82 @@ async function getSendGridClient() {
 
 // Notification recipients
 const NOTIFICATION_RECIPIENTS = [
-  'sales@motiventmarketing.com'
+  'sales@motiventmarketing.com',
+  'robert@motiventmarketing.com'
 ];
+
+function getAdminBaseUrl(): string {
+  const replitDomains = process.env.REPLIT_DOMAINS || process.env.REPLIT_DEV_DOMAIN || 'localhost:5000';
+  const primaryDomain = replitDomains.split(',')[0].trim();
+  return `https://${primaryDomain}`;
+}
+
+function logSendGridError(context: string, error: any) {
+  const details = error?.response?.body ? JSON.stringify(error.response.body) : '';
+  console.error(`[EMAIL] ${context} failed:`, error?.message || error, details);
+}
+
+interface SoftLeadNotificationData {
+  businessName: string;
+  url: string | null;
+  keyword: string;
+  scope: string;
+  city: string | null;
+  auditId: number;
+}
+
+export async function sendSoftLeadNotification(data: SoftLeadNotificationData): Promise<boolean> {
+  try {
+    const { client, fromEmail } = await getSendGridClient();
+
+    const auditUrl = `${getAdminBaseUrl()}/admin/audit/${data.auditId}`;
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #1f2937; border-bottom: 2px solid #f59e0b; padding-bottom: 10px;">
+          Initial Audit Request - Soft Lead
+        </h2>
+
+        <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+          <h3 style="margin-top: 0; color: #374151;">Business Details</h3>
+          <p><strong>Business:</strong> ${data.businessName}</p>
+          ${data.url ? `<p><strong>Website:</strong> <a href="${data.url.startsWith('http') ? data.url : 'https://' + data.url}">${data.url}</a></p>` : ''}
+          <p><strong>Service/Keyword:</strong> ${data.keyword}</p>
+          <p><strong>Scope:</strong> ${data.scope}</p>
+          ${data.city ? `<p><strong>City:</strong> ${data.city}</p>` : ''}
+        </div>
+
+        <p style="color: #6b7280; font-size: 14px;">
+          Someone just ran a free AI visibility report. No contact details yet — look up the business and reach out.
+        </p>
+
+        <div style="margin: 30px 0; text-align: center;">
+          <a href="${auditUrl}"
+             style="background: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
+            View Audit in Admin Portal
+          </a>
+        </div>
+
+        <p style="color: #9ca3af; font-size: 12px; margin-top: 30px;">
+          Or copy this link: <a href="${auditUrl}" style="color: #3b82f6;">${auditUrl}</a>
+        </p>
+      </div>
+    `;
+
+    const [response] = await client.send({
+      to: NOTIFICATION_RECIPIENTS,
+      from: fromEmail,
+      subject: `Initial Audit Request - Soft Lead: ${data.businessName}`,
+      html
+    });
+
+    console.log(`[EMAIL] Soft lead notification sent for audit ${data.auditId} (status ${response.statusCode}) to ${NOTIFICATION_RECIPIENTS.join(', ')}`);
+    return true;
+  } catch (error) {
+    logSendGridError('Soft lead notification', error);
+    return false;
+  }
+}
 
 interface AuditNotificationData {
   businessName: string;
@@ -68,17 +142,13 @@ export async function sendAuditNotification(data: AuditNotificationData): Promis
     }
     
     const scoreColor = data.overallScore >= 70 ? '#22c55e' : data.overallScore >= 40 ? '#eab308' : '#ef4444';
-    
-    const replitDomains = process.env.REPLIT_DOMAINS || process.env.REPLIT_DEV_DOMAIN || 'localhost:5000';
-    const primaryDomain = replitDomains.split(',')[0].trim();
-    const baseUrl = `https://${primaryDomain}`;
-    
-    const auditUrl = `${baseUrl}/admin/audit/${data.auditId}`;
+
+    const auditUrl = `${getAdminBaseUrl()}/admin/audit/${data.auditId}`;
     
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #1f2937; border-bottom: 2px solid #3b82f6; padding-bottom: 10px;">
-          New AI Visibility Audit Submitted
+          Full Audit Report Unlock Request - Hot Lead
         </h2>
         
         <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
@@ -119,17 +189,17 @@ export async function sendAuditNotification(data: AuditNotificationData): Promis
       </div>
     `;
 
-    await client.send({
+    const [response] = await client.send({
       to: NOTIFICATION_RECIPIENTS,
       from: fromEmail,
-      subject: `New Motivent AI Audit Lead: ${data.businessName} (${data.overallScore}% visibility)`,
+      subject: `Full Audit Report Unlock Request - Hot Lead: ${data.businessName} (${data.overallScore}% visibility)`,
       html
     });
 
-    console.log('Audit notification email sent via SendGrid');
+    console.log(`[EMAIL] Hot lead notification sent for audit ${data.auditId} (status ${response.statusCode}) to ${NOTIFICATION_RECIPIENTS.join(', ')}`);
     return true;
   } catch (error) {
-    console.error('Failed to send audit notification email:', error);
+    logSendGridError('Hot lead notification', error);
     return false;
   }
 }
