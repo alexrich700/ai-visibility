@@ -42,8 +42,7 @@ async function getSendGridClient() {
 
 // Notification recipients
 const NOTIFICATION_RECIPIENTS = [
-  'Robert@buildingbrandsmarketing.com',
-  'alex@buildingbrandsmarketing.com'
+  'sales@motiventmarketing.com'
 ];
 
 interface AuditNotificationData {
@@ -70,7 +69,9 @@ export async function sendAuditNotification(data: AuditNotificationData): Promis
     
     const scoreColor = data.overallScore >= 70 ? '#22c55e' : data.overallScore >= 40 ? '#eab308' : '#ef4444';
     
-    const baseUrl = 'https://ai.buildingbrandsmarketing.com';
+    const replitDomains = process.env.REPLIT_DOMAINS || process.env.REPLIT_DEV_DOMAIN || 'localhost:5000';
+    const primaryDomain = replitDomains.split(',')[0].trim();
+    const baseUrl = `https://${primaryDomain}`;
     
     const auditUrl = `${baseUrl}/admin/audit/${data.auditId}`;
     
@@ -121,7 +122,7 @@ export async function sendAuditNotification(data: AuditNotificationData): Promis
     await client.send({
       to: NOTIFICATION_RECIPIENTS,
       from: fromEmail,
-      subject: `New AI Audit: ${data.businessName} (${data.overallScore}% visibility)`,
+      subject: `New Motivent AI Audit Lead: ${data.businessName} (${data.overallScore}% visibility)`,
       html
     });
 
