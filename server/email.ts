@@ -1,46 +1,9 @@
-// Email service using SendGrid integration
-import sgMail from '@sendgrid/mail';
-
-let connectionSettings: any;
-const SENDGRID_REQUEST_TIMEOUT_MS = 30_000;
-
-async function getCredentials() {
-  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
-  const xReplitToken = process.env.REPL_IDENTITY 
-    ? 'repl ' + process.env.REPL_IDENTITY 
-    : process.env.WEB_REPL_RENEWAL 
-    ? 'depl ' + process.env.WEB_REPL_RENEWAL 
-    : null;
-
-  if (!xReplitToken) {
-    throw new Error('X_REPLIT_TOKEN not found for repl/depl');
-  }
-
-  connectionSettings = await fetch(
-    'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=sendgrid',
-    {
-      headers: {
-        'Accept': 'application/json',
-        'X_REPLIT_TOKEN': xReplitToken
-      }
-    }
-  ).then(res => res.json()).then(data => data.items?.[0]);
-
-  if (!connectionSettings || (!connectionSettings.settings.api_key || !connectionSettings.settings.from_email)) {
-    throw new Error('SendGrid not connected');
-  }
-  return { apiKey: connectionSettings.settings.api_key, fromEmail: connectionSettings.settings.from_email };
-}
-
-async function getSendGridClient() {
-  const { apiKey, fromEmail } = await getCredentials();
-  sgMail.setApiKey(apiKey);
-  sgMail.setTimeout(SENDGRID_REQUEST_TIMEOUT_MS);
-  return {
-    client: sgMail,
-    fromEmail
-  };
-}
+// Email templates and delivery through the verified Motivent Resend connection.
+import { createHash } from "node:crypto";
+import {
+  sendResendEmail,
+  type ResendEmailResult,
+} from "./services/resend-email-provider";
 
 // Notification recipients
 export const NOTIFICATION_RECIPIENTS = [
@@ -49,10 +12,7 @@ export const NOTIFICATION_RECIPIENTS = [
   'alex@motiventmarketing.com',
 ] as const;
 
-export interface EmailSendResult {
-  statusCode: number;
-  providerMessageId: string | null;
-}
+export type EmailSendResult = ResendEmailResult;
 
 function getAdminBaseUrl(): string {
   const configuredBaseUrl = process.env.APP_BASE_URL?.trim();
@@ -63,34 +23,6 @@ function getAdminBaseUrl(): string {
   const replitDomains = process.env.REPLIT_DOMAINS || process.env.REPLIT_DEV_DOMAIN || 'localhost:5000';
   const primaryDomain = replitDomains.split(',')[0].trim();
   return `https://${primaryDomain}`;
-}
-
-function normalizeSendGridError(error: any): Error {
-  const providerStatus = Number(
-    error?.code ?? error?.response?.statusCode ?? error?.response?.status,
-  );
-  const providerMessages = Array.isArray(error?.response?.body?.errors)
-    ? error.response.body.errors
-        .map((item: any) => String(item?.message || "").trim())
-        .filter(Boolean)
-        .join("; ")
-    : "";
-  const message = [error?.message || "SendGrid request failed", providerMessages]
-    .filter(Boolean)
-    .join(": ")
-    .replace(/\s+/g, " ")
-    .slice(0, 500);
-  const normalized = new Error(message);
-  if (Number.isFinite(providerStatus)) {
-    (normalized as any).code = providerStatus;
-  }
-  return normalized;
-}
-
-function logSendGridError(context: string, error: Error) {
-  console.error(`[EMAIL] ${context} failed: ${error.message}`, {
-    providerStatus: (error as any).code,
-  });
 }
 
 function escapeHtml(value: string): string {
@@ -112,11 +44,6 @@ function normalizeWebsiteUrl(value: string): string {
 
 function sanitizeSubjectText(value: string): string {
   return value.replace(/[\r\n]+/g, " ").trim();
-}
-
-function getProviderMessageId(response: any): string | null {
-  const value = response?.headers?.['x-message-id'];
-  return Array.isArray(value) ? value[0] ?? null : value ?? null;
 }
 
 export interface SoftLeadNotificationData {
@@ -179,26 +106,16 @@ export function buildSoftLeadEmail(data: SoftLeadNotificationData) {
 }
 
 export async function sendSoftLeadNotification(data: SoftLeadNotificationData): Promise<EmailSendResult> {
-  try {
-    const { client, fromEmail } = await getSendGridClient();
-    const message = buildSoftLeadEmail(data);
-    const [response] = await client.send({
-      to: [...NOTIFICATION_RECIPIENTS],
-      from: fromEmail,
-      customArgs: data.notificationKey
-        ? { notification_key: data.notificationKey.slice(0, 100) }
-        : undefined,
-      ...message,
-    });
-
-    const providerMessageId = getProviderMessageId(response);
-    console.log(`[EMAIL] Initial audit notification accepted (status ${response.statusCode}, message ${providerMessageId ?? 'unavailable'})`);
-    return { statusCode: response.statusCode, providerMessageId };
-  } catch (error) {
-    const normalizedError = normalizeSendGridError(error);
-    logSendGridError('Initial audit notification', normalizedError);
-    throw normalizedError;
-  }
+  const message = buildSoftLeadEmail(data);
+  const result = await sendResendEmail({
+    to: NOTIFICATION_RECIPIENTS,
+    idempotencyKey: data.notificationKey,
+    ...message,
+  });
+  console.log(
+    `[EMAIL] Initial audit notification accepted by Resend (status ${result.statusCode}, message ${result.providerMessageId})`,
+  );
+  return result;
 }
 
 export interface AuditNotificationData {
@@ -283,39 +200,21 @@ export function buildAuditNotificationEmail(data: AuditNotificationData) {
 }
 
 export async function sendAuditNotification(data: AuditNotificationData): Promise<EmailSendResult> {
-  try {
-    const { client, fromEmail } = await getSendGridClient();
-    const message = buildAuditNotificationEmail(data);
-    const [response] = await client.send({
-      to: [...NOTIFICATION_RECIPIENTS],
-      from: fromEmail,
-      customArgs: data.notificationKey
-        ? { notification_key: data.notificationKey.slice(0, 100) }
-        : undefined,
-      ...message,
-    });
-
-    const providerMessageId = getProviderMessageId(response);
-    console.log(`[EMAIL] Full-report unlock notification accepted (status ${response.statusCode}, message ${providerMessageId ?? 'unavailable'})`);
-    return { statusCode: response.statusCode, providerMessageId };
-  } catch (error) {
-    const normalizedError = normalizeSendGridError(error);
-    logSendGridError('Full-report unlock notification', normalizedError);
-    throw normalizedError;
-  }
+  const message = buildAuditNotificationEmail(data);
+  const result = await sendResendEmail({
+    to: NOTIFICATION_RECIPIENTS,
+    idempotencyKey: data.notificationKey,
+    ...message,
+  });
+  console.log(
+    `[EMAIL] Full-report unlock notification accepted by Resend (status ${result.statusCode}, message ${result.providerMessageId})`,
+  );
+  return result;
 }
 
 export async function sendPasswordResetEmail(email: string, name: string, resetToken: string): Promise<boolean> {
   try {
-    const { client, fromEmail } = await getSendGridClient();
-    
-    if (!fromEmail) {
-      console.error('SendGrid fromEmail not configured - cannot send reset email');
-      return false;
-    }
-    
     const baseUrl = getAdminBaseUrl();
-    
     const resetUrl = `${baseUrl}/admin/reset-password?token=${resetToken}`;
     
     const html = `
@@ -346,17 +245,20 @@ export async function sendPasswordResetEmail(email: string, name: string, resetT
       </div>
     `;
 
-    await client.send({
-      to: email,
-      from: fromEmail,
-      subject: 'Password Reset - AI Visibility Audit Portal',
-      html
+    await sendResendEmail({
+      to: [email],
+      subject: "Password Reset - AI Visibility Audit Portal",
+      html,
+      idempotencyKey: `password-reset:${createHash("sha256")
+        .update(resetToken)
+        .digest("hex")}`,
     });
 
-    console.log('Password reset email sent via SendGrid to', email);
+    console.log("Password reset email accepted by Resend");
     return true;
   } catch (error) {
-    console.error('Failed to send password reset email:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Failed to send password reset email:", message);
     return false;
   }
 }

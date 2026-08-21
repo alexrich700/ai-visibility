@@ -35,7 +35,7 @@ export async function handleCreateLead(
         throw new Error("Audit not found for lead notification");
       }
 
-      // Lead creation and its durable notification commit atomically. SendGrid
+      // Lead creation and its durable notification commit atomically. Provider
       // delivery remains asynchronous, so provider failures never block access.
       lead = await deps.createLeadWithNotificationFn({
         requestId,

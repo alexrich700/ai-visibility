@@ -438,20 +438,22 @@ export class EmailNotificationWorker {
       result,
     );
     if (updated) {
-      logger.info("Notification accepted by SendGrid", {
+      logger.info("Notification accepted by email provider", {
         notificationId: notification.id,
         type: notification.type,
         attempt: notification.attempts,
+        provider: result.provider,
         providerStatus: result.statusCode,
-        providerMessageId: result.providerMessageId ?? undefined,
+        providerMessageId: result.providerMessageId,
       });
     } else {
-      logger.warn("SendGrid accepted notification after lease ownership changed", {
+      logger.warn("Email provider accepted notification after lease ownership changed", {
         notificationId: notification.id,
         type: notification.type,
         attempt: notification.attempts,
+        provider: result.provider,
         providerStatus: result.statusCode,
-        providerMessageId: result.providerMessageId ?? undefined,
+        providerMessageId: result.providerMessageId,
       });
     }
 

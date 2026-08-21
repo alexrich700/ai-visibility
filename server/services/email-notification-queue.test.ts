@@ -115,7 +115,7 @@ test("processOne renews the lease with the claimed token before send (success pa
   let renewCallsAtSend = -1;
   const sender: EmailNotificationSender = async () => {
     renewCallsAtSend = fake.renewLeaseCalls.length;
-    return { statusCode: 202, providerMessageId: "msg-123" };
+    return { provider: "resend", statusCode: 200, providerMessageId: "msg-123" };
   };
 
   const worker = new EmailNotificationWorker(fake.repository, sender, () => FIXED_NOW);
@@ -130,7 +130,8 @@ test("processOne renews the lease with the claimed token before send (success pa
   assert.equal(fake.markSentCalls.length, 1);
   assert.equal(fake.markSentCalls[0].id, notification.id);
   assert.equal(fake.markSentCalls[0].leaseToken, LEASE_TOKEN);
-  assert.equal(fake.markSentCalls[0].result.statusCode, 202);
+  assert.equal(fake.markSentCalls[0].result.statusCode, 200);
+  assert.equal(fake.markSentCalls[0].result.provider, "resend");
   assert.equal(fake.markSentCalls[0].result.providerMessageId, "msg-123");
   assert.equal(fake.markFailedCalls.length, 0);
 });
@@ -210,7 +211,7 @@ test("processOne returns false and does nothing when there is no job", async () 
   let senderCalled = 0;
   const sender: EmailNotificationSender = async () => {
     senderCalled += 1;
-    return { statusCode: 202, providerMessageId: null };
+    return { provider: "resend", statusCode: 200, providerMessageId: "msg-unused" };
   };
 
   const worker = new EmailNotificationWorker(fake.repository, sender, () => FIXED_NOW);
@@ -228,7 +229,7 @@ test("processOne skips send and state writes when the pre-send lease renewal fai
   let senderCalled = 0;
   const sender: EmailNotificationSender = async () => {
     senderCalled += 1;
-    return { statusCode: 202, providerMessageId: "msg-should-not-send" };
+    return { provider: "resend", statusCode: 200, providerMessageId: "msg-should-not-send" };
   };
 
   const worker = new EmailNotificationWorker(fake.repository, sender, () => FIXED_NOW);
@@ -250,7 +251,8 @@ test("processOne tolerates a lost lease on success (false completion, no second 
   // markSent returns false -> the lease was lost (row taken over by another worker).
   const fake = makeFakeRepository([notification], { markSentResult: false });
   const sender: EmailNotificationSender = async () => ({
-    statusCode: 202,
+    provider: "resend",
+    statusCode: 200,
     providerMessageId: "msg-late",
   });
 
