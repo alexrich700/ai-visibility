@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
@@ -166,6 +166,7 @@ export default function AuditView(props: AuditViewProps = {}) {
   const [leadName, setLeadName] = useState("");
   const [leadEmail, setLeadEmail] = useState("");
   const [leadPhone, setLeadPhone] = useState("");
+  const leadSubmissionRef = useRef<{ fingerprint: string; requestId: string } | null>(null);
 
   const effectiveToken = shareToken || token;
   const isShared = isSharedView || !!effectiveToken;
@@ -181,7 +182,7 @@ export default function AuditView(props: AuditViewProps = {}) {
   });
 
   const leadMutation = useMutation({
-    mutationFn: async (data: { name: string; email: string; phone: string; businessName: string; auditScore: number; auditId?: number }) => {
+    mutationFn: async (data: { name: string; email: string; phone: string; businessName: string; auditScore: number; auditId?: number; requestId: string }) => {
       const response = await apiRequest("POST", "/api/leads", data);
       return await response.json();
     },
@@ -233,6 +234,19 @@ export default function AuditView(props: AuditViewProps = {}) {
     e.preventDefault();
     if (!leadName || !leadEmail || !leadPhone || !audit) return;
 
+    const fingerprint = JSON.stringify({
+      auditId: audit.id,
+      name: leadName,
+      email: leadEmail,
+      phone: leadPhone,
+    });
+    if (leadSubmissionRef.current?.fingerprint !== fingerprint) {
+      leadSubmissionRef.current = {
+        fingerprint,
+        requestId: window.crypto.randomUUID(),
+      };
+    }
+
     leadMutation.mutate({
       name: leadName,
       email: leadEmail,
@@ -240,6 +254,7 @@ export default function AuditView(props: AuditViewProps = {}) {
       businessName: audit.businessName,
       auditScore: audit.overallScore,
       auditId: audit.id,
+      requestId: leadSubmissionRef.current.requestId,
     });
   };
 

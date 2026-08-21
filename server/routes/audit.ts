@@ -2,10 +2,10 @@ import { Router, Request, Response } from "express";
 import { storage } from "../storage";
 import { runAudit, ProgressCallback, WarningCallback } from "../ai-services";
 import { auditRequestSchema } from "@shared/schema";
-import { sendSoftLeadNotification } from "../email";
 import crypto from "crypto";
 import { withDatabaseRetry } from "../db-utils";
 import { logError, getSafeErrorResponse } from "../utils/error-sanitizer";
+import { enqueueInitialAuditNotification } from "../services/email-notification-queue";
 
 const router = Router();
 
@@ -13,12 +13,14 @@ interface AuditStreamDeps {
   runAuditFn: typeof runAudit;
   createAuditFn: typeof storage.createAudit;
   withDatabaseRetryFn: typeof withDatabaseRetry;
+  enqueueInitialNotificationFn: typeof enqueueInitialAuditNotification;
 }
 
 const defaultAuditStreamDeps: AuditStreamDeps = {
   runAuditFn: runAudit,
   createAuditFn: storage.createAudit.bind(storage),
   withDatabaseRetryFn: withDatabaseRetry,
+  enqueueInitialNotificationFn: enqueueInitialAuditNotification,
 };
 
 function generateShareToken(): string {
@@ -36,9 +38,30 @@ export async function handleAuditStream(
 
   try {
     const validatedData = auditRequestSchema.parse(req.body);
-    const { businessName, url, keyword, scope, city } = validatedData;
+    const { businessName, url, keyword, scope } = validatedData;
+    const city = scope === "local" ? validatedData.city : undefined;
+    const requestId = validatedData.requestId ?? crypto.randomUUID();
 
-    // Set up SSE headers
+    // Persist the notification before the long-running AI audit begins.
+    // Provider delivery remains asynchronous, but this durable write is a
+    // prerequisite so an accepted request cannot silently lose its alert.
+    try {
+      await deps.enqueueInitialNotificationFn({
+        requestId,
+        businessName,
+        url: url || null,
+        keyword,
+        scope,
+        city: city || null,
+      });
+    } catch (error) {
+      logError("QUEUE INITIAL AUDIT NOTIFICATION ERROR", error);
+      return res.status(503).json(
+        getSafeErrorResponse("Unable to start the audit right now. Please try again."),
+      );
+    }
+
+    // Set up SSE headers only after the durable intake write succeeds.
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
@@ -127,16 +150,6 @@ export async function handleAuditStream(
       })
     );
 
-    // Fire-and-forget soft lead notification (never blocks the visitor flow)
-    sendSoftLeadNotification({
-      businessName,
-      url: url || null,
-      keyword,
-      scope,
-      city: city || null,
-      auditId: audit.id,
-    }).catch(err => console.error('[EMAIL] Soft lead notification error (stream):', err));
-
     // Send final result
     sendEvent("complete", {
       auditId: audit.id,
@@ -187,7 +200,25 @@ router.post("/", async (req, res) => {
   try {
     const validatedData = auditRequestSchema.parse(req.body);
     
-    const { businessName, url, keyword, scope, city } = validatedData;
+    const { businessName, url, keyword, scope } = validatedData;
+    const city = scope === "local" ? validatedData.city : undefined;
+    const requestId = validatedData.requestId ?? crypto.randomUUID();
+
+    try {
+      await enqueueInitialAuditNotification({
+        requestId,
+        businessName,
+        url: url || null,
+        keyword,
+        scope,
+        city: city || null,
+      });
+    } catch (error) {
+      logError("QUEUE INITIAL AUDIT NOTIFICATION ERROR", error);
+      return res.status(503).json(
+        getSafeErrorResponse("Unable to start the audit right now. Please try again."),
+      );
+    }
 
     const results = await runAudit(businessName, url, keyword, scope, city);
 
@@ -205,16 +236,6 @@ router.post("/", async (req, res) => {
         fullResults: JSON.stringify(results),
       })
     );
-
-    // Fire-and-forget soft lead notification (never blocks the visitor flow)
-    sendSoftLeadNotification({
-      businessName,
-      url: url || null,
-      keyword,
-      scope,
-      city: city || null,
-      auditId: audit.id,
-    }).catch(err => console.error('[EMAIL] Soft lead notification error:', err));
 
     res.json({
       auditId: audit.id,

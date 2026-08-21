@@ -5,6 +5,7 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import { startScheduler } from "./services/scheduler";
 import { startScanJobProcessor, registerShutdownHandlers } from "./services/scan-job-processor";
+import { startEmailNotificationWorker, stopEmailNotificationWorker } from "./services/email-notification-queue";
 import { validateOpenAIKey } from "./ai-services";
 import { createLogger } from "./utils/logger";
 
@@ -138,6 +139,11 @@ app.use((req, res, next) => {
       
       // Start the background scan job processor for async scan processing
       startScanJobProcessor();
+
+      // Start durable delivery for audit-funnel email notifications
+      startEmailNotificationWorker();
+      process.once("SIGTERM", stopEmailNotificationWorker);
+      process.once("SIGINT", stopEmailNotificationWorker);
       
       // Register graceful shutdown handlers to clean up running jobs before termination
       registerShutdownHandlers();

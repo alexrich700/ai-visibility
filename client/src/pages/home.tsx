@@ -112,6 +112,7 @@ export default function Home() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const auditSubmissionRef = useRef<{ fingerprint: string; requestId: string } | null>(null);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -140,12 +141,27 @@ export default function Home() {
     abortControllerRef.current = new AbortController();
 
     try {
+      const fingerprint = JSON.stringify({
+        businessName,
+        url,
+        keyword,
+        scope,
+        city: scope === "local" ? city : null,
+      });
+      if (auditSubmissionRef.current?.fingerprint !== fingerprint) {
+        auditSubmissionRef.current = {
+          fingerprint,
+          requestId: window.crypto.randomUUID(),
+        };
+      }
+
       const requestBody: AuditRequest = {
         businessName,
         url,
         keyword,
         scope,
         city: scope === "local" ? city : undefined,
+        requestId: auditSubmissionRef.current.requestId,
       };
 
       const response = await fetch("/api/audit/stream", {

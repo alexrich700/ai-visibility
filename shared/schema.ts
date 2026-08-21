@@ -1,4 +1,4 @@
-import { pgTable, text, varchar, integer, jsonb, timestamp, boolean, serial, real, index, decimal } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, jsonb, timestamp, boolean, serial, real, index, uniqueIndex, decimal } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -45,6 +45,7 @@ export type Audit = typeof audits.$inferSelect;
 export const leads = pgTable("leads", {
   id: serial("id").primaryKey(),
   auditId: integer("audit_id").references(() => audits.id),
+  submissionId: text("submission_id"),
   name: text("name").notNull(),
   email: text("email").notNull(),
   phone: text("phone").notNull(),
@@ -53,7 +54,9 @@ export const leads = pgTable("leads", {
   status: text("status").notNull().default("new"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  submissionIdIdx: uniqueIndex("leads_submission_id_idx").on(table.submissionId),
+}));
 
 export const insertLeadSchema = createInsertSchema(leads).omit({
   id: true,
@@ -63,6 +66,60 @@ export const insertLeadSchema = createInsertSchema(leads).omit({
 
 export type InsertLead = z.infer<typeof insertLeadSchema>;
 export type DbLead = typeof leads.$inferSelect;
+
+export const EMAIL_NOTIFICATION_TYPES = {
+  INITIAL_AUDIT_REQUEST: "initial_audit_request",
+  FULL_REPORT_UNLOCK: "full_report_unlock",
+} as const;
+export type EmailNotificationType = typeof EMAIL_NOTIFICATION_TYPES[keyof typeof EMAIL_NOTIFICATION_TYPES];
+
+export const EMAIL_NOTIFICATION_STATUS = {
+  PENDING: "pending",
+  SENDING: "sending",
+  SENT: "sent",
+  FAILED: "failed",
+} as const;
+export type EmailNotificationStatus = typeof EMAIL_NOTIFICATION_STATUS[keyof typeof EMAIL_NOTIFICATION_STATUS];
+
+// Durable outbox for audit-funnel email notifications.
+export const emailNotifications = pgTable("email_notifications", {
+  id: serial("id").primaryKey(),
+  type: text("type").notNull(),
+  dedupeKey: text("dedupe_key").notNull(),
+  payload: jsonb("payload").notNull(),
+  status: text("status").notNull().default(EMAIL_NOTIFICATION_STATUS.PENDING),
+  attempts: integer("attempts").notNull().default(0),
+  maxAttempts: integer("max_attempts").notNull().default(5),
+  nextAttemptAt: timestamp("next_attempt_at").defaultNow().notNull(),
+  lockedAt: timestamp("locked_at"),
+  leaseToken: text("lease_token"),
+  lastError: text("last_error"),
+  providerStatus: integer("provider_status"),
+  providerMessageId: text("provider_message_id"),
+  sentAt: timestamp("sent_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  dedupeKeyIdx: uniqueIndex("email_notifications_dedupe_key_idx").on(table.dedupeKey),
+  dueIdx: index("email_notifications_due_idx").on(table.status, table.nextAttemptAt),
+  lockedIdx: index("email_notifications_locked_idx").on(table.status, table.lockedAt),
+}));
+
+export const insertEmailNotificationSchema = createInsertSchema(emailNotifications).omit({
+  id: true,
+  attempts: true,
+  lockedAt: true,
+  leaseToken: true,
+  lastError: true,
+  providerStatus: true,
+  providerMessageId: true,
+  sentAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertEmailNotification = z.infer<typeof insertEmailNotificationSchema>;
+export type EmailNotification = typeof emailNotifications.$inferSelect;
 
 // Admin users table - for admin portal authentication
 export const adminUsers = pgTable("admin_users", {
@@ -111,6 +168,15 @@ export const auditRequestSchema = z.object({
   keyword: z.string().min(1, "Target keyword is required"),
   scope: z.enum(["local", "national"]),
   city: z.string().optional(),
+  requestId: z.string().uuid().optional(),
+}).superRefine((data, ctx) => {
+  if (data.scope === "local" && !data.city?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["city"],
+      message: "Target city is required for local audits",
+    });
+  }
 });
 
 export type AuditRequest = z.infer<typeof auditRequestSchema>;
@@ -190,6 +256,7 @@ export const leadSchema = z.object({
   businessName: z.string(),
   auditScore: z.number(),
   auditId: z.number().optional(),
+  requestId: z.string().uuid().optional(),
 });
 
 export type Lead = z.infer<typeof leadSchema>;

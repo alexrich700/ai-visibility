@@ -2,6 +2,7 @@
 import sgMail from '@sendgrid/mail';
 
 let connectionSettings: any;
+const SENDGRID_REQUEST_TIMEOUT_MS = 30_000;
 
 async function getCredentials() {
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
@@ -34,6 +35,7 @@ async function getCredentials() {
 async function getSendGridClient() {
   const { apiKey, fromEmail } = await getCredentials();
   sgMail.setApiKey(apiKey);
+  sgMail.setTimeout(SENDGRID_REQUEST_TIMEOUT_MS);
   return {
     client: sgMail,
     fromEmail
@@ -41,10 +43,16 @@ async function getSendGridClient() {
 }
 
 // Notification recipients
-const NOTIFICATION_RECIPIENTS = [
+export const NOTIFICATION_RECIPIENTS = [
   'sales@motiventmarketing.com',
-  'robert@motiventmarketing.com'
-];
+  'robert@motiventmarketing.com',
+  'alex@motiventmarketing.com',
+] as const;
+
+export interface EmailSendResult {
+  statusCode: number;
+  providerMessageId: string | null;
+}
 
 function getAdminBaseUrl(): string {
   const configuredBaseUrl = process.env.APP_BASE_URL?.trim();
@@ -57,49 +65,104 @@ function getAdminBaseUrl(): string {
   return `https://${primaryDomain}`;
 }
 
-function logSendGridError(context: string, error: any) {
-  const details = error?.response?.body ? JSON.stringify(error.response.body) : '';
-  console.error(`[EMAIL] ${context} failed:`, error?.message || error, details);
+function normalizeSendGridError(error: any): Error {
+  const providerStatus = Number(
+    error?.code ?? error?.response?.statusCode ?? error?.response?.status,
+  );
+  const providerMessages = Array.isArray(error?.response?.body?.errors)
+    ? error.response.body.errors
+        .map((item: any) => String(item?.message || "").trim())
+        .filter(Boolean)
+        .join("; ")
+    : "";
+  const message = [error?.message || "SendGrid request failed", providerMessages]
+    .filter(Boolean)
+    .join(": ")
+    .replace(/\s+/g, " ")
+    .slice(0, 500);
+  const normalized = new Error(message);
+  if (Number.isFinite(providerStatus)) {
+    (normalized as any).code = providerStatus;
+  }
+  return normalized;
 }
 
-interface SoftLeadNotificationData {
+function logSendGridError(context: string, error: Error) {
+  console.error(`[EMAIL] ${context} failed: ${error.message}`, {
+    providerStatus: (error as any).code,
+  });
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function normalizeWebsiteUrl(value: string): string {
+  const trimmed = value.trim();
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+  return `https://${trimmed}`;
+}
+
+function sanitizeSubjectText(value: string): string {
+  return value.replace(/[\r\n]+/g, " ").trim();
+}
+
+function getProviderMessageId(response: any): string | null {
+  const value = response?.headers?.['x-message-id'];
+  return Array.isArray(value) ? value[0] ?? null : value ?? null;
+}
+
+export interface SoftLeadNotificationData {
   businessName: string;
   url: string | null;
   keyword: string;
-  scope: string;
+  scope: 'local' | 'national';
   city: string | null;
-  auditId: number;
+  auditId?: number;
+  notificationKey?: string;
 }
 
-export async function sendSoftLeadNotification(data: SoftLeadNotificationData): Promise<boolean> {
-  try {
-    const { client, fromEmail } = await getSendGridClient();
+export function buildSoftLeadEmail(data: SoftLeadNotificationData) {
+  const businessName = escapeHtml(data.businessName);
+  const keyword = escapeHtml(data.keyword);
+  const scope = data.scope === 'local' ? 'Local' : 'National';
+  const city = data.scope === 'local' && data.city ? escapeHtml(data.city) : null;
+  const website = data.url ? escapeHtml(data.url) : null;
+  const websiteUrl = data.url ? escapeHtml(normalizeWebsiteUrl(data.url)) : null;
+  const auditUrl = data.auditId
+    ? `${getAdminBaseUrl()}/admin/audit/${data.auditId}`
+    : `${getAdminBaseUrl()}/admin`;
 
-    const auditUrl = `${getAdminBaseUrl()}/admin/audit/${data.auditId}`;
-
-    const html = `
+  const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #1f2937; border-bottom: 2px solid #f59e0b; padding-bottom: 10px;">
-          Initial Audit Request - Soft Lead
+          New AI Visibility Audit Request
         </h2>
 
         <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
           <h3 style="margin-top: 0; color: #374151;">Business Details</h3>
-          <p><strong>Business:</strong> ${data.businessName}</p>
-          ${data.url ? `<p><strong>Website:</strong> <a href="${data.url.startsWith('http') ? data.url : 'https://' + data.url}">${data.url}</a></p>` : ''}
-          <p><strong>Service/Keyword:</strong> ${data.keyword}</p>
-          <p><strong>Scope:</strong> ${data.scope}</p>
-          ${data.city ? `<p><strong>City:</strong> ${data.city}</p>` : ''}
+          <p><strong>Business:</strong> ${businessName}</p>
+          ${website && websiteUrl ? `<p><strong>Website:</strong> <a href="${websiteUrl}">${website}</a></p>` : ''}
+          <p><strong>Main Service:</strong> ${keyword}</p>
+          <p><strong>Scope:</strong> ${scope}</p>
+          ${city ? `<p><strong>Target City:</strong> ${city}</p>` : ''}
         </div>
 
         <p style="color: #6b7280; font-size: 14px;">
-          Someone just ran a free AI visibility report. No contact details yet — look up the business and reach out.
+          Someone just requested a free AI visibility audit. The report is being generated now.
         </p>
 
         <div style="margin: 30px 0; text-align: center;">
           <a href="${auditUrl}"
              style="background: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
-            View Audit in Admin Portal
+            ${data.auditId ? 'View Audit in Admin Portal' : 'Open Admin Portal'}
           </a>
         </div>
 
@@ -109,24 +172,40 @@ export async function sendSoftLeadNotification(data: SoftLeadNotificationData): 
       </div>
     `;
 
+  return {
+    subject: `New AI Visibility Audit Request: ${sanitizeSubjectText(data.businessName)}`,
+    html,
+  };
+}
+
+export async function sendSoftLeadNotification(data: SoftLeadNotificationData): Promise<EmailSendResult> {
+  try {
+    const { client, fromEmail } = await getSendGridClient();
+    const message = buildSoftLeadEmail(data);
     const [response] = await client.send({
-      to: NOTIFICATION_RECIPIENTS,
+      to: [...NOTIFICATION_RECIPIENTS],
       from: fromEmail,
-      subject: `Initial Audit Request - Soft Lead: ${data.businessName}`,
-      html
+      customArgs: data.notificationKey
+        ? { notification_key: data.notificationKey.slice(0, 100) }
+        : undefined,
+      ...message,
     });
 
-    console.log(`[EMAIL] Soft lead notification sent for audit ${data.auditId} (status ${response.statusCode}) to ${NOTIFICATION_RECIPIENTS.join(', ')}`);
-    return true;
+    const providerMessageId = getProviderMessageId(response);
+    console.log(`[EMAIL] Initial audit notification accepted (status ${response.statusCode}, message ${providerMessageId ?? 'unavailable'})`);
+    return { statusCode: response.statusCode, providerMessageId };
   } catch (error) {
-    logSendGridError('Soft lead notification', error);
-    return false;
+    const normalizedError = normalizeSendGridError(error);
+    logSendGridError('Initial audit notification', normalizedError);
+    throw normalizedError;
   }
 }
 
-interface AuditNotificationData {
+export interface AuditNotificationData {
   businessName: string;
+  url: string | null;
   keyword: string;
+  scope: 'local' | 'national';
   city: string | null;
   overallScore: number;
   chatgptScore: number;
@@ -135,22 +214,23 @@ interface AuditNotificationData {
   leadEmail?: string;
   leadPhone?: string;
   auditId: number;
+  notificationKey?: string;
 }
 
-export async function sendAuditNotification(data: AuditNotificationData): Promise<boolean> {
-  try {
-    const { client, fromEmail } = await getSendGridClient();
-    
-    if (!fromEmail) {
-      console.error('SendGrid fromEmail not configured - cannot send notification');
-      return false;
-    }
-    
-    const scoreColor = data.overallScore >= 70 ? '#22c55e' : data.overallScore >= 40 ? '#eab308' : '#ef4444';
+export function buildAuditNotificationEmail(data: AuditNotificationData) {
+  const scoreColor = data.overallScore >= 70 ? '#22c55e' : data.overallScore >= 40 ? '#eab308' : '#ef4444';
+  const businessName = escapeHtml(data.businessName);
+  const keyword = escapeHtml(data.keyword);
+  const scope = data.scope === 'local' ? 'Local' : 'National';
+  const city = data.scope === 'local' && data.city ? escapeHtml(data.city) : null;
+  const website = data.url ? escapeHtml(data.url) : null;
+  const websiteUrl = data.url ? escapeHtml(normalizeWebsiteUrl(data.url)) : null;
+  const leadName = data.leadName ? escapeHtml(data.leadName) : null;
+  const leadEmail = data.leadEmail ? escapeHtml(data.leadEmail) : null;
+  const leadPhone = data.leadPhone ? escapeHtml(data.leadPhone) : null;
+  const auditUrl = `${getAdminBaseUrl()}/admin/audit/${data.auditId}`;
 
-    const auditUrl = `${getAdminBaseUrl()}/admin/audit/${data.auditId}`;
-    
-    const html = `
+  const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #1f2937; border-bottom: 2px solid #3b82f6; padding-bottom: 10px;">
           Full Audit Report Unlock Request - Hot Lead
@@ -158,9 +238,11 @@ export async function sendAuditNotification(data: AuditNotificationData): Promis
         
         <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
           <h3 style="margin-top: 0; color: #374151;">Business Details</h3>
-          <p><strong>Business:</strong> ${data.businessName}</p>
-          <p><strong>Industry:</strong> ${data.keyword}</p>
-          ${data.city ? `<p><strong>City:</strong> ${data.city}</p>` : ''}
+          <p><strong>Business:</strong> ${businessName}</p>
+          ${website && websiteUrl ? `<p><strong>Website:</strong> <a href="${websiteUrl}">${website}</a></p>` : ''}
+          <p><strong>Main Service:</strong> ${keyword}</p>
+          <p><strong>Scope:</strong> ${scope}</p>
+          ${city ? `<p><strong>Target City:</strong> ${city}</p>` : ''}
         </div>
         
         <div style="background: #f0f9ff; padding: 20px; border-radius: 8px; margin: 20px 0;">
@@ -172,12 +254,12 @@ export async function sendAuditNotification(data: AuditNotificationData): Promis
           <p><strong>Google AI:</strong> ${data.googleAIScore}%</p>
         </div>
         
-        ${data.leadName || data.leadEmail ? `
+        ${leadName || leadEmail ? `
         <div style="background: #fef3c7; padding: 20px; border-radius: 8px; margin: 20px 0;">
           <h3 style="margin-top: 0; color: #374151;">Lead Information</h3>
-          ${data.leadName ? `<p><strong>Name:</strong> ${data.leadName}</p>` : ''}
-          ${data.leadEmail ? `<p><strong>Email:</strong> ${data.leadEmail}</p>` : ''}
-          ${data.leadPhone ? `<p><strong>Phone:</strong> ${data.leadPhone}</p>` : ''}
+          ${leadName ? `<p><strong>Name:</strong> ${leadName}</p>` : ''}
+          ${leadEmail ? `<p><strong>Email:</strong> ${leadEmail}</p>` : ''}
+          ${leadPhone ? `<p><strong>Phone:</strong> ${leadPhone}</p>` : ''}
         </div>
         ` : ''}
         
@@ -194,18 +276,32 @@ export async function sendAuditNotification(data: AuditNotificationData): Promis
       </div>
     `;
 
+  return {
+    subject: `Full Audit Report Unlock Request - Hot Lead: ${sanitizeSubjectText(data.businessName)} (${data.overallScore}% visibility)`,
+    html,
+  };
+}
+
+export async function sendAuditNotification(data: AuditNotificationData): Promise<EmailSendResult> {
+  try {
+    const { client, fromEmail } = await getSendGridClient();
+    const message = buildAuditNotificationEmail(data);
     const [response] = await client.send({
-      to: NOTIFICATION_RECIPIENTS,
+      to: [...NOTIFICATION_RECIPIENTS],
       from: fromEmail,
-      subject: `Full Audit Report Unlock Request - Hot Lead: ${data.businessName} (${data.overallScore}% visibility)`,
-      html
+      customArgs: data.notificationKey
+        ? { notification_key: data.notificationKey.slice(0, 100) }
+        : undefined,
+      ...message,
     });
 
-    console.log(`[EMAIL] Hot lead notification sent for audit ${data.auditId} (status ${response.statusCode}) to ${NOTIFICATION_RECIPIENTS.join(', ')}`);
-    return true;
+    const providerMessageId = getProviderMessageId(response);
+    console.log(`[EMAIL] Full-report unlock notification accepted (status ${response.statusCode}, message ${providerMessageId ?? 'unavailable'})`);
+    return { statusCode: response.statusCode, providerMessageId };
   } catch (error) {
-    logSendGridError('Hot lead notification', error);
-    return false;
+    const normalizedError = normalizeSendGridError(error);
+    logSendGridError('Full-report unlock notification', normalizedError);
+    throw normalizedError;
   }
 }
 
