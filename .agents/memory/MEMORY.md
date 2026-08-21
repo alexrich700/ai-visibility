@@ -1,0 +1,1 @@
+- [Audit email provider](audit-email-provider.md) — use verified Motivent Resend delivery; SendGrid acceptance masked multi-day queue failures.
