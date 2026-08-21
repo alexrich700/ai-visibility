@@ -47,6 +47,11 @@ const NOTIFICATION_RECIPIENTS = [
 ];
 
 function getAdminBaseUrl(): string {
+  const configuredBaseUrl = process.env.APP_BASE_URL?.trim();
+  if (configuredBaseUrl) {
+    return configuredBaseUrl.replace(/\/+$/, '');
+  }
+
   const replitDomains = process.env.REPLIT_DOMAINS || process.env.REPLIT_DEV_DOMAIN || 'localhost:5000';
   const primaryDomain = replitDomains.split(',')[0].trim();
   return `https://${primaryDomain}`;
@@ -213,7 +218,7 @@ export async function sendPasswordResetEmail(email: string, name: string, resetT
       return false;
     }
     
-    const baseUrl = 'https://ai.buildingbrandsmarketing.com';
+    const baseUrl = getAdminBaseUrl();
     
     const resetUrl = `${baseUrl}/admin/reset-password?token=${resetToken}`;
     

@@ -48,3 +48,8 @@ integrations = ["perplexity_v0:1.0.0", "javascript_mem_db:1.0.0", "javascript_op
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 20000
+
+[userenv]
+
+[userenv.shared]
+APP_BASE_URL = "https://ai.motiventmarketing.com"
