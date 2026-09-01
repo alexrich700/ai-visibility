@@ -15,7 +15,7 @@
     "test:query-cache": "node --import tsx --test server/services/monitoring/query-cache.test.ts",
     "test:selectors": "node --import tsx --test server/services/monitoring/selectors.test.ts",
     "test:logger": "node --import tsx --test server/services/monitoring/logger.test.ts",
-    "test:notifications": "node --import tsx --test server/email.test.ts server/services/resend-email-provider.test.ts server/services/email-notification-queue.test.ts server/routes/audit.stream.test.ts server/routes/leads.test.ts"
+    "test:notifications": "node --import tsx --test server/email.test.ts server/services/resend-email-provider.test.ts server/services/email-notification-queue.test.ts server/routes/resend-webhook.test.ts server/routes/audit.stream.test.ts server/routes/leads.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",

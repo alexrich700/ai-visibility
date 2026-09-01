@@ -81,6 +81,22 @@ export const EMAIL_NOTIFICATION_STATUS = {
 } as const;
 export type EmailNotificationStatus = typeof EMAIL_NOTIFICATION_STATUS[keyof typeof EMAIL_NOTIFICATION_STATUS];
 
+export const EMAIL_DELIVERY_STATUS = {
+  DELIVERED: "delivered",
+  DELAYED: "delayed",
+  BOUNCED: "bounced",
+  COMPLAINED: "complained",
+} as const;
+export type EmailDeliveryStatus = typeof EMAIL_DELIVERY_STATUS[keyof typeof EMAIL_DELIVERY_STATUS];
+
+export const RESEND_DELIVERY_EVENT_TYPES = {
+  DELIVERED: "email.delivered",
+  DELAYED: "email.delivery_delayed",
+  BOUNCED: "email.bounced",
+  COMPLAINED: "email.complained",
+} as const;
+export type ResendDeliveryEventType = typeof RESEND_DELIVERY_EVENT_TYPES[keyof typeof RESEND_DELIVERY_EVENT_TYPES];
+
 // Durable outbox for audit-funnel email notifications.
 export const emailNotifications = pgTable("email_notifications", {
   id: serial("id").primaryKey(),
@@ -96,6 +112,8 @@ export const emailNotifications = pgTable("email_notifications", {
   lastError: text("last_error"),
   providerStatus: integer("provider_status"),
   providerMessageId: text("provider_message_id"),
+  deliveryStatus: text("delivery_status"),
+  deliveryStatusAt: timestamp("delivery_status_at"),
   sentAt: timestamp("sent_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -103,6 +121,7 @@ export const emailNotifications = pgTable("email_notifications", {
   dedupeKeyIdx: uniqueIndex("email_notifications_dedupe_key_idx").on(table.dedupeKey),
   dueIdx: index("email_notifications_due_idx").on(table.status, table.nextAttemptAt),
   lockedIdx: index("email_notifications_locked_idx").on(table.status, table.lockedAt),
+  providerMessageIdx: index("email_notifications_provider_message_id_idx").on(table.providerMessageId),
 }));
 
 export const insertEmailNotificationSchema = createInsertSchema(emailNotifications).omit({
@@ -113,6 +132,8 @@ export const insertEmailNotificationSchema = createInsertSchema(emailNotificatio
   lastError: true,
   providerStatus: true,
   providerMessageId: true,
+  deliveryStatus: true,
+  deliveryStatusAt: true,
   sentAt: true,
   createdAt: true,
   updatedAt: true,
@@ -120,6 +141,30 @@ export const insertEmailNotificationSchema = createInsertSchema(emailNotificatio
 
 export type InsertEmailNotification = z.infer<typeof insertEmailNotificationSchema>;
 export type EmailNotification = typeof emailNotifications.$inferSelect;
+
+// Immutable Resend delivery-event history. providerEventId is the signed
+// svix-id header, which makes webhook retries idempotent.
+export const emailDeliveryEvents = pgTable("email_delivery_events", {
+  id: serial("id").primaryKey(),
+  providerEventId: text("provider_event_id").notNull(),
+  providerMessageId: text("provider_message_id").notNull(),
+  eventType: text("event_type").notNull(),
+  occurredAt: timestamp("occurred_at").notNull(),
+  data: jsonb("data").notNull(),
+  receivedAt: timestamp("received_at").defaultNow().notNull(),
+}, (table) => ({
+  providerEventIdIdx: uniqueIndex("email_delivery_events_provider_event_id_idx").on(table.providerEventId),
+  providerMessageIdIdx: index("email_delivery_events_provider_message_id_idx").on(table.providerMessageId),
+  eventTypeOccurredIdx: index("email_delivery_events_type_occurred_idx").on(table.eventType, table.occurredAt),
+}));
+
+export const insertEmailDeliveryEventSchema = createInsertSchema(emailDeliveryEvents).omit({
+  id: true,
+  receivedAt: true,
+});
+
+export type InsertEmailDeliveryEvent = z.infer<typeof insertEmailDeliveryEventSchema>;
+export type EmailDeliveryEvent = typeof emailDeliveryEvents.$inferSelect;
 
 // Admin users table - for admin portal authentication
 export const adminUsers = pgTable("admin_users", {

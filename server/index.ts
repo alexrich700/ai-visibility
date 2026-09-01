@@ -34,6 +34,12 @@ function validateEnvironment() {
   } else {
     startupLogger.info("DATABASE_URL is configured");
   }
+
+  if (!process.env.RESEND_WEBHOOK_SECRET) {
+    startupLogger.warn("RESEND_WEBHOOK_SECRET is not set - Resend delivery webhooks will be rejected");
+  } else {
+    startupLogger.info("RESEND_WEBHOOK_SECRET is configured");
+  }
   
   startupLogger.info("Admin portal auth uses database-backed user credentials and sessions");
   

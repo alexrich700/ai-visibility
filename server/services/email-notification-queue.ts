@@ -1,13 +1,17 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import {
+  EMAIL_DELIVERY_STATUS,
   EMAIL_NOTIFICATION_STATUS,
   EMAIL_NOTIFICATION_TYPES,
+  RESEND_DELIVERY_EVENT_TYPES,
+  emailDeliveryEvents,
   emailNotifications,
   leads,
   type DbLead,
   type EmailNotification,
   type EmailNotificationType,
+  type ResendDeliveryEventType,
   type InsertLead,
 } from "@shared/schema";
 import { db, pool } from "../db";
@@ -28,6 +32,62 @@ const LEASE_HEARTBEAT_MS = 15_000;
 const POLL_INTERVAL_MS = 5_000;
 const MAX_JOBS_PER_POLL = 10;
 const MAX_BACKOFF_MS = 15 * 60 * 1_000;
+
+function deliveryStatusForEvent(
+  eventType: ResendDeliveryEventType,
+): string {
+  switch (eventType) {
+    case RESEND_DELIVERY_EVENT_TYPES.DELIVERED:
+      return EMAIL_DELIVERY_STATUS.DELIVERED;
+    case RESEND_DELIVERY_EVENT_TYPES.DELAYED:
+      return EMAIL_DELIVERY_STATUS.DELAYED;
+    case RESEND_DELIVERY_EVENT_TYPES.BOUNCED:
+      return EMAIL_DELIVERY_STATUS.BOUNCED;
+    case RESEND_DELIVERY_EVENT_TYPES.COMPLAINED:
+      return EMAIL_DELIVERY_STATUS.COMPLAINED;
+  }
+}
+
+function eventPrioritySql() {
+  return sql<number>`
+    CASE ${emailDeliveryEvents.eventType}
+      WHEN ${RESEND_DELIVERY_EVENT_TYPES.COMPLAINED} THEN 4
+      WHEN ${RESEND_DELIVERY_EVENT_TYPES.BOUNCED} THEN 3
+      WHEN ${RESEND_DELIVERY_EVENT_TYPES.DELIVERED} THEN 2
+      WHEN ${RESEND_DELIVERY_EVENT_TYPES.DELAYED} THEN 1
+      ELSE 0
+    END
+  `;
+}
+
+function statusCanAdvanceSql(occurredAt: Date, priority: number) {
+  return sql`
+    (
+      ${emailNotifications.deliveryStatusAt} IS NULL
+      OR ${priority} > (
+        CASE ${emailNotifications.deliveryStatus}
+          WHEN ${EMAIL_DELIVERY_STATUS.COMPLAINED} THEN 4
+          WHEN ${EMAIL_DELIVERY_STATUS.BOUNCED} THEN 3
+          WHEN ${EMAIL_DELIVERY_STATUS.DELIVERED} THEN 2
+          WHEN ${EMAIL_DELIVERY_STATUS.DELAYED} THEN 1
+          ELSE 0
+        END
+      )
+      OR (
+        ${priority} = (
+          CASE ${emailNotifications.deliveryStatus}
+            WHEN ${EMAIL_DELIVERY_STATUS.COMPLAINED} THEN 4
+            WHEN ${EMAIL_DELIVERY_STATUS.BOUNCED} THEN 3
+            WHEN ${EMAIL_DELIVERY_STATUS.DELIVERED} THEN 2
+            WHEN ${EMAIL_DELIVERY_STATUS.DELAYED} THEN 1
+            ELSE 0
+          END
+        )
+        AND ${emailNotifications.deliveryStatusAt} <= ${occurredAt}
+      )
+    )
+  `;
+}
 
 export interface InitialAuditNotificationPayload extends SoftLeadNotificationData {
   requestId: string;
@@ -98,6 +158,8 @@ function mapNotificationRow(row: any): EmailNotification {
     lastError: row.last_error ?? row.lastError,
     providerStatus: row.provider_status ?? row.providerStatus,
     providerMessageId: row.provider_message_id ?? row.providerMessageId,
+    deliveryStatus: row.delivery_status ?? row.deliveryStatus,
+    deliveryStatusAt: row.delivery_status_at ?? row.deliveryStatusAt,
     sentAt: row.sent_at ?? row.sentAt,
     createdAt: row.created_at ?? row.createdAt,
     updatedAt: row.updated_at ?? row.updatedAt,
@@ -196,25 +258,83 @@ export class PostgresEmailNotificationRepository implements EmailNotificationRep
     leaseToken: string,
     result: EmailSendResult,
   ): Promise<boolean> {
-    const rows = await db
-      .update(emailNotifications)
-      .set({
-        status: EMAIL_NOTIFICATION_STATUS.SENT,
-        providerStatus: result.statusCode,
-        providerMessageId: result.providerMessageId,
-        sentAt: new Date(),
-        lockedAt: null,
-        leaseToken: null,
-        lastError: null,
-        updatedAt: new Date(),
-      })
-      .where(and(
-        eq(emailNotifications.id, id),
-        eq(emailNotifications.status, EMAIL_NOTIFICATION_STATUS.SENDING),
-        eq(emailNotifications.leaseToken, leaseToken),
-      ))
-      .returning({ id: emailNotifications.id });
-    return rows.length === 1;
+    return db.transaction(async (tx) => {
+      // Serialize this commit with delivery-webhook processing for the same
+      // provider message. Without a shared lock, both transactions could miss
+      // the other's uncommitted row and leave delivery state unreconciled.
+      await tx.execute(sql`
+        SELECT pg_advisory_xact_lock(
+          hashtextextended(${result.providerMessageId}, 0)
+        )
+      `);
+
+      const rows = await tx
+        .update(emailNotifications)
+        .set({
+          status: EMAIL_NOTIFICATION_STATUS.SENT,
+          providerStatus: result.statusCode,
+          providerMessageId: result.providerMessageId,
+          sentAt: new Date(),
+          lockedAt: null,
+          leaseToken: null,
+          lastError: null,
+          updatedAt: new Date(),
+        })
+        .where(and(
+          eq(emailNotifications.id, id),
+          eq(emailNotifications.status, EMAIL_NOTIFICATION_STATUS.SENDING),
+          eq(emailNotifications.leaseToken, leaseToken),
+        ))
+        .returning({ id: emailNotifications.id });
+      if (rows.length !== 1) {
+        return false;
+      }
+
+      // A delivery webhook can beat this provider-message-id write. Reconcile
+      // any already-persisted event in the same transaction so that race does
+      // not leave a bounced or delayed message looking merely "sent".
+      const [latestEvent] = await tx
+        .select({
+          eventType: emailDeliveryEvents.eventType,
+          occurredAt: emailDeliveryEvents.occurredAt,
+          priority: eventPrioritySql(),
+        })
+        .from(emailDeliveryEvents)
+        .where(
+          eq(
+            emailDeliveryEvents.providerMessageId,
+            result.providerMessageId,
+          ),
+        )
+        .orderBy(
+          desc(eventPrioritySql()),
+          desc(emailDeliveryEvents.occurredAt),
+        )
+        .limit(1);
+
+      if (latestEvent) {
+        await tx
+          .update(emailNotifications)
+          .set({
+            deliveryStatus: deliveryStatusForEvent(
+              latestEvent.eventType as ResendDeliveryEventType,
+            ),
+            deliveryStatusAt: latestEvent.occurredAt,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(emailNotifications.id, id),
+              statusCanAdvanceSql(
+                latestEvent.occurredAt,
+                latestEvent.priority,
+              ),
+            ),
+          );
+      }
+
+      return true;
+    });
   }
 
   async renewLease(id: number, leaseToken: string): Promise<boolean> {

@@ -7,4 +7,8 @@ Audit-funnel and password-reset emails should use the verified Motivent Resend c
 
 **Why:** SendGrid accepted audit notifications but left them in processing for days before reporting continuous deferral. Resend reported both notification paths delivered, and the user confirmed both arrived in the inbox on August 21, 2026.
 
-**How to apply:** Preserve the durable outbox, stable idempotency keys, and three-recipient list. For live verification, require both a provider delivery event and inbox confirmation rather than treating API acceptance as delivery.
+Provider acceptance and delivery webhooks are independent concurrent inputs. Any email-provider change must preserve guaranteed reconciliation by provider message ID and must not let delayed/lower-severity events overwrite a final bounce or complaint.
+
+**Why:** A provider can emit a delivery event before the outbox commits the accepted message ID; ordinary transaction lookups can miss each other's uncommitted writes and silently leave a final failure unmatched.
+
+**How to apply:** Preserve the durable outbox, stable idempotency keys, three-recipient list, cross-path serialization/reconciliation, and monotonic final delivery states. For live verification, require both a provider delivery event and inbox confirmation rather than treating API acceptance as delivery.
