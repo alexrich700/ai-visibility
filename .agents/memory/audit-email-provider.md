@@ -12,3 +12,9 @@ Provider acceptance and delivery webhooks are independent concurrent inputs. Any
 **Why:** A provider can emit a delivery event before the outbox commits the accepted message ID; ordinary transaction lookups can miss each other's uncommitted writes and silently leave a final failure unmatched.
 
 **How to apply:** Preserve the durable outbox, stable idempotency keys, three-recipient list, cross-path serialization/reconciliation, and monotonic final delivery states. For live verification, require both a provider delivery event and inbox confirmation rather than treating API acceptance as delivery.
+
+Development schema synchronization may stop without applying new email tables because Drizzle prompts about an unrelated audit uniqueness constraint when merge setup has no interactive input. Never bypass that prompt with `--force`, because it can approve truncating existing audits.
+
+**Why:** The delivery-webhook merge completed while its additive development schema was still absent, and automated tests failed until the intended additive migration was applied separately.
+
+**How to apply:** After email schema merges, verify the expected development tables exist before testing. Keep production schema changes in Replit's Publish flow, and avoid any blanket auto-approval that could accept data loss.

@@ -9,13 +9,13 @@ import {
   type AuditNotificationData,
 } from "./email";
 
-test("NOTIFICATION_RECIPIENTS is exactly the three sales aliases", () => {
+test("NOTIFICATION_RECIPIENTS is exactly the requested audit team", () => {
   assert.deepEqual(
     [...NOTIFICATION_RECIPIENTS],
     [
-      "sales@motiventmarketing.com",
       "robert@motiventmarketing.com",
-      "alex@motiventmarketing.com",
+      "roslyn@motiventmarketing.com",
+      "nathan@motiventmarketing.com",
     ],
   );
 });

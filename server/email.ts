@@ -7,9 +7,9 @@ import {
 
 // Notification recipients
 export const NOTIFICATION_RECIPIENTS = [
-  'sales@motiventmarketing.com',
   'robert@motiventmarketing.com',
-  'alex@motiventmarketing.com',
+  'roslyn@motiventmarketing.com',
+  'nathan@motiventmarketing.com',
 ] as const;
 
 export type EmailSendResult = ResendEmailResult;
